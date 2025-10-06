@@ -1,0 +1,26 @@
+# Environment variables - CRITICAL - NEVER PUSH THIS
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Database - contains sensitive data
+*.db
+calleval.db
+
+# Uploads folder - contains audio files
+uploads/
+
+# Virtual environment
+venv/
+env/
+.venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
