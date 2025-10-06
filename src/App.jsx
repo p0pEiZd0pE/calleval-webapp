@@ -6,8 +6,8 @@ import {
   SidebarProvider,
 } from '@/components/ui/sidebar'
 import { Routes, Route } from 'react-router-dom'
-import Dashboard from "@/pages/dashboard"
-import CallEvaluations from "@/pages/CallEvaluations"
+import Dashboard from "./pages/dashboard"
+import CallEvaluations from "./pages/CallEvaluations"
 import Upload from "./pages/Upload"
 import Agent from "./pages/Agent"
 import Reports from "./pages/Reports"
