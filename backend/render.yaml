@@ -2,6 +2,7 @@ services:
   - type: web
     name: calleval-backend
     env: python
+    runtime: python-3.10
     buildCommand: "pip install -r requirements.txt"
     startCommand: "uvicorn main:app --host 0.0.0.0 --port $PORT"
     envVars:
@@ -14,4 +15,6 @@ services:
       - key: MODAL_FUNCTION_NAME
         value: transcribe_with_diarization
       - key: FRONTEND_URL
+        sync: false
+      - key: BACKEND_URL
         sync: false
