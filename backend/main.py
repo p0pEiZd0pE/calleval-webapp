@@ -14,6 +14,12 @@ import json
 from config import settings
 from database import get_db, CallEvaluation, SessionLocal
 
+# ⭐ ADD THIS SECTION - Modal Authentication for Production
+if os.getenv("MODAL_TOKEN_ID") and os.getenv("MODAL_TOKEN_SECRET"):
+    # Set Modal credentials for production environment
+    os.environ["MODAL_TOKEN_ID"] = os.getenv("MODAL_TOKEN_ID")
+    os.environ["MODAL_TOKEN_SECRET"] = os.getenv("MODAL_TOKEN_SECRET")
+
 # Initialize APIs
 os.environ["REPLICATE_API_TOKEN"] = settings.REPLICATE_API_TOKEN
 os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
