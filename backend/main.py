@@ -181,7 +181,7 @@ def process_call(call_id: str, file_path: str):
         # Call Wav2Vec2-BERT model on Replicate
         print(f"✓ Running Wav2Vec2-BERT model...")
         wav2vec_output = replicate.run(
-            "p0peizd0pe/wav2vec2-calleval-bert:latest",
+            "p0peizd0pe/wav2vec2-calleval-bert:4f9414167eff508260c6981379338743da77cbf37f4715fd1f56e73b68237399",
             input={
                 "audio": open(file_path, "rb"),
                 "text": agent_text
@@ -191,7 +191,7 @@ def process_call(call_id: str, file_path: str):
         # Call BERT model on Replicate for text-only analysis
         print(f"✓ Running BERT model...")
         bert_output = replicate.run(
-            "p0peizd0pe/calleval-bert:latest",
+            "p0peizd0pe/calleval-bert:89f41f4389e3ccc573950905bf1784905be3029014a573a880cbcd47d582cc12",
             input={
                 "text": agent_text,
                 "task": "all"  # Analyze all tasks
