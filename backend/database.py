@@ -21,8 +21,7 @@ class CallEvaluation(Base):
     transcript = Column(Text, nullable=True)
     speakers = Column(JSON, nullable=True)  # Speaker diarization data
     
-    # BERT Analysis Results
-    classification = Column(String, nullable=True)  # Satisfactory/Unsatisfactory
+    # Summary Scores (for dashboard/quick view)
     tone_score = Column(Float, nullable=True)
     script_score = Column(Float, nullable=True)
     resolution_score = Column(Float, nullable=True)
@@ -34,9 +33,16 @@ class CallEvaluation(Base):
     enthusiasm_score = Column(Float, nullable=True)
     politeness_score = Column(Float, nullable=True)
     
+    # Classification
+    classification = Column(String, nullable=True)  # Satisfactory/Unsatisfactory/Failed
+    
+    # Detailed Scorecard Results (NEW - stores complete breakdown)
+    detailed_scores = Column(JSON, nullable=True)
+    scorecard_summary = Column(JSON, nullable=True)
+    
     # Status
-    status = Column(String, default="pending")  # pending, completed, failed
-    analysis_status = Column(String, default="pending")
+    status = Column(String, default="pending")  # pending, transcribing, completed, failed
+    analysis_status = Column(String, default="pending")  # pending, transcribing, analyzing, completed, failed
     
     # File path
     audio_path = Column(String)
