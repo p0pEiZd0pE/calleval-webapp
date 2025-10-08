@@ -14,11 +14,16 @@ import json
 from config import settings
 from database import get_db, CallEvaluation, SessionLocal
 
-# ⭐ ADD THIS SECTION - Modal Authentication for Production
-if os.getenv("MODAL_TOKEN_ID") and os.getenv("MODAL_TOKEN_SECRET"):
-    # Set Modal credentials for production environment
-    os.environ["MODAL_TOKEN_ID"] = os.getenv("MODAL_TOKEN_ID")
-    os.environ["MODAL_TOKEN_SECRET"] = os.getenv("MODAL_TOKEN_SECRET")
+# Modal Authentication for Production (Optional)
+modal_token_id = os.getenv("MODAL_TOKEN_ID")
+modal_token_secret = os.getenv("MODAL_TOKEN_SECRET")
+
+if modal_token_id and modal_token_secret:
+    print(f"✓ Modal credentials found, setting up authentication...")
+    os.environ["MODAL_TOKEN_ID"] = modal_token_id
+    os.environ["MODAL_TOKEN_SECRET"] = modal_token_secret
+else:
+    print("⚠ Warning: Modal credentials not found. Modal functions may not work.")
 
 # Initialize APIs
 os.environ["REPLICATE_API_TOKEN"] = settings.REPLICATE_API_TOKEN
@@ -29,7 +34,7 @@ app = FastAPI(title="CallEval API - Modal WhisperX + Binary Scorecard")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[settings.FRONTEND_URL],
+    allow_origins=[settings.FRONTEND_URL, "http://localhost:5173"],  # Allow both production and local
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -65,6 +70,17 @@ def transcribe_with_modal_whisperx(audio_path: str, call_id: str):
     )
     
     return result
+
+
+@app.get("/")
+async def root():
+    """Health check endpoint"""
+    return {
+        "status": "ok",
+        "service": "CallEval Backend API",
+        "version": "1.0.0",
+        "docs": "/docs"
+    }
 
 
 def process_call(call_id: str, file_path: str):
@@ -180,23 +196,33 @@ def process_call(call_id: str, file_path: str):
         
         # Call Wav2Vec2-BERT model on Replicate
         print(f"✓ Running Wav2Vec2-BERT model...")
-        wav2vec_output = replicate.run(
-            "p0peizd0pe/wav2vec2-calleval-bert:4f9414167eff508260c6981379338743da77cbf37f4715fd1f56e73b68237399",
-            input={
-                "audio": open(file_path, "rb"),
-                "text": agent_text
-            }
-        )
+        try:
+            wav2vec_output = replicate.run(
+                "p0peizd0pe/wav2vec2-calleval-bert:4f9414167eff508260c6981379338743da77cbf37f4715fd1f56e73b68237399",
+                input={
+                    "audio": open(file_path, "rb"),
+                    "text": agent_text
+                }
+            )
+        except Exception as e:
+            print(f"⚠️ Wav2Vec2-BERT model error: {e}")
+            print(f"⚠️ Skipping Wav2Vec2-BERT analysis, using BERT only")
+            wav2vec_output = None
         
         # Call BERT model on Replicate for text-only analysis
         print(f"✓ Running BERT model...")
-        bert_output = replicate.run(
-            "p0peizd0pe/calleval-bert:89f41f4389e3ccc573950905bf1784905be3029014a573a880cbcd47d582cc12",
-            input={
-                "text": agent_text,
-                "task": "all"  # Analyze all tasks
-            }
-        )
+        try:
+            bert_output = replicate.run(
+                "p0peizd0pe/calleval-bert:89f41f4389e3ccc573950905bf1784905be3029014a573a880cbcd47d582cc12",
+                input={
+                    "text": agent_text,
+                    "task": "all"  # Analyze all tasks
+                }
+            )
+        except Exception as e:
+            print(f"⚠️ BERT model error: {e}")
+            print(f"⚠️ Skipping BERT analysis")
+            bert_output = None
         
         # ============================================================
         # STEP 3: BINARY SCORING SYSTEM
@@ -255,6 +281,9 @@ def process_call(call_id: str, file_path: str):
                 if isinstance(bert_score, dict) and "score" in bert_score:
                     if bert_score["score"] > 0.5:  # Threshold for binary decision
                         return True
+                elif isinstance(bert_score, (int, float)):
+                    if bert_score > 0.5:
+                        return True
             
             # Check Wav2Vec2-BERT model prediction
             if wav2vec_results and metric_name in wav2vec_results:
@@ -262,8 +291,11 @@ def process_call(call_id: str, file_path: str):
                 if isinstance(wav2vec_score, dict) and "score" in wav2vec_score:
                     if wav2vec_score["score"] > 0.5:
                         return True
+                elif isinstance(wav2vec_score, (int, float)):
+                    if wav2vec_score > 0.5:
+                        return True
             
-            # Pattern matching as fallback
+            # Pattern matching as fallback (always used if models unavailable)
             patterns = {
                 "professional_greeting": ["thank you for calling", "good morning", "good afternoon", "hello"],
                 "verifies_patient_online": ["are you online", "online with me", "verify"],
@@ -274,6 +306,9 @@ def process_call(call_id: str, file_path: str):
                 "recaps_time_date": ["appointment", "scheduled", "time", "date"],
                 "offers_further_assistance": ["anything else", "help you with", "further assistance"],
                 "ended_call_properly": ["have a great day", "thank you", "goodbye", "bye"],
+                "enthusiasm_markers": ["!", "great", "wonderful", "excellent"],
+                "shows_enthusiasm": ["excited", "happy to", "glad"],
+                "sounds_polite_courteous": ["please", "thank you", "you're welcome", "certainly"],
             }
             
             if metric_name in patterns:
@@ -345,10 +380,11 @@ def process_call(call_id: str, file_path: str):
         call.score = total_score
         call.scores = scores
         call.status = "completed"
-        call.analysis_status = "completed"
+        call.analysis_status = f"completed (WhisperX + pattern matching{' + BERT' if bert_output else ''}{' + Wav2Vec2' if wav2vec_output else ''})"
         
         print(f"\n{'='*60}")
         print(f"✓ Analysis completed: {total_score:.1f}/100")
+        print(f"✓ Models used: WhisperX + Pattern Matching{' + BERT' if bert_output else ''}{' + Wav2Vec2' if wav2vec_output else ''}")
         print(f"{'='*60}")
         
         db.commit()
