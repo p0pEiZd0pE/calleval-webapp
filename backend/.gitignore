@@ -1,4 +1,4 @@
-# Environment variables - CRITICAL - NEVER PUSH THIS
+# Environment variables - NEVER PUSH THIS
 .env
 
 # Python
@@ -6,6 +6,7 @@ __pycache__/
 *.py[cod]
 *$py.class
 *.so
+.Python
 
 # Database - contains sensitive data
 *.db
@@ -18,9 +19,16 @@ uploads/
 venv/
 env/
 .venv/
+ENV/
 
 # IDE
 .vscode/
 .idea/
 *.swp
 *.swo
+.DS_Store
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/

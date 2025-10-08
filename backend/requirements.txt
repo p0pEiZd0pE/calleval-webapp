@@ -1,12 +1,11 @@
 fastapi==0.104.1
 uvicorn==0.24.0
 python-multipart==0.0.6
-sqlalchemy==2.0.23
-assemblyai==0.17.0
+sqlalchemy==0.23
+modal==0.63.0
 replicate==0.22.0
-transformers==4.35.2
-torch==2.1.1
 librosa==0.10.1
 soundfile==0.12.1
 python-dotenv==1.0.0
 numpy==1.24.3
+pydantic-settings==2.1.0

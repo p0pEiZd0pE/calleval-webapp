@@ -3,8 +3,14 @@ from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     # API Keys
-    ASSEMBLYAI_API_KEY: str  # ← ADD THIS LINE
     REPLICATE_API_TOKEN: str
+    
+    # Modal Configuration
+    MODAL_APP_NAME: str = "whisperx-calleval"  # Your Modal app name
+    MODAL_FUNCTION_NAME: str = "transcribe_with_diarization"  # Your Modal function name
+    
+    # Backend URL (for Modal to access audio files)
+    BACKEND_URL: str = "http://localhost:8000"  # Will be set to Render URL in production
     
     # Frontend URL for CORS
     FRONTEND_URL: str = "http://localhost:5173"
