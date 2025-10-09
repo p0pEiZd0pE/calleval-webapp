@@ -291,6 +291,7 @@ async def upload_call(
     call = CallEvaluation(
         id=call_id,
         filename=file.filename,
+        file_path=file_path,
         status="processing",
         analysis_status="queued",
         created_at=datetime.utcnow()
