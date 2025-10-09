@@ -67,27 +67,43 @@ def transcribe_with_modal_whisperx(audio_path: str, call_id: str):
 async def test_replicate():
     """Test endpoint to check if Replicate API works"""
     try:
-        # Test BERT model with simple text
-        result = replicate.run(
-            "p0peizd0pe/calleval-bert:89f41f4389e3ccc573950905bf1784905be3029014a573a880cbcd47d582cc12",
-            input={
+        import httpx
+        
+        # Direct API call to see raw response
+        headers = {
+            "Authorization": f"Token {os.getenv('REPLICATE_API_TOKEN')}",
+            "Content-Type": "application/json"
+        }
+        
+        data = {
+            "version": "89f41f4389e3ccc573950905bf1784905be3029014a573a880cbcd47d582cc12",
+            "input": {
                 "text": "Hello, thank you for calling",
                 "task": "all"
             }
-        )
-        return {
-            "status": "success",
-            "message": "Replicate API working",
-            "result": result
         }
+        
+        client = httpx.Client()
+        response = client.post(
+            "https://api.replicate.com/v1/predictions",
+            headers=headers,
+            json=data,
+            timeout=30.0
+        )
+        
+        return {
+            "status_code": response.status_code,
+            "headers": dict(response.headers),
+            "raw_content": response.text[:500],  # First 500 chars
+            "is_json": response.headers.get("content-type", "").startswith("application/json")
+        }
+        
     except Exception as e:
         import traceback
         return {
             "status": "error",
             "error": str(e),
-            "error_type": type(e).__name__,
-            "traceback": traceback.format_exc(),
-            "token_set": bool(os.getenv("REPLICATE_API_TOKEN"))
+            "traceback": traceback.format_exc()
         }
 
 
