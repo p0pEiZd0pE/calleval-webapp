@@ -197,10 +197,14 @@ def process_call(call_id: str, file_path: str):
         # Call Wav2Vec2-BERT model on Replicate
         print(f"✓ Running Wav2Vec2-BERT model...")
         try:
+            # Read audio file properly
+            with open(file_path, "rb") as audio_file:
+                audio_data = audio_file.read()
+            
             wav2vec_output = replicate.run(
                 "p0peizd0pe/calleval-wav2vec2:4f9414167eff508260c6981379338743da77cbf37f4715fd1f56e73b68237399",
                 input={
-                    "audio": open(file_path, "rb"),
+                    "audio": audio_data,
                     "text": agent_text
                 }
             )
