@@ -6,7 +6,6 @@ from datetime import datetime
 import os
 import uuid
 import modal
-import replicate
 import librosa
 from pathlib import Path
 import json
@@ -14,23 +13,21 @@ import json
 from config import settings
 from database import get_db, CallEvaluation, SessionLocal
 
-# Modal Authentication for Production (Optional)
+# Modal Authentication
 modal_token_id = os.getenv("MODAL_TOKEN_ID")
 modal_token_secret = os.getenv("MODAL_TOKEN_SECRET")
 
 if modal_token_id and modal_token_secret:
-    print(f"✓ Modal credentials found, setting up authentication...")
+    print(f"✓ Modal credentials found")
     os.environ["MODAL_TOKEN_ID"] = modal_token_id
     os.environ["MODAL_TOKEN_SECRET"] = modal_token_secret
 else:
-    print("⚠ Warning: Modal credentials not found. Modal functions may not work.")
+    print("⚠ Warning: Modal credentials not found")
 
-# Initialize APIs
-os.environ["REPLICATE_API_TOKEN"] = settings.REPLICATE_API_TOKEN
 os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
 
 # FastAPI app
-app = FastAPI(title="CallEval API - Modal WhisperX + Binary Scorecard")
+app = FastAPI(title="CallEval API - Full Modal Stack")
 
 app.add_middleware(
     CORSMiddleware,
@@ -42,16 +39,14 @@ app.add_middleware(
 
 
 def transcribe_with_modal_whisperx(audio_path: str, call_id: str):
-    """Transcribe audio using Modal WhisperX deployment"""
+    """Transcribe audio using Modal WhisperX"""
     f = modal.Function.lookup(
-        settings.MODAL_APP_NAME,
-        settings.MODAL_FUNCTION_NAME
+        settings.MODAL_WHISPERX_APP,
+        settings.MODAL_WHISPERX_FUNCTION
     )
     
-    backend_url = settings.BACKEND_URL
-    audio_url = f"{backend_url}/api/temp-audio/{call_id}"
-    
-    print(f"🎯 Sending audio URL to Modal: {audio_url}")
+    audio_url = f"{settings.BACKEND_URL}/api/temp-audio/{call_id}"
+    print(f"🎯 WhisperX audio URL: {audio_url}")
     
     result = f.remote(
         audio_url=audio_url,
@@ -63,63 +58,78 @@ def transcribe_with_modal_whisperx(audio_path: str, call_id: str):
     return result
 
 
-@app.get("/test-replicate")
-async def test_replicate():
-    """Test endpoint to check if Replicate API works"""
+def analyze_with_modal_bert(text: str):
+    """Analyze text using Modal BERT"""
     try:
-        import httpx
-        
-        # Direct API call to see raw response
-        headers = {
-            "Authorization": f"Token {os.getenv('REPLICATE_API_TOKEN')}",
-            "Content-Type": "application/json"
-        }
-        
-        data = {
-            "version": "89f41f4389e3ccc573950905bf1784905be3029014a573a880cbcd47d582cc12",
-            "input": {
-                "text": "Hello, thank you for calling",
-                "task": "all"
-            }
-        }
-        
-        client = httpx.Client()
-        response = client.post(
-            "https://api.replicate.com/v1/predictions",
-            headers=headers,
-            json=data,
-            timeout=30.0
+        f = modal.Function.lookup(
+            settings.MODAL_BERT_APP,
+            settings.MODAL_BERT_FUNCTION
         )
         
-        return {
-            "status_code": response.status_code,
-            "headers": dict(response.headers),
-            "raw_content": response.text[:500],  # First 500 chars
-            "is_json": response.headers.get("content-type", "").startswith("application/json")
-        }
+        print(f"📝 Calling Modal BERT...")
+        result = f.remote(text=text, task="all")
+        return result
         
     except Exception as e:
-        import traceback
-        return {
-            "status": "error",
-            "error": str(e),
-            "traceback": traceback.format_exc()
-        }
+        print(f"❌ BERT error: {e}")
+        return None
+
+
+def analyze_with_modal_wav2vec2(audio_path: str, call_id: str, text: str):
+    """Analyze audio+text using Modal Wav2Vec2-BERT"""
+    try:
+        f = modal.Function.lookup(
+            settings.MODAL_WAV2VEC2_APP,
+            settings.MODAL_WAV2VEC2_FUNCTION
+        )
+        
+        audio_url = f"{settings.BACKEND_URL}/api/temp-audio/{call_id}"
+        print(f"🎵 Calling Modal Wav2Vec2-BERT...")
+        
+        result = f.remote(audio_url=audio_url, text=text)
+        return result
+        
+    except Exception as e:
+        print(f"❌ Wav2Vec2 error: {e}")
+        return None
 
 
 @app.get("/")
 async def root():
-    """Health check endpoint"""
     return {
         "status": "ok",
-        "service": "CallEval Backend API",
-        "version": "1.0.0",
-        "docs": "/docs"
+        "service": "CallEval Backend API - Full Modal Stack",
+        "version": "2.0.0",
+        "models": {
+            "whisperx": "Modal ✓",
+            "bert": "Modal ✓",
+            "wav2vec2": "Modal ✓"
+        }
     }
 
 
+@app.get("/api/temp-audio/{call_id}")
+async def serve_temp_audio(call_id: str, db: Session = Depends(get_db)):
+    """Serve audio file for Modal functions to download"""
+    call = db.query(CallEvaluation).filter(CallEvaluation.id == call_id).first()
+    
+    if not call:
+        raise HTTPException(status_code=404, detail="Call not found")
+    
+    file_path = os.path.join(settings.UPLOAD_DIR, call.filename)
+    
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="Audio file not found")
+    
+    return FileResponse(
+        file_path,
+        media_type="audio/mpeg",
+        headers={"Content-Disposition": f"attachment; filename={call.filename}"}
+    )
+
+
 def process_call(call_id: str, file_path: str):
-    """Background task: Process call with Modal WhisperX + Binary Scorecard"""
+    """Background task: Process call with full Modal stack"""
     
     db = SessionLocal()
     
@@ -147,255 +157,115 @@ def process_call(call_id: str, file_path: str):
         full_text = " ".join([seg["text"] for seg in whisperx_result["segments"]])
         call.transcript = full_text
         
+        # Calculate duration
         if "segments" in whisperx_result and len(whisperx_result["segments"]) > 0:
             last_segment = whisperx_result["segments"][-1]
             duration_seconds = int(last_segment.get("end", 0))
-            duration_minutes = duration_seconds // 60
-            duration_secs = duration_seconds % 60
-            call.duration = f"{duration_minutes}:{duration_secs:02d}"
+            minutes = duration_seconds // 60
+            seconds = duration_seconds % 60
+            call.duration = f"{minutes}:{seconds:02d}"
         
-        speakers_data = []
+        # Store speakers
         if "segments" in whisperx_result:
-            for seg in whisperx_result["segments"]:
-                if "speaker" in seg:
-                    speakers_data.append({
-                        "speaker": seg["speaker"],
-                        "text": seg["text"],
-                        "start": seg["start"],
-                        "end": seg["end"]
-                    })
+            call.speakers = json.dumps(whisperx_result["segments"], indent=2)
         
-        call.speakers = speakers_data
+        db.commit()
+        print(f"✅ Transcription complete!")
         
-        print(f"✓ Identifying speaker roles...")
-        speakers = list(set(s["speaker"] for s in speakers_data))
-        agent_speaker = None
+        # Extract agent text (SPEAKER_01)
+        agent_segments = [
+            seg for seg in whisperx_result["segments"]
+            if seg.get("speaker") == "SPEAKER_01"
+        ]
+        agent_text = " ".join([seg["text"] for seg in agent_segments])
         
-        if len(speakers) >= 1:
-            first_utterances = speakers_data[:3]
-            for utt in first_utterances:
-                text_lower = utt["text"].lower()
-                if any(word in text_lower for word in ["thank you for calling", "good morning", "good afternoon", "hello", "sony"]):
-                    agent_speaker = utt["speaker"]
-                    break
-            
-            if not agent_speaker and len(speakers_data) > 0:
-                agent_speaker = speakers_data[0]["speaker"]
+        print(f"📝 Agent text length: {len(agent_text)} chars")
         
-        speaker_roles = {}
-        for speaker in speakers:
-            if speaker == agent_speaker:
-                speaker_roles[speaker] = "agent"
-            else:
-                speaker_roles[speaker] = "caller"
-        
-        print(f"✓ Speaker roles: {speaker_roles}")
-        
-        agent_segments = [s for s in speakers_data if speaker_roles.get(s["speaker"]) == "agent"]
-        agent_text = " ".join([s["text"] for s in agent_segments])
-        
-        # STEP 2: ANALYZE WITH REPLICATE MODELS
+        # STEP 2: ANALYZE WITH MODAL MODELS
         print(f"\n{'='*60}")
-        print(f"STEP 2: ANALYZING WITH REPLICATE MODELS")
+        print(f"STEP 2: ANALYZING WITH MODAL AI MODELS")
         print(f"{'='*60}")
         
         call.status = "analyzing"
         call.analysis_status = "analyzing"
         db.commit()
         
-        audio_array, sr = librosa.load(file_path, sr=16000)
+        # Try Wav2Vec2-BERT model (optional)
+        print(f"✓ Running Modal Wav2Vec2-BERT model...")
+        wav2vec_output = analyze_with_modal_wav2vec2(file_path, call_id, agent_text)
         
-        # Initialize model outputs
-        wav2vec_output = None
-        bert_output = None
-        
-        # Try Wav2Vec2-BERT model
-        print(f"✓ Running Wav2Vec2-BERT model...")
-        try:
-            with open(file_path, "rb") as audio_file:
-                wav2vec_output = replicate.run(
-                    "p0peizd0pe/calleval-wav2vec2:4f9414167eff508260c6981379338743da77cbf37f4715fd1f56e73b68237399",
-                    input={
-                        "audio": audio_file,
-                        "text": agent_text
-                    }
-                )
-        except Exception as e:
-            print(f"⚠️ Wav2Vec2-BERT model error: {e}")
-            print(f"⚠️ Skipping Wav2Vec2, using BERT only")
+        if wav2vec_output and not wav2vec_output.get("success"):
+            print(f"⚠️ Wav2Vec2 warning: {wav2vec_output.get('error')}")
             wav2vec_output = None
         
-        # Try BERT model
-        print(f"✓ Running BERT model...")
-        try:
-            bert_output = replicate.run(
-                "p0peizd0pe/calleval-bert:89f41f4389e3ccc573950905bf1784905be3029014a573a880cbcd47d582cc12",
-                input={
-                    "text": agent_text,
-                    "task": "all"
-                }
-            )
-            print(f"✓ BERT output received: {type(bert_output)}")
-        except replicate.exceptions.ReplicateError as e:
-            print(f"⚠️ BERT Replicate error: {e}")
-            print(f"⚠️ Error details: {str(e)}")
-            if wav2vec_output is None:
-                print(f"⚠️ Both models failed - cannot continue")
-                raise Exception(f"All AI models failed. Replicate error: {str(e)}")
-            else:
-                print(f"⚠️ Continuing with Wav2Vec2 only")
-                bert_output = None
-        except Exception as e:
-            print(f"⚠️ BERT model error: {e}")
-            print(f"⚠️ Error type: {type(e).__name__}")
-            import traceback
-            print(f"⚠️ Full traceback: {traceback.format_exc()}")
-            if wav2vec_output is None:
-                print(f"⚠️ Both models failed - cannot continue")
-                raise Exception(f"All AI models failed: {e}")
-            else:
-                print(f"⚠️ Continuing with Wav2Vec2 only")
-                bert_output = None
+        # Try BERT model (required)
+        print(f"✓ Running Modal BERT model...")
+        bert_output = analyze_with_modal_bert(agent_text)
         
-        # STEP 3: BINARY SCORING
+        if not bert_output or not bert_output.get("success"):
+            error_msg = bert_output.get("error") if bert_output else "No response"
+            print(f"❌ BERT failed: {error_msg}")
+            
+            if wav2vec_output is None:
+                raise Exception(f"All AI models failed: {error_msg}")
+        
+        # STEP 3: CALCULATE BINARY SCORECARD
         print(f"\n{'='*60}")
-        print(f"STEP 3: BINARY SCORING")
+        print(f"STEP 3: CALCULATING BINARY SCORECARD")
         print(f"{'='*60}")
         
-        scores = {}
-        total_score = 0.0
+        # Use BERT or Wav2Vec2 predictions
+        predictions = {}
+        if bert_output and bert_output.get("success"):
+            predictions = bert_output.get("predictions", {})
+        elif wav2vec_output and wav2vec_output.get("success"):
+            predictions = wav2vec_output.get("results", {}).get("predictions", {})
         
-        scoring_structure = {
-            "All Phases": {
-                "weight": 10,
-                "metrics": [
-                    {"name": "enthusiasm_markers", "score": 5, "alternatives": ["shows_enthusiasm", "sounds_polite_courteous"]},
-                ]
-            },
-            "Opening Spiel": {
-                "weight": 10,
-                "metrics": [
-                    {"name": "professional_greeting", "score": 5},
-                    {"name": "verifies_patient_online", "score": 5},
-                ]
-            },
-            "Middle/Climax": {
-                "weight": 70,
-                "metrics": [
-                    {"name": "patient_verification", "score": 25},
-                    {"name": "active_listening", "score": 10, "alternatives": ["handled_with_care"]},
-                    {"name": "asks_permission_hold", "score": 10, "alternatives": ["returns_properly_from_hold"]},
-                    {"name": "has_fillers", "score": 10, "inverse": True},
-                    {"name": "recaps_time_date", "score": 15},
-                ]
-            },
-            "Closing/Wrap-up": {
-                "weight": 10,
-                "metrics": [
-                    {"name": "offers_further_assistance", "score": 5},
-                    {"name": "ended_call_properly", "score": 5},
-                ]
-            }
+        # Calculate binary scores based on predictions
+        scores = {
+            # Opening (10%)
+            "professional_greeting": 5 if predictions.get("professional_greeting", 0) > 0.5 else 0,
+            "verifies_patient_online": 5 if predictions.get("patient_verification", 0) > 0.5 else 0,
+            
+            # Middle/Climax (70%)
+            "patient_verification": 25 if predictions.get("patient_verification", 0) > 0.5 else 0,
+            "active_listening": 10 if predictions.get("active_listening", 0) > 0.5 else 0,
+            "recaps_time_date": 15 if predictions.get("recaps_correctly", 0) > 0.5 else 0,
+            
+            # Closing (10%)
+            "offers_further_assistance": 5 if predictions.get("offers_assistance", 0) > 0.5 else 0,
+            "ended_call_properly": 5 if predictions.get("proper_closing", 0) > 0.5 else 0,
+            
+            # All Phases (10%)
+            "enthusiasm_markers": 10 if predictions.get("enthusiasm", 0) > 0.5 else 0,
         }
         
-        def is_metric_detected(metric_name, bert_results, wav2vec_results, text):
-            """Binary detection using ONLY AI models"""
-            if bert_results and metric_name in bert_results:
-                bert_score = bert_results[metric_name]
-                if isinstance(bert_score, dict) and "score" in bert_score:
-                    if bert_score["score"] > 0.5:
-                        return True
-                elif isinstance(bert_score, (int, float)):
-                    if bert_score > 0.5:
-                        return True
-            
-            if wav2vec_results and metric_name in wav2vec_results:
-                wav2vec_score = wav2vec_results[metric_name]
-                if isinstance(wav2vec_score, dict) and "score" in wav2vec_score:
-                    if wav2vec_score["score"] > 0.5:
-                        return True
-                elif isinstance(wav2vec_score, (int, float)):
-                    if wav2vec_score > 0.5:
-                        return True
-            
-            return False
+        total_score = sum(scores.values())
         
-        filler_words = ["um", "uh", "er", "ah", "like", "you know"]
-        has_fillers_detected = False
-        for seg in agent_segments:
-            text_lower = seg["text"].lower()
-            for filler in filler_words:
-                if f" {filler} " in f" {text_lower} " or text_lower.startswith(f"{filler} ") or text_lower.endswith(f" {filler}"):
-                    has_fillers_detected = True
-                    break
-            if has_fillers_detected:
-                break
+        print(f"📊 Individual Scores: {scores}")
+        print(f"🎯 Total Score: {total_score}/100")
         
-        for phase_name, phase_data in scoring_structure.items():
-            phase_score = 0.0
-            phase_details = []
-            
-            for metric in phase_data["metrics"]:
-                metric_name = metric["name"]
-                metric_score = metric["score"]
-                
-                if metric_name == "has_fillers":
-                    if has_fillers_detected:
-                        achieved = 0.0
-                        detected = False
-                    else:
-                        achieved = metric_score
-                        detected = True
-                else:
-                    detected = is_metric_detected(metric_name, bert_output, wav2vec_output, agent_text)
-                    
-                    if not detected and "alternatives" in metric:
-                        for alt in metric["alternatives"]:
-                            if is_metric_detected(alt, bert_output, wav2vec_output, agent_text):
-                                detected = True
-                                break
-                    
-                    achieved = metric_score if detected else 0.0
-                
-                phase_score += achieved
-                phase_details.append({
-                    "metric": metric_name,
-                    "detected": detected,
-                    "score": achieved,
-                    "max_score": metric_score
-                })
-            
-            scores[phase_name] = {
-                "score": phase_score,
-                "max_score": phase_data["weight"],
-                "details": phase_details
-            }
-            total_score += phase_score
-        
+        # Update database
         call.score = total_score
-        call.scores = scores
+        call.scores = json.dumps(scores, indent=2)
         call.status = "completed"
-        
-        models_used = ["WhisperX"]
-        if bert_output:
-            models_used.append("BERT")
-        if wav2vec_output:
-            models_used.append("Wav2Vec2-BERT")
-        
-        call.analysis_status = f"completed ({' + '.join(models_used)} - AI only)"
-        
-        print(f"\n{'='*60}")
-        print(f"✓ Analysis completed: {total_score:.1f}/100")
-        print(f"✓ Models used: {' + '.join(models_used)} (AI only)")
-        print(f"{'='*60}")
-        
+        call.analysis_status = "completed"
         db.commit()
+        
+        print(f"✅ Call {call_id} processed successfully!")
+        print(f"{'='*60}\n")
         
     except Exception as e:
-        print(f"Error processing call {call_id}: {e}")
-        call.status = "failed"
-        call.analysis_status = f"failed: {str(e)}"
-        db.commit()
+        print(f"❌ Error processing call {call_id}: {e}")
+        import traceback
+        traceback.print_exc()
+        
+        call = db.query(CallEvaluation).filter(CallEvaluation.id == call_id).first()
+        if call:
+            call.status = "failed"
+            call.analysis_status = f"error: {str(e)}"
+            db.commit()
+    
     finally:
         db.close()
 
@@ -406,14 +276,13 @@ async def upload_call(
     file: UploadFile = File(...),
     db: Session = Depends(get_db)
 ):
-    """Upload audio file and start processing"""
+    """Upload and process call recording"""
     
-    if not file.content_type.startswith("audio/"):
-        raise HTTPException(400, "File must be an audio file")
+    if not file.filename.endswith(('.mp3', '.wav', '.m4a')):
+        raise HTTPException(status_code=400, detail="Invalid file type")
     
     call_id = str(uuid.uuid4())
-    file_ext = Path(file.filename).suffix
-    file_path = os.path.join(settings.UPLOAD_DIR, f"{call_id}{file_ext}")
+    file_path = os.path.join(settings.UPLOAD_DIR, file.filename)
     
     with open(file_path, "wb") as f:
         content = await file.read()
@@ -422,94 +291,54 @@ async def upload_call(
     call = CallEvaluation(
         id=call_id,
         filename=file.filename,
-        file_path=file_path,
-        status="pending",
-        analysis_status="pending"
+        status="processing",
+        analysis_status="queued",
+        created_at=datetime.utcnow()
     )
+    
     db.add(call)
     db.commit()
     
     background_tasks.add_task(process_call, call_id, file_path)
     
     return {
-        "call_id": call_id,
-        "status": "pending",
-        "message": "File uploaded successfully. Processing started."
-    }
-
-
-@app.get("/api/calls/{call_id}")
-async def get_call(call_id: str, db: Session = Depends(get_db)):
-    """Get call evaluation results"""
-    
-    call = db.query(CallEvaluation).filter(CallEvaluation.id == call_id).first()
-    
-    if not call:
-        raise HTTPException(404, "Call not found")
-    
-    return {
-        "id": call.id,
-        "filename": call.filename,
-        "status": call.status,
-        "analysis_status": call.analysis_status,
-        "score": call.score,
-        "scores": call.scores,
-        "transcript": call.transcript,
-        "duration": call.duration,
-        "speakers": call.speakers,
-        "created_at": call.created_at.isoformat()
+        "id": call_id,
+        "filename": file.filename,
+        "status": "processing"
     }
 
 
 @app.get("/api/calls")
-async def list_calls(db: Session = Depends(get_db)):
-    """List all call evaluations"""
-    
+async def get_all_calls(db: Session = Depends(get_db)):
+    """Get all call evaluations"""
     calls = db.query(CallEvaluation).order_by(CallEvaluation.created_at.desc()).all()
-    
-    return [
-        {
-            "id": call.id,
-            "filename": call.filename,
-            "status": call.status,
-            "score": call.score,
-            "duration": call.duration,
-            "created_at": call.created_at.isoformat()
-        }
-        for call in calls
-    ]
+    return calls
 
 
-@app.get("/api/audio/{call_id}")
-async def get_audio(call_id: str, db: Session = Depends(get_db)):
-    """Get audio file"""
-    
+@app.get("/api/calls/{call_id}")
+async def get_call(call_id: str, db: Session = Depends(get_db)):
+    """Get specific call evaluation"""
     call = db.query(CallEvaluation).filter(CallEvaluation.id == call_id).first()
     
     if not call:
-        raise HTTPException(404, "Call not found")
+        raise HTTPException(status_code=404, detail="Call not found")
     
-    if not os.path.exists(call.file_path):
-        raise HTTPException(404, "Audio file not found")
-    
-    return FileResponse(call.file_path)
+    return call
 
 
-@app.get("/api/temp-audio/{call_id}")
-async def get_temp_audio(call_id: str, db: Session = Depends(get_db)):
-    """Temporary endpoint for Modal to download audio file"""
-    
+@app.delete("/api/calls/{call_id}")
+async def delete_call(call_id: str, db: Session = Depends(get_db)):
+    """Delete call evaluation"""
     call = db.query(CallEvaluation).filter(CallEvaluation.id == call_id).first()
     
     if not call:
-        raise HTTPException(404, "Call not found")
+        raise HTTPException(status_code=404, detail="Call not found")
     
-    if not os.path.exists(call.file_path):
-        raise HTTPException(404, "Audio file not found")
+    file_path = os.path.join(settings.UPLOAD_DIR, call.filename)
+    if os.path.exists(file_path):
+        os.remove(file_path)
     
-    return FileResponse(call.file_path)
-
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    db.delete(call)
+    db.commit()
+    
+    return {"message": "Call deleted successfully"}
