@@ -34,7 +34,7 @@ app = FastAPI(title="CallEval API - Modal WhisperX + Binary Scorecard")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[settings.FRONTEND_URL, "http://localhost:5173"],  # Allow both production and local
+    allow_origins=[settings.FRONTEND_URL, "http://localhost:5173"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -42,26 +42,17 @@ app.add_middleware(
 
 
 def transcribe_with_modal_whisperx(audio_path: str, call_id: str):
-    """
-    Transcribe audio using Modal WhisperX deployment
-    
-    Modal function expects a URL, so we create a public URL to the file
-    """
-    # Get Modal function
+    """Transcribe audio using Modal WhisperX deployment"""
     f = modal.Function.lookup(
         settings.MODAL_APP_NAME,
         settings.MODAL_FUNCTION_NAME
     )
     
-    # Create URL to audio file
-    # In production (Render): https://calleval-backend.onrender.com/api/temp-audio/{call_id}
-    # In local dev: http://localhost:8000/api/temp-audio/{call_id}
-    backend_url = settings.BACKEND_URL  # Set in environment variables
+    backend_url = settings.BACKEND_URL
     audio_url = f"{backend_url}/api/temp-audio/{call_id}"
     
     print(f"🎯 Sending audio URL to Modal: {audio_url}")
     
-    # Call Modal WhisperX with URL
     result = f.remote(
         audio_url=audio_url,
         language="en",
@@ -84,17 +75,7 @@ async def root():
 
 
 def process_call(call_id: str, file_path: str):
-    """
-    BACKGROUND TASK: Process the call with Modal WhisperX + Binary Scorecard
-    
-    All Phases (10%): enthusiasm_markers | shows_enthusiasm | sounds_polite_courteous
-    I. Opening Spiel (10%): professional_greeting (5%) + verifies_patient_online (5%)
-    II. Middle/Climax (70%): patient_verification (25%) + active_listening|handled_with_care (10%) + 
-                             asks_permission_hold|returns_properly_from_hold (10%) + 
-                             has_fillers|no_fillers_stammers (10%) + recaps_time_date (15%)
-    III. Closing/Wrap-up (10%): offers_further_assistance (5%) + ended_call_properly (5%)
-    Total: 100%
-    """
+    """Background task: Process call with Modal WhisperX + Binary Scorecard"""
     
     db = SessionLocal()
     
@@ -105,9 +86,7 @@ def process_call(call_id: str, file_path: str):
             print(f"Call {call_id} not found")
             return
         
-        # ============================================================
         # STEP 1: TRANSCRIBE WITH MODAL WHISPERX
-        # ============================================================
         print(f"\n{'='*60}")
         print(f"STEP 1: TRANSCRIBING WITH MODAL WHISPERX")
         print(f"{'='*60}")
@@ -116,17 +95,14 @@ def process_call(call_id: str, file_path: str):
         call.analysis_status = "transcribing"
         db.commit()
         
-        # Call Modal WhisperX
         whisperx_result = transcribe_with_modal_whisperx(file_path, call_id)
         
         if not whisperx_result or "segments" not in whisperx_result:
             raise Exception("WhisperX transcription failed")
         
-        # Extract full transcript
         full_text = " ".join([seg["text"] for seg in whisperx_result["segments"]])
         call.transcript = full_text
         
-        # Calculate duration
         if "segments" in whisperx_result and len(whisperx_result["segments"]) > 0:
             last_segment = whisperx_result["segments"][-1]
             duration_seconds = int(last_segment.get("end", 0))
@@ -134,7 +110,6 @@ def process_call(call_id: str, file_path: str):
             duration_secs = duration_seconds % 60
             call.duration = f"{duration_minutes}:{duration_secs:02d}"
         
-        # Process speaker diarization from WhisperX
         speakers_data = []
         if "segments" in whisperx_result:
             for seg in whisperx_result["segments"]:
@@ -148,13 +123,11 @@ def process_call(call_id: str, file_path: str):
         
         call.speakers = speakers_data
         
-        # Identify speaker roles
         print(f"✓ Identifying speaker roles...")
         speakers = list(set(s["speaker"] for s in speakers_data))
         agent_speaker = None
         
         if len(speakers) >= 1:
-            # Check first utterances for greeting patterns
             first_utterances = speakers_data[:3]
             for utt in first_utterances:
                 text_lower = utt["text"].lower()
@@ -162,11 +135,9 @@ def process_call(call_id: str, file_path: str):
                     agent_speaker = utt["speaker"]
                     break
             
-            # If no clear greeting, assume first speaker is agent
             if not agent_speaker and len(speakers_data) > 0:
                 agent_speaker = speakers_data[0]["speaker"]
         
-        # Assign roles
         speaker_roles = {}
         for speaker in speakers:
             if speaker == agent_speaker:
@@ -176,13 +147,10 @@ def process_call(call_id: str, file_path: str):
         
         print(f"✓ Speaker roles: {speaker_roles}")
         
-        # Filter agent segments
         agent_segments = [s for s in speakers_data if speaker_roles.get(s["speaker"]) == "agent"]
         agent_text = " ".join([s["text"] for s in agent_segments])
         
-        # ============================================================
         # STEP 2: ANALYZE WITH REPLICATE MODELS
-        # ============================================================
         print(f"\n{'='*60}")
         print(f"STEP 2: ANALYZING WITH REPLICATE MODELS")
         print(f"{'='*60}")
@@ -191,55 +159,55 @@ def process_call(call_id: str, file_path: str):
         call.analysis_status = "analyzing"
         db.commit()
         
-        # Prepare audio features for Wav2Vec2-BERT
         audio_array, sr = librosa.load(file_path, sr=16000)
         
         # Initialize model outputs
         wav2vec_output = None
         bert_output = None
         
-        # Call Wav2Vec2-BERT model on Replicate
+        # Try Wav2Vec2-BERT model
         print(f"✓ Running Wav2Vec2-BERT model...")
         try:
-            wav2vec_output = replicate.run(
-                "p0peizd0pe/calleval-wav2vec2:89f41f4389e3ccc573950905bf1784905be3029014a573a880cbcd47d582cc12",
-                input={
-                    "audio": open(file_path, "rb"),
-                    "text": agent_text
-                }
-            )
+            with open(file_path, "rb") as audio_file:
+                wav2vec_output = replicate.run(
+                    "p0peizd0pe/calleval-wav2vec2:4f9414167eff508260c6981379338743da77cbf37f4715fd1f56e73b68237399",
+                    input={
+                        "audio": audio_file,
+                        "text": agent_text
+                    }
+                )
         except Exception as e:
             print(f"⚠️ Wav2Vec2-BERT model error: {e}")
-            print(f"⚠️ Cannot continue without AI models")
-            raise Exception(f"Wav2Vec2 model failed: {e}")
+            print(f"⚠️ Skipping Wav2Vec2, using BERT only")
+            wav2vec_output = None
         
-        # Call BERT model on Replicate for text-only analysis
+        # Try BERT model
         print(f"✓ Running BERT model...")
         try:
             bert_output = replicate.run(
-                "p0peizd0pe/calleval-bert:latest",
+                "p0peizd0pe/calleval-bert:89f41f4389e3ccc573950905bf1784905be3029014a573a880cbcd47d582cc12",
                 input={
                     "text": agent_text,
-                    "task": "all"  # Analyze all tasks
+                    "task": "all"
                 }
             )
         except Exception as e:
             print(f"⚠️ BERT model error: {e}")
-            print(f"⚠️ Cannot continue without AI models")
-            raise Exception(f"BERT model failed: {e}")
+            if wav2vec_output is None:
+                print(f"⚠️ Both models failed - cannot continue")
+                raise Exception(f"All AI models failed: {e}")
+            else:
+                print(f"⚠️ Continuing with Wav2Vec2 only")
+                bert_output = None
         
-        # ============================================================
-        # STEP 3: BINARY SCORING SYSTEM
-        # ============================================================
+        # STEP 3: BINARY SCORING
         print(f"\n{'='*60}")
         print(f"STEP 3: BINARY SCORING")
         print(f"{'='*60}")
         
-        # Initialize scores
         scores = {}
         total_score = 0.0
         
-        # Define scoring structure
         scoring_structure = {
             "All Phases": {
                 "weight": 10,
@@ -260,7 +228,7 @@ def process_call(call_id: str, file_path: str):
                     {"name": "patient_verification", "score": 25},
                     {"name": "active_listening", "score": 10, "alternatives": ["handled_with_care"]},
                     {"name": "asks_permission_hold", "score": 10, "alternatives": ["returns_properly_from_hold"]},
-                    {"name": "has_fillers", "score": 10, "inverse": True},  # 0 if fillers detected, 10 if no fillers
+                    {"name": "has_fillers", "score": 10, "inverse": True},
                     {"name": "recaps_time_date", "score": 15},
                 ]
             },
@@ -273,23 +241,17 @@ def process_call(call_id: str, file_path: str):
             }
         }
         
-        # Helper function to check if metric is detected
         def is_metric_detected(metric_name, bert_results, wav2vec_results, text):
-            """
-            Binary detection using ONLY AI models (no pattern matching)
-            Returns True if metric is detected by models, False otherwise
-            """
-            # Check BERT model prediction
+            """Binary detection using ONLY AI models"""
             if bert_results and metric_name in bert_results:
                 bert_score = bert_results[metric_name]
                 if isinstance(bert_score, dict) and "score" in bert_score:
-                    if bert_score["score"] > 0.5:  # Threshold for binary decision
+                    if bert_score["score"] > 0.5:
                         return True
                 elif isinstance(bert_score, (int, float)):
                     if bert_score > 0.5:
                         return True
             
-            # Check Wav2Vec2-BERT model prediction
             if wav2vec_results and metric_name in wav2vec_results:
                 wav2vec_score = wav2vec_results[metric_name]
                 if isinstance(wav2vec_score, dict) and "score" in wav2vec_score:
@@ -299,10 +261,8 @@ def process_call(call_id: str, file_path: str):
                     if wav2vec_score > 0.5:
                         return True
             
-            # No pattern matching - models only
             return False
         
-        # Detect fillers in segments
         filler_words = ["um", "uh", "er", "ah", "like", "you know"]
         has_fillers_detected = False
         for seg in agent_segments:
@@ -314,7 +274,6 @@ def process_call(call_id: str, file_path: str):
             if has_fillers_detected:
                 break
         
-        # Calculate scores for each phase
         for phase_name, phase_data in scoring_structure.items():
             phase_score = 0.0
             phase_details = []
@@ -323,19 +282,16 @@ def process_call(call_id: str, file_path: str):
                 metric_name = metric["name"]
                 metric_score = metric["score"]
                 
-                # Special handling for fillers (inverse scoring)
                 if metric_name == "has_fillers":
                     if has_fillers_detected:
-                        achieved = 0.0  # Fillers detected = 0 points
+                        achieved = 0.0
                         detected = False
                     else:
-                        achieved = metric_score  # No fillers = full points
+                        achieved = metric_score
                         detected = True
                 else:
-                    # Check if metric or any alternative is detected
                     detected = is_metric_detected(metric_name, bert_output, wav2vec_output, agent_text)
                     
-                    # Check alternatives if available
                     if not detected and "alternatives" in metric:
                         for alt in metric["alternatives"]:
                             if is_metric_detected(alt, bert_output, wav2vec_output, agent_text):
@@ -359,12 +315,10 @@ def process_call(call_id: str, file_path: str):
             }
             total_score += phase_score
         
-        # Save results
         call.score = total_score
         call.scores = scores
         call.status = "completed"
         
-        # Create status message based on which models worked
         models_used = ["WhisperX"]
         if bert_output:
             models_used.append("BERT")
@@ -385,7 +339,6 @@ def process_call(call_id: str, file_path: str):
         call.status = "failed"
         call.analysis_status = f"failed: {str(e)}"
         db.commit()
-        # Don't raise - let the background task complete
     finally:
         db.close()
 
@@ -398,11 +351,9 @@ async def upload_call(
 ):
     """Upload audio file and start processing"""
     
-    # Validate file type
     if not file.content_type.startswith("audio/"):
         raise HTTPException(400, "File must be an audio file")
     
-    # Generate unique ID and save file
     call_id = str(uuid.uuid4())
     file_ext = Path(file.filename).suffix
     file_path = os.path.join(settings.UPLOAD_DIR, f"{call_id}{file_ext}")
@@ -411,7 +362,6 @@ async def upload_call(
         content = await file.read()
         f.write(content)
     
-    # Create database record
     call = CallEvaluation(
         id=call_id,
         filename=file.filename,
@@ -422,7 +372,6 @@ async def upload_call(
     db.add(call)
     db.commit()
     
-    # Start background processing
     background_tasks.add_task(process_call, call_id, file_path)
     
     return {
@@ -491,10 +440,7 @@ async def get_audio(call_id: str, db: Session = Depends(get_db)):
 
 @app.get("/api/temp-audio/{call_id}")
 async def get_temp_audio(call_id: str, db: Session = Depends(get_db)):
-    """
-    Temporary endpoint for Modal to download audio file
-    This serves the file so Modal's transcribe_with_diarization can access it via URL
-    """
+    """Temporary endpoint for Modal to download audio file"""
     
     call = db.query(CallEvaluation).filter(CallEvaluation.id == call_id).first()
     
