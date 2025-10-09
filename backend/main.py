@@ -198,7 +198,7 @@ def process_call(call_id: str, file_path: str):
         print(f"✓ Running Wav2Vec2-BERT model...")
         try:
             wav2vec_output = replicate.run(
-                "p0peizd0pe/wav2vec2-calleval-bert:4f9414167eff508260c6981379338743da77cbf37f4715fd1f56e73b68237399",
+                "p0peizd0pe/calleval-wav2vec2:4f9414167eff508260c6981379338743da77cbf37f4715fd1f56e73b68237399",
                 input={
                     "audio": open(file_path, "rb"),
                     "text": agent_text
@@ -206,8 +206,8 @@ def process_call(call_id: str, file_path: str):
             )
         except Exception as e:
             print(f"⚠️ Wav2Vec2-BERT model error: {e}")
-            print(f"⚠️ Skipping Wav2Vec2-BERT analysis, using BERT only")
-            wav2vec_output = None
+            print(f"⚠️ Cannot continue without AI models")
+            raise Exception(f"Wav2Vec2 model failed: {e}")
         
         # Call BERT model on Replicate for text-only analysis
         print(f"✓ Running BERT model...")
@@ -221,8 +221,8 @@ def process_call(call_id: str, file_path: str):
             )
         except Exception as e:
             print(f"⚠️ BERT model error: {e}")
-            print(f"⚠️ Skipping BERT analysis")
-            bert_output = None
+            print(f"⚠️ Cannot continue without AI models")
+            raise Exception(f"BERT model failed: {e}")
         
         # ============================================================
         # STEP 3: BINARY SCORING SYSTEM
@@ -272,8 +272,8 @@ def process_call(call_id: str, file_path: str):
         # Helper function to check if metric is detected
         def is_metric_detected(metric_name, bert_results, wav2vec_results, text):
             """
-            Binary detection: Returns True if metric is detected, False otherwise
-            Uses AI models + pattern matching
+            Binary detection using ONLY AI models (no pattern matching)
+            Returns True if metric is detected by models, False otherwise
             """
             # Check BERT model prediction
             if bert_results and metric_name in bert_results:
@@ -295,28 +295,7 @@ def process_call(call_id: str, file_path: str):
                     if wav2vec_score > 0.5:
                         return True
             
-            # Pattern matching as fallback (always used if models unavailable)
-            patterns = {
-                "professional_greeting": ["thank you for calling", "good morning", "good afternoon", "hello"],
-                "verifies_patient_online": ["are you online", "online with me", "verify"],
-                "patient_verification": ["confirm", "verify", "date of birth", "birthday"],
-                "active_listening": ["i understand", "i see", "okay", "i hear you"],
-                "asks_permission_hold": ["may i put you on hold", "can i put you on hold", "hold please"],
-                "returns_properly_from_hold": ["thank you for holding", "thanks for waiting"],
-                "recaps_time_date": ["appointment", "scheduled", "time", "date"],
-                "offers_further_assistance": ["anything else", "help you with", "further assistance"],
-                "ended_call_properly": ["have a great day", "thank you", "goodbye", "bye"],
-                "enthusiasm_markers": ["!", "great", "wonderful", "excellent"],
-                "shows_enthusiasm": ["excited", "happy to", "glad"],
-                "sounds_polite_courteous": ["please", "thank you", "you're welcome", "certainly"],
-            }
-            
-            if metric_name in patterns:
-                text_lower = text.lower()
-                for pattern in patterns[metric_name]:
-                    if pattern in text_lower:
-                        return True
-            
+            # No pattern matching - models only
             return False
         
         # Detect fillers in segments
@@ -380,11 +359,11 @@ def process_call(call_id: str, file_path: str):
         call.score = total_score
         call.scores = scores
         call.status = "completed"
-        call.analysis_status = f"completed (WhisperX + pattern matching{' + BERT' if bert_output else ''}{' + Wav2Vec2' if wav2vec_output else ''})"
+        call.analysis_status = "completed (WhisperX + AI models)"
         
         print(f"\n{'='*60}")
         print(f"✓ Analysis completed: {total_score:.1f}/100")
-        print(f"✓ Models used: WhisperX + Pattern Matching{' + BERT' if bert_output else ''}{' + Wav2Vec2' if wav2vec_output else ''}")
+        print(f"✓ Models used: WhisperX + BERT + Wav2Vec2-BERT (AI only)")
         print(f"{'='*60}")
         
         db.commit()
@@ -394,7 +373,7 @@ def process_call(call_id: str, file_path: str):
         call.status = "failed"
         call.analysis_status = f"failed: {str(e)}"
         db.commit()
-        raise
+        # Don't raise - let the background task complete
     finally:
         db.close()
 
