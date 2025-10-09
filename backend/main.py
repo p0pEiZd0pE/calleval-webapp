@@ -194,17 +194,17 @@ def process_call(call_id: str, file_path: str):
         # Prepare audio features for Wav2Vec2-BERT
         audio_array, sr = librosa.load(file_path, sr=16000)
         
+        # Initialize model outputs
+        wav2vec_output = None
+        bert_output = None
+        
         # Call Wav2Vec2-BERT model on Replicate
         print(f"✓ Running Wav2Vec2-BERT model...")
         try:
-            # Read audio file properly
-            with open(file_path, "rb") as audio_file:
-                audio_data = audio_file.read()
-            
             wav2vec_output = replicate.run(
-                "p0peizd0pe/calleval-wav2vec2:4f9414167eff508260c6981379338743da77cbf37f4715fd1f56e73b68237399",
+                "p0peizd0pe/calleval-wav2vec2:89f41f4389e3ccc573950905bf1784905be3029014a573a880cbcd47d582cc12",
                 input={
-                    "audio": audio_data,
+                    "audio": open(file_path, "rb"),
                     "text": agent_text
                 }
             )
@@ -217,7 +217,7 @@ def process_call(call_id: str, file_path: str):
         print(f"✓ Running BERT model...")
         try:
             bert_output = replicate.run(
-                "p0peizd0pe/calleval-bert:89f41f4389e3ccc573950905bf1784905be3029014a573a880cbcd47d582cc12",
+                "p0peizd0pe/calleval-bert:latest",
                 input={
                     "text": agent_text,
                     "task": "all"  # Analyze all tasks
@@ -363,11 +363,19 @@ def process_call(call_id: str, file_path: str):
         call.score = total_score
         call.scores = scores
         call.status = "completed"
-        call.analysis_status = "completed (WhisperX + AI models)"
+        
+        # Create status message based on which models worked
+        models_used = ["WhisperX"]
+        if bert_output:
+            models_used.append("BERT")
+        if wav2vec_output:
+            models_used.append("Wav2Vec2-BERT")
+        
+        call.analysis_status = f"completed ({' + '.join(models_used)} - AI only)"
         
         print(f"\n{'='*60}")
         print(f"✓ Analysis completed: {total_score:.1f}/100")
-        print(f"✓ Models used: WhisperX + BERT + Wav2Vec2-BERT (AI only)")
+        print(f"✓ Models used: {' + '.join(models_used)} (AI only)")
         print(f"{'='*60}")
         
         db.commit()
