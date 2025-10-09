@@ -63,6 +63,34 @@ def transcribe_with_modal_whisperx(audio_path: str, call_id: str):
     return result
 
 
+@app.get("/test-replicate")
+async def test_replicate():
+    """Test endpoint to check if Replicate API works"""
+    try:
+        # Test BERT model with simple text
+        result = replicate.run(
+            "p0peizd0pe/calleval-bert:89f41f4389e3ccc573950905bf1784905be3029014a573a880cbcd47d582cc12",
+            input={
+                "text": "Hello, thank you for calling",
+                "task": "all"
+            }
+        )
+        return {
+            "status": "success",
+            "message": "Replicate API working",
+            "result": result
+        }
+    except Exception as e:
+        import traceback
+        return {
+            "status": "error",
+            "error": str(e),
+            "error_type": type(e).__name__,
+            "traceback": traceback.format_exc(),
+            "token_set": bool(os.getenv("REPLICATE_API_TOKEN"))
+        }
+
+
 @app.get("/")
 async def root():
     """Health check endpoint"""
@@ -191,8 +219,21 @@ def process_call(call_id: str, file_path: str):
                     "task": "all"
                 }
             )
+            print(f"✓ BERT output received: {type(bert_output)}")
+        except replicate.exceptions.ReplicateError as e:
+            print(f"⚠️ BERT Replicate error: {e}")
+            print(f"⚠️ Error details: {str(e)}")
+            if wav2vec_output is None:
+                print(f"⚠️ Both models failed - cannot continue")
+                raise Exception(f"All AI models failed. Replicate error: {str(e)}")
+            else:
+                print(f"⚠️ Continuing with Wav2Vec2 only")
+                bert_output = None
         except Exception as e:
             print(f"⚠️ BERT model error: {e}")
+            print(f"⚠️ Error type: {type(e).__name__}")
+            import traceback
+            print(f"⚠️ Full traceback: {traceback.format_exc()}")
             if wav2vec_output is None:
                 print(f"⚠️ Both models failed - cannot continue")
                 raise Exception(f"All AI models failed: {e}")
