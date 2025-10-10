@@ -1,0 +1,24 @@
+// API Configuration
+// Automatically uses environment variables for different environments
+
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+
+export const API_ENDPOINTS = {
+  // Upload
+  UPLOAD: `${API_URL}/api/upload`,
+  
+  // Calls
+  CALLS: `${API_URL}/api/calls`,
+  CALL_DETAIL: (id) => `${API_URL}/api/calls/${id}`,
+  DELETE_CALL: (id) => `${API_URL}/api/calls/${id}`,
+  
+  // Audio
+  AUDIO: (id) => `${API_URL}/api/audio/${id}`,
+  TEMP_AUDIO: (id) => `${API_URL}/api/temp-audio/${id}`,
+  
+  // Health check
+  ROOT: `${API_URL}/`,
+};
+
+// Export the base URL in case it's needed
+export { API_URL };

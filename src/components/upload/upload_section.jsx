@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { CloudUpload, X, Loader2 } from "lucide-react";
+import { API_ENDPOINTS } from '@/config/api';
 
 export default function UploadSection({ onUploadComplete }) {
   const [files, setFiles] = useState([]);
@@ -46,7 +47,7 @@ export default function UploadSection({ onUploadComplete }) {
       formData.append('file', file);
       
       try {
-        const response = await fetch('http://localhost:8000/api/upload', {
+        const response = await fetch(API_ENDPOINTS.UPLOAD, {
           method: 'POST',
           body: formData,
         });

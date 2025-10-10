@@ -8,6 +8,7 @@ import {
 } from "@/components/ui/card"
 import { columns } from './columns';
 import { DataTable } from './data-table';
+import { API_ENDPOINTS } from '@/config/api';
 
 export default function RecentlyUploadedCall({ refreshTrigger }) {
   const [data, setData] = useState([]);
@@ -15,14 +16,14 @@ export default function RecentlyUploadedCall({ refreshTrigger }) {
 
   const fetchCalls = async () => {
     try {
-      const response = await fetch('http://localhost:8000/api/calls');
+      const response = await fetch(API_ENDPOINTS.CALLS);
       const calls = await response.json();
       
       // Transform backend data to match table format
       const formattedData = calls.map(call => ({
         id: call.id,
-        fileName: call.file_name,
-        uploadDate: new Date(call.date_time).toLocaleDateString(),
+        fileName: call.filename,
+        uploadDate: new Date(call.created_at).toLocaleDateString(),
         status: call.status,
         analysisStatus: call.analysis_status,
         // Keep full data for actions
@@ -44,7 +45,10 @@ export default function RecentlyUploadedCall({ refreshTrigger }) {
   // Poll for updates every 5 seconds if there are pending uploads
   useEffect(() => {
     const hasPending = data.some(
-      call => call.status === 'pending' || call.status === 'transcribing'
+      call => call.status === 'pending' || 
+              call.status === 'processing' ||
+              call.status === 'transcribing' ||
+              call.status === 'analyzing'
     );
     
     if (hasPending) {

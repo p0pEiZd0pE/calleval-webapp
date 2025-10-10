@@ -29,6 +29,8 @@ dist-ssr
 
 # Environment variables - NEVER PUSH THESE
 .env
+.env.local
+.env.production.local
 backend/.env
 **/.env
 
