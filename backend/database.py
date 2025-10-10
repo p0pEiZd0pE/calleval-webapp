@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, Column, String, Float, DateTime, Text, JSON
+from sqlalchemy import create_engine, Column, String, Float, DateTime, Text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from datetime import datetime
@@ -24,8 +24,15 @@ class CallEvaluation(Base):
     transcript = Column(Text, nullable=True)  # Full transcription text
     duration = Column(String, nullable=True)  # Duration in MM:SS format
     score = Column(Float, nullable=True)  # Overall score (0-100)
-    scores = Column(JSON, nullable=True)  # Detailed scores breakdown
-    speakers = Column(JSON, nullable=True)  # Speaker diarization data
+    
+    # Modal AI Model Results - NEW COLUMNS
+    bert_analysis = Column(Text, nullable=True)  # BERT model output (JSON string)
+    wav2vec2_analysis = Column(Text, nullable=True)  # Wav2Vec2-BERT model output (JSON string)
+    binary_scores = Column(Text, nullable=True)  # Binary scorecard results (JSON string)
+    
+    # Legacy columns (kept for backward compatibility)
+    scores = Column(Text, nullable=True)  # Detailed scores breakdown (JSON string)
+    speakers = Column(Text, nullable=True)  # Speaker diarization data (JSON string)
     
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow)

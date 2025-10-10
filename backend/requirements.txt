@@ -6,8 +6,8 @@ uvicorn[standard]==0.24.0
 sqlalchemy==2.0.23
 python-multipart==0.0.6
 
-# Modal for AI Models
-modal==0.63.0
+# Modal for AI Models - UPDATED VERSION
+modal>=0.68.0
 
 # Audio Processing
 librosa==0.10.1
