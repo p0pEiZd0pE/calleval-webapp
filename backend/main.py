@@ -29,9 +29,18 @@ os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
 # FastAPI app
 app = FastAPI(title="CallEval API - Full Modal Stack")
 
+# Parse FRONTEND_URL to support multiple origins (comma-separated)
+allowed_origins = [
+    origin.strip() 
+    for origin in settings.FRONTEND_URL.split(",")
+]
+# Always allow localhost for development
+if "http://localhost:5173" not in allowed_origins:
+    allowed_origins.append("http://localhost:5173")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[settings.FRONTEND_URL, "http://localhost:5173"],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -87,7 +96,7 @@ SCORECARD_CONFIG = {
 
 def transcribe_with_modal_whisperx(audio_path: str, call_id: str):
     """Transcribe audio using Modal WhisperX"""
-    f = modal.Function.lookup(
+    f = modal.Function.from_name(
         settings.MODAL_WHISPERX_APP,
         settings.MODAL_WHISPERX_FUNCTION
     )
@@ -108,7 +117,7 @@ def transcribe_with_modal_whisperx(audio_path: str, call_id: str):
 def analyze_with_modal_bert(text: str):
     """Analyze text using Modal BERT"""
     try:
-        f = modal.Function.lookup(
+        f = modal.Function.from_name(
             settings.MODAL_BERT_APP,
             settings.MODAL_BERT_FUNCTION
         )
@@ -125,7 +134,7 @@ def analyze_with_modal_bert(text: str):
 def analyze_with_modal_wav2vec2(audio_path: str, call_id: str, text: str):
     """Analyze audio+text using Modal Wav2Vec2-BERT"""
     try:
-        f = modal.Function.lookup(
+        f = modal.Function.from_name(
             settings.MODAL_WAV2VEC2_APP,
             settings.MODAL_WAV2VEC2_FUNCTION
         )
