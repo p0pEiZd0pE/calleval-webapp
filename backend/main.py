@@ -96,27 +96,35 @@ SCORECARD_CONFIG = {
 
 def transcribe_with_modal_whisperx(audio_path: str, call_id: str):
     """Transcribe audio using Modal WhisperX"""
-    f = modal.Function.from_name(
-        settings.MODAL_WHISPERX_APP,
-        settings.MODAL_WHISPERX_FUNCTION
-    )
-    
-    audio_url = f"{settings.BACKEND_URL}/api/temp-audio/{call_id}"
-    print(f"🎯 WhisperX audio URL: {audio_url}")
-    
-    result = f.remote(
-        audio_url=audio_url,
-        language="en",
-        min_speakers=2,
-        max_speakers=2
-    )
-    
-    return result
+    try:
+        print(f"🔍 Looking up Modal function: {settings.MODAL_WHISPERX_APP}/{settings.MODAL_WHISPERX_FUNCTION}")
+        f = modal.Function.from_name(
+            settings.MODAL_WHISPERX_APP,
+            settings.MODAL_WHISPERX_FUNCTION
+        )
+        
+        audio_url = f"{settings.BACKEND_URL}/api/temp-audio/{call_id}"
+        print(f"🎯 WhisperX audio URL: {audio_url}")
+        
+        result = f.remote(
+            audio_url=audio_url,
+            language="en",
+            min_speakers=2,
+            max_speakers=2
+        )
+        
+        return result
+    except Exception as e:
+        print(f"❌ WhisperX Modal error: {e}")
+        print(f"   App: {settings.MODAL_WHISPERX_APP}")
+        print(f"   Function: {settings.MODAL_WHISPERX_FUNCTION}")
+        raise
 
 
 def analyze_with_modal_bert(text: str):
     """Analyze text using Modal BERT"""
     try:
+        print(f"🔍 Looking up Modal function: {settings.MODAL_BERT_APP}/{settings.MODAL_BERT_FUNCTION}")
         f = modal.Function.from_name(
             settings.MODAL_BERT_APP,
             settings.MODAL_BERT_FUNCTION
@@ -127,13 +135,16 @@ def analyze_with_modal_bert(text: str):
         return result
         
     except Exception as e:
-        print(f"❌ BERT error: {e}")
+        print(f"❌ BERT Modal error: {e}")
+        print(f"   App: {settings.MODAL_BERT_APP}")
+        print(f"   Function: {settings.MODAL_BERT_FUNCTION}")
         return None
 
 
 def analyze_with_modal_wav2vec2(audio_path: str, call_id: str, text: str):
     """Analyze audio+text using Modal Wav2Vec2-BERT"""
     try:
+        print(f"🔍 Looking up Modal function: {settings.MODAL_WAV2VEC2_APP}/{settings.MODAL_WAV2VEC2_FUNCTION}")
         f = modal.Function.from_name(
             settings.MODAL_WAV2VEC2_APP,
             settings.MODAL_WAV2VEC2_FUNCTION
@@ -146,7 +157,9 @@ def analyze_with_modal_wav2vec2(audio_path: str, call_id: str, text: str):
         return result
         
     except Exception as e:
-        print(f"❌ Wav2Vec2 error: {e}")
+        print(f"❌ Wav2Vec2 Modal error: {e}")
+        print(f"   App: {settings.MODAL_WAV2VEC2_APP}")
+        print(f"   Function: {settings.MODAL_WAV2VEC2_FUNCTION}")
         return None
 
 
