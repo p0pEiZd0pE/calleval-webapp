@@ -37,6 +37,53 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Binary Scorecard Configuration (AI-only)
+SCORECARD_CONFIG = {
+    # All Phases (10%)
+    "enthusiasm_markers": {
+        "weight": 5,
+        "threshold": 0.5
+    },
+    "sounds_polite_courteous": {
+        "weight": 5,
+        "threshold": 0.5
+    },
+    
+    # Opening Spiel (10%)
+    "professional_greeting": {
+        "weight": 5,
+        "threshold": 0.5
+    },
+    "verifies_patient_online": {
+        "weight": 5,
+        "threshold": 0.5
+    },
+    
+    # Middle/Climax (70%)
+    "patient_verification": {
+        "weight": 25,
+        "threshold": 0.5
+    },
+    "active_listening": {
+        "weight": 10,
+        "threshold": 0.5
+    },
+    "recaps_time_date": {
+        "weight": 15,
+        "threshold": 0.5
+    },
+    
+    # Closing/Wrap up (10%)
+    "offers_further_assistance": {
+        "weight": 5,
+        "threshold": 0.5
+    },
+    "ended_call_properly": {
+        "weight": 5,
+        "threshold": 0.5
+    }
+}
+
 
 def transcribe_with_modal_whisperx(audio_path: str, call_id: str):
     """Transcribe audio using Modal WhisperX"""
@@ -94,12 +141,57 @@ def analyze_with_modal_wav2vec2(audio_path: str, call_id: str, text: str):
         return None
 
 
+def evaluate_binary_metric(metric_name: str, text: str, bert_output: dict, wav2vec2_output: dict) -> float:
+    """
+    Evaluate a single metric using AI models only (BERT + Wav2Vec2)
+    Returns: 1.0 if ANY AI model detects it, 0.0 otherwise
+    """
+    # BERT-based score
+    ai_score = 0.0
+    if bert_output and bert_output.get("success") and metric_name in SCORECARD_CONFIG:
+        predictions = bert_output.get("predictions", {})
+        threshold = SCORECARD_CONFIG[metric_name].get("threshold", 0.5)
+        
+        if metric_name in predictions:
+            prediction_value = predictions[metric_name]
+            ai_score = 1.0 if prediction_value >= threshold else 0.0
+            print(f"  {metric_name}: BERT={prediction_value:.3f} (threshold={threshold}) → {ai_score}")
+    
+    # Wav2Vec2-based score (for enthusiasm and politeness)
+    wav2vec2_score = 0.0
+    if wav2vec2_output and wav2vec2_output.get("success"):
+        results = wav2vec2_output.get("results", {})
+        preds = results.get("predictions", {})
+        
+        wav2vec2_mapping = {
+            'enthusiasm_markers': 'enthusiasm',
+            'sounds_polite_courteous': 'politeness'
+        }
+        
+        if metric_name in wav2vec2_mapping:
+            wav2vec2_key = wav2vec2_mapping[metric_name]
+            if wav2vec2_key in preds:
+                threshold = SCORECARD_CONFIG[metric_name].get("threshold", 0.5)
+                prediction_value = preds[wav2vec2_key]
+                wav2vec2_score = 1.0 if prediction_value >= threshold else 0.0
+                print(f"  {metric_name}: Wav2Vec2={prediction_value:.3f} → {wav2vec2_score}")
+    
+    # Binary OR logic: if ANY AI model detects it, return 1.0
+    final_score = 1.0 if (ai_score > 0 or wav2vec2_score > 0) else 0.0
+    
+    if ai_score == 0 and wav2vec2_score == 0:
+        print(f"  {metric_name}: NOT DETECTED by any AI model → {final_score}")
+    
+    return final_score
+
+
 @app.get("/")
 async def root():
     return {
         "status": "ok",
         "service": "CallEval Backend API - Full Modal Stack",
         "version": "2.0.0",
+        "evaluation": "AI Models Only (No Pattern Matching)",
         "models": {
             "whisperx": "Modal ✓",
             "bert": "Modal ✓",
@@ -116,7 +208,7 @@ async def serve_temp_audio(call_id: str, db: Session = Depends(get_db)):
     if not call:
         raise HTTPException(status_code=404, detail="Call not found")
     
-    file_path = os.path.join(settings.UPLOAD_DIR, call.filename)
+    file_path = call.file_path
     
     if not os.path.exists(file_path):
         raise HTTPException(status_code=404, detail="Audio file not found")
@@ -129,7 +221,7 @@ async def serve_temp_audio(call_id: str, db: Session = Depends(get_db)):
 
 
 def process_call(call_id: str, file_path: str):
-    """Background task: Process call with full Modal stack"""
+    """Background task: Process call with full Modal stack + Binary Scoring"""
     
     db = SessionLocal()
     
@@ -204,43 +296,33 @@ def process_call(call_id: str, file_path: str):
         
         if not bert_output or not bert_output.get("success"):
             error_msg = bert_output.get("error") if bert_output else "No response"
-            print(f"❌ BERT failed: {error_msg}")
+            print(f"⚠️ BERT failed: {error_msg}")
+            print(f"⚠️ Cannot continue without AI model predictions")
             
             if wav2vec_output is None:
-                raise Exception(f"All AI models failed: {error_msg}")
+                raise Exception(f"Both AI models failed - cannot evaluate call without model predictions")
         
-        # STEP 3: CALCULATE BINARY SCORECARD
+        # STEP 3: CALCULATE BINARY SCORECARD (AI-ONLY)
         print(f"\n{'='*60}")
-        print(f"STEP 3: CALCULATING BINARY SCORECARD")
+        print(f"STEP 3: CALCULATING BINARY SCORECARD (AI MODELS ONLY)")
         print(f"{'='*60}")
         
-        # Use BERT or Wav2Vec2 predictions
-        predictions = {}
-        if bert_output and bert_output.get("success"):
-            predictions = bert_output.get("predictions", {})
-        elif wav2vec_output and wav2vec_output.get("success"):
-            predictions = wav2vec_output.get("results", {}).get("predictions", {})
+        # Evaluate each metric using binary logic
+        metric_scores = {}
         
-        # Calculate binary scores based on predictions
-        scores = {
-            # Opening (10%)
-            "professional_greeting": 5 if predictions.get("professional_greeting", 0) > 0.5 else 0,
-            "verifies_patient_online": 5 if predictions.get("patient_verification", 0) > 0.5 else 0,
-            
-            # Middle/Climax (70%)
-            "patient_verification": 25 if predictions.get("patient_verification", 0) > 0.5 else 0,
-            "active_listening": 10 if predictions.get("active_listening", 0) > 0.5 else 0,
-            "recaps_time_date": 15 if predictions.get("recaps_correctly", 0) > 0.5 else 0,
-            
-            # Closing (10%)
-            "offers_further_assistance": 5 if predictions.get("offers_assistance", 0) > 0.5 else 0,
-            "ended_call_properly": 5 if predictions.get("proper_closing", 0) > 0.5 else 0,
-            
-            # All Phases (10%)
-            "enthusiasm_markers": 10 if predictions.get("enthusiasm", 0) > 0.5 else 0,
-        }
+        for metric_name in SCORECARD_CONFIG.keys():
+            score = evaluate_binary_metric(metric_name, agent_text, bert_output, wav2vec_output)
+            metric_scores[metric_name] = score
         
-        total_score = sum(scores.values())
+        # Calculate weighted scores
+        scores = {}
+        total_score = 0
+        
+        for metric_name, found_score in metric_scores.items():
+            weight = SCORECARD_CONFIG[metric_name]["weight"]
+            final_score = found_score * weight
+            scores[metric_name] = final_score
+            total_score += final_score
         
         print(f"📊 Individual Scores: {scores}")
         print(f"🎯 Total Score: {total_score}/100")
@@ -249,7 +331,7 @@ def process_call(call_id: str, file_path: str):
         call.score = total_score
         call.scores = json.dumps(scores, indent=2)
         call.status = "completed"
-        call.analysis_status = "completed"
+        call.analysis_status = "completed - AI models only"
         db.commit()
         
         print(f"✅ Call {call_id} processed successfully!")
@@ -335,7 +417,7 @@ async def delete_call(call_id: str, db: Session = Depends(get_db)):
     if not call:
         raise HTTPException(status_code=404, detail="Call not found")
     
-    file_path = os.path.join(settings.UPLOAD_DIR, call.filename)
+    file_path = call.file_path
     if os.path.exists(file_path):
         os.remove(file_path)
     
