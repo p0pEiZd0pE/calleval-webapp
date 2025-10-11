@@ -9,7 +9,7 @@ import modal
 import librosa
 from pathlib import Path
 import json
-import re  # ADD THIS IMPORT FOR PATTERN MATCHING
+import re  # ADD THIS FOR PATTERN MATCHING
 
 from config import settings
 from database import get_db, CallEvaluation, SessionLocal
@@ -62,7 +62,7 @@ SCORECARD_CONFIG = {
     # All Phases (10%)
     "enthusiasm_markers": {
         "weight": 5,
-        "threshold": 0.6,
+        "threshold": 0.5,
         "patterns": [
             r"happy to help", r"glad to assist", r"pleasure", r"absolutely", 
             r"of course", r"definitely", r"certainly", r"wonderful", r"great"
@@ -70,7 +70,7 @@ SCORECARD_CONFIG = {
     },
     "sounds_polite_courteous": {
         "weight": 5,
-        "threshold": 0.6,
+        "threshold": 0.5,
         "patterns": [
             r"please", r"thank you", r"you're welcome", r"my pleasure", 
             r"sir", r"ma'am", r"excuse me", r"pardon"
@@ -80,7 +80,7 @@ SCORECARD_CONFIG = {
     # Opening Spiel (10%)
     "professional_greeting": {
         "weight": 5,
-        "threshold": 0.6,
+        "threshold": 0.5,
         "patterns": [
             r"thank you for calling.*practice",
             r"good (morning|afternoon|evening)",
@@ -102,7 +102,7 @@ SCORECARD_CONFIG = {
     # Middle/Climax (70%)
     "patient_verification": {
         "weight": 25,
-        "threshold": 0.6,
+        "threshold": 0.5,
         "patterns": [
             r"(date of birth|dob|birthday)",
             r"(first.*last name|full name)",
@@ -146,11 +146,11 @@ SCORECARD_CONFIG = {
     "no_fillers_stammers": {
         "weight": 10,
         "threshold": 0.5,
-        "patterns": []  # This is inverse - fillers detected = 0, no fillers = 1
+        "patterns": []  # Inverse logic
     },
     "recaps_time_date": {
         "weight": 15,
-        "threshold": 0.6,
+        "threshold": 0.5,
         "patterns": [
             r"(monday|tuesday|wednesday|thursday|friday|saturday|sunday)",
             r"(january|february|march|april|may|june|july|august|september|october|november|december)",
@@ -186,140 +186,95 @@ SCORECARD_CONFIG = {
 }
 
 
+# ORIGINAL WORKING MODAL FUNCTIONS (NO CHANGES)
 def transcribe_with_modal_whisperx(audio_path: str, call_id: str):
     """Transcribe audio using Modal WhisperX"""
     try:
         print(f"🔍 Looking up Modal function: {settings.MODAL_WHISPERX_APP}/{settings.MODAL_WHISPERX_FUNCTION}")
         
-        # Import modal here to ensure env vars are set
         import modal
         
         try:
-            # Modal v1.2.0+ API
-            app = modal.App.lookup(settings.MODAL_WHISPERX_APP)
-            print(f"✓ App '{settings.MODAL_WHISPERX_APP}' found")
-            
-            # Access function through registered_functions dictionary
-            if hasattr(app, 'registered_functions'):
-                print(f"📋 Registered functions: {list(app.registered_functions.keys())}")
-                
-                if settings.MODAL_WHISPERX_FUNCTION in app.registered_functions:
-                    f = app.registered_functions[settings.MODAL_WHISPERX_FUNCTION]
-                    print(f"✓ Function '{settings.MODAL_WHISPERX_FUNCTION}' found in registered_functions")
-                else:
-                    print(f"❌ Function '{settings.MODAL_WHISPERX_FUNCTION}' not found")
-                    print(f"   Available functions: {list(app.registered_functions.keys())}")
-                    raise Exception(f"Function '{settings.MODAL_WHISPERX_FUNCTION}' not found. Available: {list(app.registered_functions.keys())}")
-            else:
-                raise Exception("App has no registered_functions attribute")
-                    
-        except Exception as lookup_error:
-            print(f"❌ Modal function lookup failed: {lookup_error}")
-            print(f"   App: {settings.MODAL_WHISPERX_APP}")
-            print(f"   Function: {settings.MODAL_WHISPERX_FUNCTION}")
-            print(f"   Modal version: {modal.__version__ if hasattr(modal, '__version__') else 'unknown'}")
-            import traceback
-            traceback.print_exc()
-            return None
+            f = modal.Function.lookup(settings.MODAL_WHISPERX_APP, settings.MODAL_WHISPERX_FUNCTION)
+        except AttributeError:
+            # Fallback for older Modal SDK versions
+            f = modal.Function.from_name(settings.MODAL_WHISPERX_APP, settings.MODAL_WHISPERX_FUNCTION)
         
-        print(f"🎤 Modal WhisperX function found. Processing audio...")
         audio_url = f"{settings.BACKEND_URL}/api/temp-audio/{call_id}"
-        result = f.remote(audio_url=audio_url)
+        print(f"🎯 WhisperX audio URL: {audio_url}")
         
-        print(f"✅ WhisperX transcription complete")
+        result = f.remote(
+            audio_url=audio_url,
+            language="en",
+            min_speakers=2,
+            max_speakers=2
+        )
+        
         return result
-        
     except Exception as e:
         print(f"❌ WhisperX Modal error: {e}")
+        print(f"   App: {settings.MODAL_WHISPERX_APP}")
+        print(f"   Function: {settings.MODAL_WHISPERX_FUNCTION}")
         import traceback
         traceback.print_exc()
-        return None
+        raise
 
 
-def analyze_with_modal_bert(text: str, call_id: str):
+def analyze_with_modal_bert(text: str):
     """Analyze text using Modal BERT"""
     try:
-        print(f"🔍 Looking up Modal BERT function: {settings.MODAL_BERT_APP}/{settings.MODAL_BERT_FUNCTION}")
+        print(f"🔍 Looking up Modal function: {settings.MODAL_BERT_APP}/{settings.MODAL_BERT_FUNCTION}")
         
         import modal
         
         try:
-            # Modal v1.2.0+ API
-            app = modal.App.lookup(settings.MODAL_BERT_APP)
-            
-            # Access function through registered_functions dictionary
-            if hasattr(app, 'registered_functions'):
-                if settings.MODAL_BERT_FUNCTION in app.registered_functions:
-                    f = app.registered_functions[settings.MODAL_BERT_FUNCTION]
-                    print(f"✓ BERT function found")
-                else:
-                    print(f"❌ Available functions: {list(app.registered_functions.keys())}")
-                    raise Exception(f"Function '{settings.MODAL_BERT_FUNCTION}' not found")
-            else:
-                raise Exception("App has no registered_functions attribute")
-                    
-        except Exception as lookup_error:
-            print(f"❌ Modal BERT lookup failed: {lookup_error}")
-            return None
+            f = modal.Function.lookup(settings.MODAL_BERT_APP, settings.MODAL_BERT_FUNCTION)
+        except AttributeError:
+            f = modal.Function.from_name(settings.MODAL_BERT_APP, settings.MODAL_BERT_FUNCTION)
         
-        print(f"📝 Analyzing text with BERT...")
-        result = f.remote(text=text)
+        print(f"📝 Calling Modal BERT...")
+        result = f.remote(text=text, task="all")
         return result
         
     except Exception as e:
         print(f"❌ BERT Modal error: {e}")
+        print(f"   App: {settings.MODAL_BERT_APP}")
+        print(f"   Function: {settings.MODAL_BERT_FUNCTION}")
         import traceback
         traceback.print_exc()
         return None
 
 
 def analyze_with_modal_wav2vec2(audio_path: str, call_id: str, text: str):
-    """Analyze audio using Modal Wav2Vec2-BERT"""
+    """Analyze audio+text using Modal Wav2Vec2-BERT"""
     try:
-        print(f"🔍 Looking up Modal Wav2Vec2 function: {settings.MODAL_WAV2VEC2_APP}/{settings.MODAL_WAV2VEC2_FUNCTION}")
+        print(f"🔍 Looking up Modal function: {settings.MODAL_WAV2VEC2_APP}/{settings.MODAL_WAV2VEC2_FUNCTION}")
         
         import modal
         
         try:
-            # Modal v1.2.0+ API
-            app = modal.App.lookup(settings.MODAL_WAV2VEC2_APP)
-            
-            # Access function through registered_functions dictionary
-            if hasattr(app, 'registered_functions'):
-                if settings.MODAL_WAV2VEC2_FUNCTION in app.registered_functions:
-                    f = app.registered_functions[settings.MODAL_WAV2VEC2_FUNCTION]
-                    print(f"✓ Wav2Vec2 function found")
-                else:
-                    print(f"❌ Available functions: {list(app.registered_functions.keys())}")
-                    raise Exception(f"Function '{settings.MODAL_WAV2VEC2_FUNCTION}' not found")
-            else:
-                raise Exception("App has no registered_functions attribute")
-                    
-        except Exception as lookup_error:
-            print(f"❌ Modal Wav2Vec2 lookup failed: {lookup_error}")
-            return None
+            f = modal.Function.lookup(settings.MODAL_WAV2VEC2_APP, settings.MODAL_WAV2VEC2_FUNCTION)
+        except AttributeError:
+            f = modal.Function.from_name(settings.MODAL_WAV2VEC2_APP, settings.MODAL_WAV2VEC2_FUNCTION)
         
         audio_url = f"{settings.BACKEND_URL}/api/temp-audio/{call_id}"
-        print(f"🎵 Calling Modal Wav2Vec2-BERT...")
+        print(f"🎵 Calling Modal Wav2Vec2...")
         
         result = f.remote(audio_url=audio_url, text=text)
         return result
         
     except Exception as e:
         print(f"❌ Wav2Vec2 Modal error: {e}")
-        print(f"   App: {settings.MODAL_WAV2VEC2_APP}")
-        print(f"   Function: {settings.MODAL_WAV2VEC2_FUNCTION}")
         import traceback
         traceback.print_exc()
         return None
 
 
+# UPDATED FUNCTION - PATTERN MATCHING ADDED
 def evaluate_binary_metric(metric_name: str, text: str, bert_output: dict, wav2vec2_output: dict) -> float:
     """
-    Evaluate a single metric using PATTERN MATCHING + AI models (BERT + Wav2Vec2)
+    Evaluate a single metric using PATTERN MATCHING + AI models
     Returns: 1.0 if ANY method detects it, 0.0 otherwise
-    
-    UPDATED VERSION - Now includes pattern matching!
     """
     if metric_name not in SCORECARD_CONFIG:
         return 0.0
@@ -334,10 +289,9 @@ def evaluate_binary_metric(metric_name: str, text: str, bert_output: dict, wav2v
         try:
             if re.search(pattern, text.lower(), re.IGNORECASE):
                 pattern_score = 1.0
-                print(f"  ✓ {metric_name}: PATTERN MATCHED '{pattern}'")
+                print(f"  ✓ {metric_name}: PATTERN MATCHED")
                 break
-        except re.error as e:
-            print(f"  ⚠ Regex error in pattern '{pattern}': {e}")
+        except re.error:
             continue
     
     # 2. BERT predictions
@@ -358,22 +312,14 @@ def evaluate_binary_metric(metric_name: str, text: str, bert_output: dict, wav2v
             wav2vec2_score = 1.0 if prediction_value >= threshold else 0.0
             print(f"  {metric_name}: Wav2Vec2={prediction_value:.3f} → {wav2vec2_score}")
     
-    # OR LOGIC: Return 1.0 if ANY method detects it (pattern OR BERT OR Wav2Vec2)
+    # OR LOGIC: Return 1.0 if ANY method detects it
     final_score = max(pattern_score, bert_score, wav2vec2_score)
-    
-    if final_score > 0:
-        print(f"  ✓ {metric_name}: DETECTED (pattern={pattern_score}, bert={bert_score}, wav2vec2={wav2vec2_score})")
-    
     return final_score
 
 
 def calculate_binary_scores(text: str, bert_output: dict, wav2vec2_output: dict) -> dict:
     """Calculate binary scores for all metrics"""
     scores = {}
-    
-    print(f"\n{'='*60}")
-    print(f"EVALUATING EACH METRIC (Pattern + BERT + Wav2Vec2)")
-    print(f"{'='*60}\n")
     
     for metric_name in SCORECARD_CONFIG.keys():
         score = evaluate_binary_metric(metric_name, text, bert_output, wav2vec2_output)
@@ -399,9 +345,8 @@ def calculate_binary_scores(text: str, bert_output: dict, wav2vec2_output: dict)
 @app.get("/")
 async def root():
     return {
-        "message": "CallEval API - Full Modal Stack (WhisperX + BERT + Wav2Vec2) with Pattern Matching",
+        "message": "CallEval API - Full Modal Stack with Pattern Matching",
         "status": "running",
-        "evaluation_method": "Pattern Matching + AI Models (OR Logic)",
         "models": {
             "transcription": f"{settings.MODAL_WHISPERX_APP}/{settings.MODAL_WHISPERX_FUNCTION}",
             "bert": f"{settings.MODAL_BERT_APP}/{settings.MODAL_BERT_FUNCTION}",
@@ -594,7 +539,7 @@ def process_call(call_id: str, file_path: str):
             segment_text = segment["text"]
             print(f"\n📝 Segment {i+1}/{len(agent_segments)}: '{segment_text[:50]}...'")
             
-            bert_output = analyze_with_modal_bert(segment_text, call_id)
+            bert_output = analyze_with_modal_bert(segment_text)
             
             if bert_output and bert_output.get("success"):
                 predictions = bert_output.get("predictions", {})
