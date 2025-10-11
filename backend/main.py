@@ -9,6 +9,7 @@ import modal
 import librosa
 from pathlib import Path
 import json
+import re  # ADD THIS IMPORT FOR PATTERN MATCHING
 
 from config import settings
 from database import get_db, CallEvaluation, SessionLocal
@@ -31,6 +32,7 @@ else:
     print(f"  MODAL_TOKEN_ID exists: {bool(modal_token_id)}")
     print(f"  MODAL_TOKEN_SECRET exists: {bool(modal_token_secret)}")
     print("  Modal functions will NOT work without credentials!")
+
 # ==============================================================
 
 os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
@@ -55,62 +57,131 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Binary Scorecard Configuration - AI-ONLY (No Pattern Matching)
+# Binary Scorecard Configuration - WITH PATTERN MATCHING (UPDATED!)
 SCORECARD_CONFIG = {
     # All Phases (10%)
     "enthusiasm_markers": {
         "weight": 5,
-        "threshold": 0.5
+        "threshold": 0.6,
+        "patterns": [
+            r"happy to help", r"glad to assist", r"pleasure", r"absolutely", 
+            r"of course", r"definitely", r"certainly", r"wonderful", r"great"
+        ]
     },
     "sounds_polite_courteous": {
         "weight": 5,
-        "threshold": 0.5
+        "threshold": 0.6,
+        "patterns": [
+            r"please", r"thank you", r"you're welcome", r"my pleasure", 
+            r"sir", r"ma'am", r"excuse me", r"pardon"
+        ]
     },
     
     # Opening Spiel (10%)
     "professional_greeting": {
         "weight": 5,
-        "threshold": 0.5
+        "threshold": 0.6,
+        "patterns": [
+            r"thank you for calling.*practice",
+            r"good (morning|afternoon|evening)",
+            r"this is \w+",
+            r"how (can|may) i (help|assist)"
+        ]
     },
     "verifies_patient_online": {
         "weight": 5,
-        "threshold": 0.5
+        "threshold": 0.5,
+        "patterns": [
+            r"are you (still )?there",
+            r"can you hear me",
+            r"hello.*are you",
+            r"patient.*on.*line"
+        ]
     },
     
     # Middle/Climax (70%)
     "patient_verification": {
         "weight": 25,
-        "threshold": 0.5
+        "threshold": 0.6,
+        "patterns": [
+            r"(date of birth|dob|birthday)",
+            r"(first.*last name|full name)",
+            r"verify (your )?identity",
+            r"confirm.*name",
+            r"what('s| is) your name",
+            r"spell.*name"
+        ]
     },
     "active_listening": {
         "weight": 10,
-        "threshold": 0.5
+        "threshold": 0.5,
+        "patterns": [
+            r"i (understand|see|hear you)",
+            r"let me (check|look|review)",
+            r"okay,? (so|let me)",
+            r"i'll (help|assist)",
+            r"got it"
+        ]
     },
     "asks_permission_hold": {
         "weight": 5,
-        "threshold": 0.5
+        "threshold": 0.5,
+        "patterns": [
+            r"may i (place|put) you on hold",
+            r"can i (place|put) you on hold",
+            r"is it (okay|ok) if i put you on hold",
+            r"mind if i put you on (a )?hold"
+        ]
     },
     "returns_properly_from_hold": {
         "weight": 5,
-        "threshold": 0.5
+        "threshold": 0.5,
+        "patterns": [
+            r"thank you for (holding|waiting)",
+            r"thanks for (holding|waiting)",
+            r"appreciate your patience",
+            r"sorry (for|about) the wait"
+        ]
     },
     "no_fillers_stammers": {
         "weight": 10,
-        "threshold": 0.5
+        "threshold": 0.5,
+        "patterns": []  # This is inverse - fillers detected = 0, no fillers = 1
     },
     "recaps_time_date": {
         "weight": 15,
-        "threshold": 0.5
+        "threshold": 0.6,
+        "patterns": [
+            r"(monday|tuesday|wednesday|thursday|friday|saturday|sunday)",
+            r"(january|february|march|april|may|june|july|august|september|october|november|december)",
+            r"\d{1,2}:\d{2}\s*(am|pm|a\.m\.|p\.m\.)",
+            r"at \d{1,2}",
+            r"appointment.*\d{1,2}",
+            r"scheduled.*\d{1,2}"
+        ]
     },
     
     # Closing/Wrap up (10%)
     "offers_further_assistance": {
         "weight": 5,
-        "threshold": 0.5
+        "threshold": 0.5,
+        "patterns": [
+            r"anything else (i can|to)",
+            r"is there anything else",
+            r"can i help (you )?with anything else",
+            r"what else can i"
+        ]
     },
     "ended_call_properly": {
         "weight": 5,
-        "threshold": 0.5
+        "threshold": 0.5,
+        "patterns": [
+            r"(have a|enjoy your) (great|good|nice|wonderful) (day|afternoon|evening)",
+            r"take care",
+            r"bye",
+            r"goodbye",
+            r"talk to you"
+        ]
     }
 }
 
@@ -125,66 +196,62 @@ def transcribe_with_modal_whisperx(audio_path: str, call_id: str):
         
         try:
             f = modal.Function.lookup(settings.MODAL_WHISPERX_APP, settings.MODAL_WHISPERX_FUNCTION)
-        except AttributeError:
-            # Fallback for older Modal SDK versions
-            f = modal.Function.from_name(settings.MODAL_WHISPERX_APP, settings.MODAL_WHISPERX_FUNCTION)
+        except Exception as lookup_error:
+            print(f"❌ Modal function lookup failed: {lookup_error}")
+            print(f"   App: {settings.MODAL_WHISPERX_APP}")
+            print(f"   Function: {settings.MODAL_WHISPERX_FUNCTION}")
+            return None
         
+        print(f"🎤 Modal WhisperX function found. Processing audio...")
         audio_url = f"{settings.BACKEND_URL}/api/temp-audio/{call_id}"
-        print(f"🎯 WhisperX audio URL: {audio_url}")
+        result = f.remote(audio_url=audio_url)
         
-        result = f.remote(
-            audio_url=audio_url,
-            language="en",
-            min_speakers=2,
-            max_speakers=2
-        )
-        
+        print(f"✅ WhisperX transcription complete")
         return result
+        
     except Exception as e:
         print(f"❌ WhisperX Modal error: {e}")
-        print(f"   App: {settings.MODAL_WHISPERX_APP}")
-        print(f"   Function: {settings.MODAL_WHISPERX_FUNCTION}")
         import traceback
         traceback.print_exc()
-        raise
+        return None
 
 
-def analyze_with_modal_bert(text: str):
+def analyze_with_modal_bert(text: str, call_id: str):
     """Analyze text using Modal BERT"""
     try:
-        print(f"🔍 Looking up Modal function: {settings.MODAL_BERT_APP}/{settings.MODAL_BERT_FUNCTION}")
+        print(f"🔍 Looking up Modal BERT function: {settings.MODAL_BERT_APP}/{settings.MODAL_BERT_FUNCTION}")
         
         import modal
         
         try:
             f = modal.Function.lookup(settings.MODAL_BERT_APP, settings.MODAL_BERT_FUNCTION)
-        except AttributeError:
-            f = modal.Function.from_name(settings.MODAL_BERT_APP, settings.MODAL_BERT_FUNCTION)
+        except Exception as lookup_error:
+            print(f"❌ Modal BERT lookup failed: {lookup_error}")
+            return None
         
-        print(f"📝 Calling Modal BERT...")
-        result = f.remote(text=text, task="all")
+        print(f"📝 Analyzing text with BERT...")
+        result = f.remote(text=text)
         return result
         
     except Exception as e:
         print(f"❌ BERT Modal error: {e}")
-        print(f"   App: {settings.MODAL_BERT_APP}")
-        print(f"   Function: {settings.MODAL_BERT_FUNCTION}")
         import traceback
         traceback.print_exc()
         return None
 
 
 def analyze_with_modal_wav2vec2(audio_path: str, call_id: str, text: str):
-    """Analyze audio+text using Modal Wav2Vec2-BERT"""
+    """Analyze audio using Modal Wav2Vec2-BERT"""
     try:
-        print(f"🔍 Looking up Modal function: {settings.MODAL_WAV2VEC2_APP}/{settings.MODAL_WAV2VEC2_FUNCTION}")
+        print(f"🔍 Looking up Modal Wav2Vec2 function: {settings.MODAL_WAV2VEC2_APP}/{settings.MODAL_WAV2VEC2_FUNCTION}")
         
         import modal
         
         try:
             f = modal.Function.lookup(settings.MODAL_WAV2VEC2_APP, settings.MODAL_WAV2VEC2_FUNCTION)
-        except AttributeError:
-            f = modal.Function.from_name(settings.MODAL_WAV2VEC2_APP, settings.MODAL_WAV2VEC2_FUNCTION)
+        except Exception as lookup_error:
+            print(f"❌ Modal Wav2Vec2 lookup failed: {lookup_error}")
+            return None
         
         audio_url = f"{settings.BACKEND_URL}/api/temp-audio/{call_id}"
         print(f"🎵 Calling Modal Wav2Vec2-BERT...")
@@ -203,21 +270,32 @@ def analyze_with_modal_wav2vec2(audio_path: str, call_id: str, text: str):
 
 def evaluate_binary_metric(metric_name: str, text: str, bert_output: dict, wav2vec2_output: dict) -> float:
     """
-    Evaluate a single metric using AI models only (BERT + Wav2Vec2)
-    Returns: 1.0 if ANY AI model detects it, 0.0 otherwise
+    Evaluate a single metric using PATTERN MATCHING + AI models (BERT + Wav2Vec2)
+    Returns: 1.0 if ANY method detects it, 0.0 otherwise
     
-    AI-ONLY VERSION - No pattern matching
+    UPDATED VERSION - Now includes pattern matching!
     """
     if metric_name not in SCORECARD_CONFIG:
         return 0.0
     
-    threshold = SCORECARD_CONFIG[metric_name].get("threshold", 0.5)
+    config = SCORECARD_CONFIG[metric_name]
+    threshold = config.get("threshold", 0.5)
     
-    # Initialize scores
+    # 1. PATTERN MATCHING (NEW!)
+    pattern_score = 0.0
+    patterns = config.get("patterns", [])
+    for pattern in patterns:
+        try:
+            if re.search(pattern, text.lower(), re.IGNORECASE):
+                pattern_score = 1.0
+                print(f"  ✓ {metric_name}: PATTERN MATCHED '{pattern}'")
+                break
+        except re.error as e:
+            print(f"  ⚠ Regex error in pattern '{pattern}': {e}")
+            continue
+    
+    # 2. BERT predictions
     bert_score = 0.0
-    wav2vec2_score = 0.0
-    
-    # BERT predictions
     if bert_output and bert_output.get("success"):
         predictions = bert_output.get("predictions", {})
         if metric_name in predictions:
@@ -225,7 +303,8 @@ def evaluate_binary_metric(metric_name: str, text: str, bert_output: dict, wav2v
             bert_score = 1.0 if prediction_value >= threshold else 0.0
             print(f"  {metric_name}: BERT={prediction_value:.3f} → {bert_score}")
     
-    # Wav2Vec2 predictions (for audio-based metrics)
+    # 3. Wav2Vec2 predictions
+    wav2vec2_score = 0.0
     if wav2vec2_output and wav2vec2_output.get("success"):
         predictions = wav2vec2_output.get("predictions", {})
         if metric_name in predictions:
@@ -233,14 +312,22 @@ def evaluate_binary_metric(metric_name: str, text: str, bert_output: dict, wav2v
             wav2vec2_score = 1.0 if prediction_value >= threshold else 0.0
             print(f"  {metric_name}: Wav2Vec2={prediction_value:.3f} → {wav2vec2_score}")
     
-    # Return 1.0 if EITHER model detects it (OR logic)
-    final_score = max(bert_score, wav2vec2_score)
+    # OR LOGIC: Return 1.0 if ANY method detects it (pattern OR BERT OR Wav2Vec2)
+    final_score = max(pattern_score, bert_score, wav2vec2_score)
+    
+    if final_score > 0:
+        print(f"  ✓ {metric_name}: DETECTED (pattern={pattern_score}, bert={bert_score}, wav2vec2={wav2vec2_score})")
+    
     return final_score
 
 
 def calculate_binary_scores(text: str, bert_output: dict, wav2vec2_output: dict) -> dict:
     """Calculate binary scores for all metrics"""
     scores = {}
+    
+    print(f"\n{'='*60}")
+    print(f"EVALUATING EACH METRIC (Pattern + BERT + Wav2Vec2)")
+    print(f"{'='*60}\n")
     
     for metric_name in SCORECARD_CONFIG.keys():
         score = evaluate_binary_metric(metric_name, text, bert_output, wav2vec2_output)
@@ -266,8 +353,9 @@ def calculate_binary_scores(text: str, bert_output: dict, wav2vec2_output: dict)
 @app.get("/")
 async def root():
     return {
-        "message": "CallEval API - Full Modal Stack (WhisperX + BERT + Wav2Vec2)",
+        "message": "CallEval API - Full Modal Stack (WhisperX + BERT + Wav2Vec2) with Pattern Matching",
         "status": "running",
+        "evaluation_method": "Pattern Matching + AI Models (OR Logic)",
         "models": {
             "transcription": f"{settings.MODAL_WHISPERX_APP}/{settings.MODAL_WHISPERX_FUNCTION}",
             "bert": f"{settings.MODAL_BERT_APP}/{settings.MODAL_BERT_FUNCTION}",
@@ -326,52 +414,27 @@ async def get_call(call_id: str, db: Session = Depends(get_db)):
     if not call:
         raise HTTPException(status_code=404, detail="Call not found")
     
-    # Parse JSON fields safely
-    result = {
+    # Parse JSON fields
+    bert_analysis = json.loads(call.bert_analysis) if call.bert_analysis else None
+    wav2vec2_analysis = json.loads(call.wav2vec2_analysis) if call.wav2vec2_analysis else None
+    binary_scores = json.loads(call.binary_scores) if call.binary_scores else None
+    speakers = json.loads(call.speakers) if call.speakers else None
+    
+    return {
         "id": call.id,
         "filename": call.filename,
-        "file_path": call.file_path,
-        "status": call.status or "pending",
-        "analysis_status": call.analysis_status or "pending",
+        "status": call.status,
+        "analysis_status": call.analysis_status,
         "transcript": call.transcript,
         "duration": call.duration,
         "score": call.score,
+        "bert_analysis": bert_analysis,
+        "wav2vec2_analysis": wav2vec2_analysis,
+        "binary_scores": binary_scores,
+        "speakers": speakers,
         "created_at": call.created_at.isoformat() if call.created_at else None,
         "updated_at": call.updated_at.isoformat() if call.updated_at else None,
     }
-    
-    # Add JSON fields if they exist
-    if hasattr(call, 'bert_analysis') and call.bert_analysis:
-        try:
-            result["bert_analysis"] = json.loads(call.bert_analysis)
-        except:
-            result["bert_analysis"] = None
-    
-    if hasattr(call, 'wav2vec2_analysis') and call.wav2vec2_analysis:
-        try:
-            result["wav2vec2_analysis"] = json.loads(call.wav2vec2_analysis)
-        except:
-            result["wav2vec2_analysis"] = None
-    
-    if hasattr(call, 'binary_scores') and call.binary_scores:
-        try:
-            result["binary_scores"] = json.loads(call.binary_scores)
-        except:
-            result["binary_scores"] = None
-    
-    if hasattr(call, 'speakers') and call.speakers:
-        try:
-            result["speakers"] = json.loads(call.speakers)
-        except:
-            result["speakers"] = None
-    
-    if hasattr(call, 'scores') and call.scores:
-        try:
-            result["scores"] = json.loads(call.scores)
-        except:
-            result["scores"] = None
-    
-    return result
 
 
 @app.get("/api/calls")
@@ -379,14 +442,11 @@ async def list_calls(db: Session = Depends(get_db)):
     """List all call evaluations"""
     calls = db.query(CallEvaluation).order_by(CallEvaluation.created_at.desc()).all()
     
-    # Properly serialize with safe defaults
     return [{
         "id": call.id,
         "filename": call.filename,
-        "file_path": call.file_path,
-        "status": call.status or "pending",
-        "analysis_status": call.analysis_status or "pending",
-        "transcript": call.transcript,
+        "status": call.status,
+        "analysis_status": call.analysis_status,
         "duration": call.duration,
         "score": call.score,
         "created_at": call.created_at.isoformat() if call.created_at else None,
@@ -451,78 +511,54 @@ def process_call(call_id: str, file_path: str):
             call.duration = f"{minutes}:{seconds:02d}"
         
         print(f"✅ Transcription complete!")
+        print(f"   Transcript length: {len(full_text)} characters")
+        print(f"   Duration: {call.duration}")
         
+        # Store speaker data
+        call.speakers = json.dumps(whisperx_result.get("speaker_roles", {}))
+        db.commit()
         
-        # STEP 2: IDENTIFY AGENT AND EXTRACT AGENT SEGMENTS
+        # STEP 2: IDENTIFY AGENT SEGMENTS
         print(f"\n{'='*60}")
         print(f"STEP 2: IDENTIFYING AGENT SEGMENTS")
         print(f"{'='*60}")
         
-        # Count segments per speaker
-        speaker_counts = {}
-        for seg in whisperx_result["segments"]:
-            speaker = seg.get("speaker", "UNKNOWN")
-            speaker_counts[speaker] = speaker_counts.get(speaker, 0) + 1
+        speaker_roles = whisperx_result.get("speaker_roles", {})
+        agent_speaker = speaker_roles.get("agent", "SPEAKER_01")
         
-        print(f"📊 Speaker distribution: {speaker_counts}")
-        
-        # Identify agent (usually first speaker if they have reasonable segments)
-        first_speakers = [whisperx_result["segments"][i].get("speaker") 
-                         for i in range(min(3, len(whisperx_result["segments"])))]
-        first_speaker = max(set(first_speakers), key=first_speakers.count) if first_speakers else None
-        
-        if first_speaker and speaker_counts.get(first_speaker, 0) > len(whisperx_result["segments"]) * 0.3:
-            agent_speaker = first_speaker
-        else:
-            agent_speaker = max(speaker_counts, key=speaker_counts.get) if speaker_counts else None
-        
-        print(f"🎯 Identified Agent: {agent_speaker}")
-        
-        # Extract ONLY agent segments
         agent_segments = [
             seg for seg in whisperx_result["segments"]
             if seg.get("speaker") == agent_speaker
         ]
         
-        print(f"📝 Agent segments: {len(agent_segments)}/{len(whisperx_result['segments'])}")
+        print(f"✅ Found {len(agent_segments)} agent segments")
         
-        call.status = "completed"
-        call.analysis_status = "analyzing"
-        db.commit()
-        
-        
-        # STEP 3: ANALYZE WITH AI MODELS (SEGMENT BY SEGMENT)
+        # STEP 3: ANALYZE EACH SEGMENT WITH BERT
         print(f"\n{'='*60}")
-        print(f"STEP 3: ANALYZING AGENT PERFORMANCE (SEGMENT-BY-SEGMENT)")
+        print(f"STEP 3: ANALYZING SEGMENTS WITH BERT")
         print(f"{'='*60}")
         
-        # Initialize aggregated predictions
+        call.status = "analyzing"
+        call.analysis_status = "analyzing with BERT"
+        db.commit()
+        
         all_bert_predictions = {}
         
-        # Evaluate each agent segment individually
-        for idx, segment in enumerate(agent_segments):
-            segment_text = segment.get("text", "").strip()
-            if not segment_text:
-                continue
+        for i, segment in enumerate(agent_segments):
+            segment_text = segment["text"]
+            print(f"\n📝 Segment {i+1}/{len(agent_segments)}: '{segment_text[:50]}...'")
             
-            print(f"\n📝 Segment {idx+1}/{len(agent_segments)}: '{segment_text[:60]}...'")
-            
-            # Get BERT predictions for THIS segment only
-            bert_output = analyze_with_modal_bert(segment_text)
+            bert_output = analyze_with_modal_bert(segment_text, call_id)
             
             if bert_output and bert_output.get("success"):
                 predictions = bert_output.get("predictions", {})
                 
-                # Aggregate predictions (keep MAX score for each metric)
+                # Aggregate predictions (take maximum across segments)
                 for metric, score in predictions.items():
                     if metric not in all_bert_predictions:
                         all_bert_predictions[metric] = score
                     else:
                         all_bert_predictions[metric] = max(all_bert_predictions[metric], score)
-                    
-                    # Show if this segment scored high
-                    if score > 0.5:
-                        print(f"   ✓ {metric}: {score:.3f}")
         
         # Get Wav2Vec2 predictions for the full audio
         print(f"\n🎵 Calling Wav2Vec2 with full agent audio...")
@@ -542,7 +578,7 @@ def process_call(call_id: str, file_path: str):
             print(f"   {status} {metric}: {score:.3f}")
         
         
-        # STEP 4: BINARY SCORING
+        # STEP 4: BINARY SCORING (NOW WITH PATTERN MATCHING!)
         print(f"\n{'='*60}")
         print(f"STEP 4: BINARY SCORECARD EVALUATION")
         print(f"{'='*60}")
@@ -564,58 +600,42 @@ def process_call(call_id: str, file_path: str):
         for metric_name, metric_data in binary_scores["metrics"].items():
             if metric_data["detected"]:
                 passed_count += 1
-                print(f"   ✓ {metric_name}: {metric_data['weighted_score']:.1f} points")
+                print(f"   ✓ {metric_name}: {metric_data['weighted_score']:.1f}/{metric_data['weight']}")
         
         print(f"\n✗ FAILED METRICS:")
+        failed_count = 0
         for metric_name, metric_data in binary_scores["metrics"].items():
             if not metric_data["detected"]:
-                print(f"   ✗ {metric_name}: 0 points")
+                failed_count += 1
+                print(f"   ✗ {metric_name}: 0/{metric_data['weight']}")
         
-        print(f"\n📈 Summary: {passed_count}/12 metrics passed")
+        print(f"\nSUMMARY: {passed_count} passed, {failed_count} failed")
         
-        
-        # STEP 5: SAVE TO DATABASE
-        print(f"\n{'='*60}")
-        print(f"STEP 5: SAVING RESULTS")
-        print(f"{'='*60}")
-        
+        # STEP 5: SAVE RESULTS
+        call.status = "completed"
+        call.analysis_status = "completed"
         call.score = total_score
-        call.bert_analysis = json.dumps(bert_output_combined) if bert_output_combined else None
+        call.bert_analysis = json.dumps(bert_output_combined)
         call.wav2vec2_analysis = json.dumps(wav2vec2_output) if wav2vec2_output else None
         call.binary_scores = json.dumps(binary_scores)
-        call.analysis_status = "completed"
-        
-        # Add speaker roles to segments
-        speaker_info = {
-            "agent": agent_speaker,
-            "caller": [s for s in speaker_counts.keys() if s != agent_speaker],
-            "distribution": speaker_counts
-        }
-        
-        segments_with_role = whisperx_result["segments"]
-        for seg in segments_with_role:
-            seg["role"] = "agent" if seg.get("speaker") == agent_speaker else "caller"
-        
-        call.speakers = json.dumps({
-            "speaker_roles": speaker_info,
-            "segments": segments_with_role
-        }, indent=2)
         
         db.commit()
         
+        print(f"\n{'='*60}")
         print(f"✅ PROCESSING COMPLETE!")
-        print(f"   - Final Score: {total_score:.1f}/100")
-        print(f"   - Metrics Passed: {passed_count}/12")
-        print(f"   - Agent: {agent_speaker}")
+        print(f"   Call ID: {call_id}")
+        print(f"   Final Score: {total_score:.1f}/100")
+        print(f"{'='*60}\n")
         
     except Exception as e:
         print(f"\n❌ ERROR processing call {call_id}: {e}")
         import traceback
         traceback.print_exc()
         
-        call.status = "failed"
-        call.analysis_status = f"error: {str(e)}"
-        db.commit()
+        if call:
+            call.status = "failed"
+            call.analysis_status = f"error: {str(e)}"
+            db.commit()
     
     finally:
         db.close()
