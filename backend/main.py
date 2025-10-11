@@ -195,11 +195,30 @@ def transcribe_with_modal_whisperx(audio_path: str, call_id: str):
         import modal
         
         try:
-            f = modal.Function.lookup(settings.MODAL_WHISPERX_APP, settings.MODAL_WHISPERX_FUNCTION)
+            # Try new Modal API first (v0.63+)
+            try:
+                app = modal.App.lookup(settings.MODAL_WHISPERX_APP)
+                f = getattr(app, settings.MODAL_WHISPERX_FUNCTION)
+                print(f"✓ Using Modal App.lookup API")
+            except (AttributeError, Exception):
+                # Fallback to Stub API (older versions)
+                try:
+                    stub = modal.Stub.lookup(settings.MODAL_WHISPERX_APP)
+                    f = getattr(stub, settings.MODAL_WHISPERX_FUNCTION)
+                    print(f"✓ Using Modal Stub.lookup API")
+                except Exception:
+                    # Try direct function lookup
+                    from modal import Function
+                    f = Function.lookup(settings.MODAL_WHISPERX_APP, settings.MODAL_WHISPERX_FUNCTION)
+                    print(f"✓ Using Modal Function.lookup API")
+                    
         except Exception as lookup_error:
             print(f"❌ Modal function lookup failed: {lookup_error}")
             print(f"   App: {settings.MODAL_WHISPERX_APP}")
             print(f"   Function: {settings.MODAL_WHISPERX_FUNCTION}")
+            print(f"   Modal version: {modal.__version__ if hasattr(modal, '__version__') else 'unknown'}")
+            import traceback
+            traceback.print_exc()
             return None
         
         print(f"🎤 Modal WhisperX function found. Processing audio...")
@@ -224,7 +243,20 @@ def analyze_with_modal_bert(text: str, call_id: str):
         import modal
         
         try:
-            f = modal.Function.lookup(settings.MODAL_BERT_APP, settings.MODAL_BERT_FUNCTION)
+            # Try new Modal API first (v0.63+)
+            try:
+                app = modal.App.lookup(settings.MODAL_BERT_APP)
+                f = getattr(app, settings.MODAL_BERT_FUNCTION)
+            except (AttributeError, Exception):
+                # Fallback to Stub API (older versions)
+                try:
+                    stub = modal.Stub.lookup(settings.MODAL_BERT_APP)
+                    f = getattr(stub, settings.MODAL_BERT_FUNCTION)
+                except Exception:
+                    # Try direct function lookup
+                    from modal import Function
+                    f = Function.lookup(settings.MODAL_BERT_APP, settings.MODAL_BERT_FUNCTION)
+                    
         except Exception as lookup_error:
             print(f"❌ Modal BERT lookup failed: {lookup_error}")
             return None
@@ -248,7 +280,20 @@ def analyze_with_modal_wav2vec2(audio_path: str, call_id: str, text: str):
         import modal
         
         try:
-            f = modal.Function.lookup(settings.MODAL_WAV2VEC2_APP, settings.MODAL_WAV2VEC2_FUNCTION)
+            # Try new Modal API first (v0.63+)
+            try:
+                app = modal.App.lookup(settings.MODAL_WAV2VEC2_APP)
+                f = getattr(app, settings.MODAL_WAV2VEC2_FUNCTION)
+            except (AttributeError, Exception):
+                # Fallback to Stub API (older versions)
+                try:
+                    stub = modal.Stub.lookup(settings.MODAL_WAV2VEC2_APP)
+                    f = getattr(stub, settings.MODAL_WAV2VEC2_FUNCTION)
+                except Exception:
+                    # Try direct function lookup
+                    from modal import Function
+                    f = Function.lookup(settings.MODAL_WAV2VEC2_APP, settings.MODAL_WAV2VEC2_FUNCTION)
+                    
         except Exception as lookup_error:
             print(f"❌ Modal Wav2Vec2 lookup failed: {lookup_error}")
             return None
