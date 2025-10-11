@@ -414,7 +414,7 @@ async def get_temp_audio(call_id: str, db: Session = Depends(get_db)):
 
 
 def process_call(call_id: str, file_path: str):
-    """Background task: Process call with agent-only binary scoring"""
+    """Background task: Process call with segment-by-segment evaluation"""
     
     db = SessionLocal()
     
@@ -484,45 +484,94 @@ def process_call(call_id: str, file_path: str):
             if seg.get("speaker") == agent_speaker
         ]
         
-        # Get agent text only
-        agent_text = " ".join([seg["text"] for seg in agent_segments])
-        
         print(f"📝 Agent segments: {len(agent_segments)}/{len(whisperx_result['segments'])}")
-        print(f"📝 Agent text length: {len(agent_text)} characters")
-        print(f"📝 Agent text preview: {agent_text[:200]}...")
         
         call.status = "completed"
         call.analysis_status = "analyzing"
         db.commit()
         
         
-        # STEP 3: ANALYZE WITH AI MODELS (AGENT TEXT ONLY)
+        # STEP 3: ANALYZE WITH AI MODELS (SEGMENT BY SEGMENT)
         print(f"\n{'='*60}")
-        print(f"STEP 3: ANALYZING AGENT PERFORMANCE")
+        print(f"STEP 3: ANALYZING AGENT PERFORMANCE (SEGMENT-BY-SEGMENT)")
         print(f"{'='*60}")
         
-        print(f"🤖 Calling BERT with agent text...")
-        bert_output = analyze_with_modal_bert(agent_text)  # ← FIXED: No task parameter
+        # Initialize aggregated predictions
+        all_bert_predictions = {}
         
-        print(f"🎵 Calling Wav2Vec2 with agent audio...")
-        wav2vec2_output = analyze_with_modal_wav2vec2(file_path, call_id, agent_text)
+        # Evaluate each agent segment individually
+        for idx, segment in enumerate(agent_segments):
+            segment_text = segment.get("text", "").strip()
+            if not segment_text:
+                continue
+            
+            print(f"\n📝 Segment {idx+1}/{len(agent_segments)}: '{segment_text[:60]}...'")
+            
+            # Get BERT predictions for THIS segment only
+            bert_output = analyze_with_modal_bert(segment_text)
+            
+            if bert_output and bert_output.get("success"):
+                predictions = bert_output.get("predictions", {})
+                
+                # Aggregate predictions (keep MAX score for each metric)
+                for metric, score in predictions.items():
+                    if metric not in all_bert_predictions:
+                        all_bert_predictions[metric] = score
+                    else:
+                        all_bert_predictions[metric] = max(all_bert_predictions[metric], score)
+                    
+                    # Show if this segment scored high
+                    if score > 0.5:
+                        print(f"   ✓ {metric}: {score:.3f}")
+        
+        # Get Wav2Vec2 predictions for the full audio
+        print(f"\n🎵 Calling Wav2Vec2 with full agent audio...")
+        agent_text_combined = " ".join([seg["text"] for seg in agent_segments])
+        wav2vec2_output = analyze_with_modal_wav2vec2(file_path, call_id, agent_text_combined)
+        
+        # Create combined BERT output for storage
+        bert_output_combined = {
+            "success": True,
+            "predictions": all_bert_predictions,
+            "method": "segment-by-segment evaluation"
+        }
+        
+        print(f"\n📊 Aggregated BERT Predictions:")
+        for metric, score in all_bert_predictions.items():
+            status = "✓" if score >= 0.5 else "✗"
+            print(f"   {status} {metric}: {score:.3f}")
         
         
-        # STEP 4: BINARY SCORING (AGENT ONLY)
+        # STEP 4: BINARY SCORING
         print(f"\n{'='*60}")
-        print(f"STEP 4: BINARY SCORECARD EVALUATION (AGENT ONLY)")
+        print(f"STEP 4: BINARY SCORECARD EVALUATION")
         print(f"{'='*60}")
         
-        binary_scores = calculate_binary_scores(agent_text, bert_output, wav2vec2_output)
+        binary_scores = calculate_binary_scores(
+            agent_text_combined, 
+            bert_output_combined, 
+            wav2vec2_output
+        )
+        
         total_score = binary_scores["total_score"]
         
-        print(f"\n📊 SCORING RESULTS:")
+        print(f"\n📊 FINAL SCORING RESULTS:")
         print(f"   Total Score: {total_score:.1f}/100")
         print(f"   Percentage: {binary_scores['percentage']:.1f}%")
         
+        print(f"\n✓ PASSED METRICS:")
+        passed_count = 0
         for metric_name, metric_data in binary_scores["metrics"].items():
-            status = "✓" if metric_data["detected"] else "✗"
-            print(f"   {status} {metric_name}: {metric_data['weighted_score']:.1f} points")
+            if metric_data["detected"]:
+                passed_count += 1
+                print(f"   ✓ {metric_name}: {metric_data['weighted_score']:.1f} points")
+        
+        print(f"\n✗ FAILED METRICS:")
+        for metric_name, metric_data in binary_scores["metrics"].items():
+            if not metric_data["detected"]:
+                print(f"   ✗ {metric_name}: 0 points")
+        
+        print(f"\n📈 Summary: {passed_count}/12 metrics passed")
         
         
         # STEP 5: SAVE TO DATABASE
@@ -531,7 +580,7 @@ def process_call(call_id: str, file_path: str):
         print(f"{'='*60}")
         
         call.score = total_score
-        call.bert_analysis = json.dumps(bert_output) if bert_output else None
+        call.bert_analysis = json.dumps(bert_output_combined) if bert_output_combined else None
         call.wav2vec2_analysis = json.dumps(wav2vec2_output) if wav2vec2_output else None
         call.binary_scores = json.dumps(binary_scores)
         call.analysis_status = "completed"
@@ -556,6 +605,7 @@ def process_call(call_id: str, file_path: str):
         
         print(f"✅ PROCESSING COMPLETE!")
         print(f"   - Final Score: {total_score:.1f}/100")
+        print(f"   - Metrics Passed: {passed_count}/12")
         print(f"   - Agent: {agent_speaker}")
         
     except Exception as e:
