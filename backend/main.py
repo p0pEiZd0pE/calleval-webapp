@@ -166,8 +166,7 @@ SCORECARD_CONFIG = {
         "weight": 5,
         "threshold": 0.5,
         "patterns": [
-            r"anything else (i can|to)",
-            r"is there anything else",
+            r"(and |is there )?anything else",  # Catches "anything else", "and anything else", "is there anything else"
             r"can i help (you )?with anything else",
             r"what else can i"
         ]
@@ -535,21 +534,26 @@ def process_call(call_id: str, file_path: str):
         
         all_bert_predictions = {}
         
-        # STEP 3: ANALYZE EACH SEGMENT WITH BERT
         for i, segment in enumerate(agent_segments):
             segment_text = segment["text"]
+            print(f"\n📝 Segment {i+1}/{len(agent_segments)}: '{segment_text[:50]}...'")
+            
             bert_output = analyze_with_modal_bert(segment_text)
             
             if bert_output and bert_output.get("success"):
                 predictions = bert_output.get("predictions", {})
                 
-                # FIX: Extract score from nested structure
+                # Aggregate predictions (take maximum across segments)
                 for metric, value in predictions.items():
-                    # Check if value is a dict with "score" key
+                    # FIX: Handle nested structure from BERT model
+                    # BERT returns: {"metric": {"score": 0.999, "prediction": "positive"}}
+                    # We need to extract just the score
                     if isinstance(value, dict) and "score" in value:
-                        score = value["score"]  # ← EXTRACT THE ACTUAL SCORE
+                        score = value["score"]
+                        print(f"   {metric}: {score:.3f} (extracted from nested)")
                     else:
-                        score = value  # Fallback for flat structure
+                        score = value
+                        print(f"   {metric}: {score:.3f} (flat)")
                     
                     if metric not in all_bert_predictions:
                         all_bert_predictions[metric] = score
