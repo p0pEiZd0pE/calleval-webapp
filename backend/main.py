@@ -535,17 +535,22 @@ def process_call(call_id: str, file_path: str):
         
         all_bert_predictions = {}
         
+        # STEP 3: ANALYZE EACH SEGMENT WITH BERT
         for i, segment in enumerate(agent_segments):
             segment_text = segment["text"]
-            print(f"\n📝 Segment {i+1}/{len(agent_segments)}: '{segment_text[:50]}...'")
-            
             bert_output = analyze_with_modal_bert(segment_text)
             
             if bert_output and bert_output.get("success"):
                 predictions = bert_output.get("predictions", {})
                 
-                # Aggregate predictions (take maximum across segments)
-                for metric, score in predictions.items():
+                # FIX: Extract score from nested structure
+                for metric, value in predictions.items():
+                    # Check if value is a dict with "score" key
+                    if isinstance(value, dict) and "score" in value:
+                        score = value["score"]  # ← EXTRACT THE ACTUAL SCORE
+                    else:
+                        score = value  # Fallback for flat structure
+                    
                     if metric not in all_bert_predictions:
                         all_bert_predictions[metric] = score
                     else:
