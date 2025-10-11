@@ -232,7 +232,8 @@ def analyze_with_modal_bert(text: str):
             f = modal.Function.from_name(settings.MODAL_BERT_APP, settings.MODAL_BERT_FUNCTION)
         
         print(f"📝 Calling Modal BERT...")
-        result = f.remote(text=text, task="all")
+        # Removed task="all" parameter - not needed with fixed multi-task model
+        result = f.remote(text=text)
         return result
         
     except Exception as e:
@@ -545,13 +546,13 @@ def process_call(call_id: str, file_path: str):
                 
                 # Aggregate predictions (take maximum across segments)
                 for metric, value in predictions.items():
-                    # FIX: Handle nested structure from BERT model
+                    # FIXED: Handle nested structure from multi-task BERT
                     # BERT returns: {"metric": {"score": 0.999, "prediction": "positive"}}
-                    # We need to extract just the score
                     if isinstance(value, dict) and "score" in value:
                         score = value["score"]
-                        print(f"   {metric}: {score:.3f} (extracted from nested)")
+                        print(f"   {metric}: {score:.3f} ({value.get('prediction', 'N/A')})")
                     else:
+                        # Fallback for flat structure
                         score = value
                         print(f"   {metric}: {score:.3f} (flat)")
                     
