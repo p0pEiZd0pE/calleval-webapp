@@ -199,29 +199,19 @@ def transcribe_with_modal_whisperx(audio_path: str, call_id: str):
             app = modal.App.lookup(settings.MODAL_WHISPERX_APP)
             print(f"✓ App '{settings.MODAL_WHISPERX_APP}' found")
             
-            # Debug: List all available functions/methods in the app
-            app_methods = [m for m in dir(app) if not m.startswith('_')]
-            print(f"📋 Available methods in app: {app_methods}")
-            
-            # Try different ways to access the function
-            try:
-                # Method 1: Dictionary-style access
-                f = app[settings.MODAL_WHISPERX_FUNCTION]
-                print(f"✓ Using Modal App dictionary access")
-            except (KeyError, TypeError) as e:
-                print(f"⚠ Dictionary access failed: {e}")
-                try:
-                    # Method 2: Direct attribute access
-                    f = getattr(app, settings.MODAL_WHISPERX_FUNCTION)
-                    print(f"✓ Using Modal App attribute access")
-                except AttributeError as e2:
-                    print(f"❌ Attribute access failed: {e2}")
-                    print(f"\n⚠ TROUBLESHOOTING:")
-                    print(f"   1. Check if Modal app is deployed: modal app list")
-                    print(f"   2. Verify function name in Modal dashboard")
-                    print(f"   3. Expected: '{settings.MODAL_WHISPERX_FUNCTION}'")
-                    print(f"   4. Available: {app_methods[:10]}")  # Show first 10
-                    raise Exception(f"Cannot find function '{settings.MODAL_WHISPERX_FUNCTION}' in app '{settings.MODAL_WHISPERX_APP}'")
+            # Access function through registered_functions dictionary
+            if hasattr(app, 'registered_functions'):
+                print(f"📋 Registered functions: {list(app.registered_functions.keys())}")
+                
+                if settings.MODAL_WHISPERX_FUNCTION in app.registered_functions:
+                    f = app.registered_functions[settings.MODAL_WHISPERX_FUNCTION]
+                    print(f"✓ Function '{settings.MODAL_WHISPERX_FUNCTION}' found in registered_functions")
+                else:
+                    print(f"❌ Function '{settings.MODAL_WHISPERX_FUNCTION}' not found")
+                    print(f"   Available functions: {list(app.registered_functions.keys())}")
+                    raise Exception(f"Function '{settings.MODAL_WHISPERX_FUNCTION}' not found. Available: {list(app.registered_functions.keys())}")
+            else:
+                raise Exception("App has no registered_functions attribute")
                     
         except Exception as lookup_error:
             print(f"❌ Modal function lookup failed: {lookup_error}")
@@ -257,13 +247,16 @@ def analyze_with_modal_bert(text: str, call_id: str):
             # Modal v1.2.0+ API
             app = modal.App.lookup(settings.MODAL_BERT_APP)
             
-            # Try different ways to access the function
-            try:
-                # Method 1: Dictionary-style access
-                f = app[settings.MODAL_BERT_FUNCTION]
-            except (KeyError, TypeError):
-                # Method 2: Direct attribute access
-                f = getattr(app, settings.MODAL_BERT_FUNCTION)
+            # Access function through registered_functions dictionary
+            if hasattr(app, 'registered_functions'):
+                if settings.MODAL_BERT_FUNCTION in app.registered_functions:
+                    f = app.registered_functions[settings.MODAL_BERT_FUNCTION]
+                    print(f"✓ BERT function found")
+                else:
+                    print(f"❌ Available functions: {list(app.registered_functions.keys())}")
+                    raise Exception(f"Function '{settings.MODAL_BERT_FUNCTION}' not found")
+            else:
+                raise Exception("App has no registered_functions attribute")
                     
         except Exception as lookup_error:
             print(f"❌ Modal BERT lookup failed: {lookup_error}")
@@ -291,13 +284,16 @@ def analyze_with_modal_wav2vec2(audio_path: str, call_id: str, text: str):
             # Modal v1.2.0+ API
             app = modal.App.lookup(settings.MODAL_WAV2VEC2_APP)
             
-            # Try different ways to access the function
-            try:
-                # Method 1: Dictionary-style access
-                f = app[settings.MODAL_WAV2VEC2_FUNCTION]
-            except (KeyError, TypeError):
-                # Method 2: Direct attribute access
-                f = getattr(app, settings.MODAL_WAV2VEC2_FUNCTION)
+            # Access function through registered_functions dictionary
+            if hasattr(app, 'registered_functions'):
+                if settings.MODAL_WAV2VEC2_FUNCTION in app.registered_functions:
+                    f = app.registered_functions[settings.MODAL_WAV2VEC2_FUNCTION]
+                    print(f"✓ Wav2Vec2 function found")
+                else:
+                    print(f"❌ Available functions: {list(app.registered_functions.keys())}")
+                    raise Exception(f"Function '{settings.MODAL_WAV2VEC2_FUNCTION}' not found")
+            else:
+                raise Exception("App has no registered_functions attribute")
                     
         except Exception as lookup_error:
             print(f"❌ Modal Wav2Vec2 lookup failed: {lookup_error}")
