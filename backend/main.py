@@ -488,6 +488,7 @@ def process_call(call_id: str, file_path: str):
         agent_text = " ".join([seg["text"] for seg in agent_segments])
         
         print(f"📝 Agent segments: {len(agent_segments)}/{len(whisperx_result['segments'])}")
+        print(f"📝 Agent text length: {len(agent_text)} characters")
         print(f"📝 Agent text preview: {agent_text[:200]}...")
         
         call.status = "completed"
@@ -501,7 +502,7 @@ def process_call(call_id: str, file_path: str):
         print(f"{'='*60}")
         
         print(f"🤖 Calling BERT with agent text...")
-        bert_output = analyze_with_modal_bert(agent_text, task="all")
+        bert_output = analyze_with_modal_bert(agent_text)  # ← FIXED: No task parameter
         
         print(f"🎵 Calling Wav2Vec2 with agent audio...")
         wav2vec2_output = analyze_with_modal_wav2vec2(file_path, call_id, agent_text)
