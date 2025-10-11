@@ -1,120 +1,144 @@
-from fastapi import FastAPI, UploadFile, File, Depends, HTTPException, BackgroundTasks
+# =========================================
+# CallEval Backend API - AI-Only Binary Scoring System
+# Modal Integration + Pure AI Scorecard Evaluation
+# No Pattern Matching - 100% Model-Based Predictions
+# =========================================
+
+import os
+import json
+import uuid
+from datetime import datetime
+from pathlib import Path
+from typing import Dict, List, Optional, Any
+
+from fastapi import FastAPI, File, UploadFile, HTTPException, Depends, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
-from sqlalchemy.orm import Session
-from datetime import datetime
-import os
-import uuid
-import modal
-import librosa
-from pathlib import Path
-import json
+from sqlalchemy import create_engine, Column, String, Text, DateTime
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker, Session
+from pydantic import BaseModel
 
 from config import settings
-from database import get_db, CallEvaluation, SessionLocal
 
-# ==================== MODAL AUTHENTICATION ====================
-modal_token_id = os.getenv("MODAL_TOKEN_ID")
-modal_token_secret = os.getenv("MODAL_TOKEN_SECRET")
+# Database setup
+Base = declarative_base()
+engine = create_engine(settings.DATABASE_URL)
+SessionLocal = sessionmaker(bind=engine)
 
-if modal_token_id and modal_token_secret:
-    print(f"✓ Modal credentials found")
-    print(f"  Token ID: {modal_token_id[:10]}...")
+class CallEvaluation(Base):
+    __tablename__ = "call_evaluations"
     
-    # Set environment variables for Modal
-    os.environ["MODAL_TOKEN_ID"] = modal_token_id
-    os.environ["MODAL_TOKEN_SECRET"] = modal_token_secret
-    
-    print(f"✓ Modal environment configured")
-else:
-    print("⚠ WARNING: Modal credentials NOT found!")
-    print(f"  MODAL_TOKEN_ID exists: {bool(modal_token_id)}")
-    print(f"  MODAL_TOKEN_SECRET exists: {bool(modal_token_secret)}")
-    print("  Modal functions will NOT work without credentials!")
-# ==============================================================
+    id = Column(String, primary_key=True)
+    filename = Column(String)
+    file_path = Column(String)
+    duration = Column(String, nullable=True)
+    transcript = Column(Text, nullable=True)
+    speakers = Column(Text, nullable=True)
+    status = Column(String, default="queued")
+    analysis_status = Column(String, default="pending")
+    scorecard_results = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
+Base.metadata.create_all(bind=engine)
 
-# FastAPI app
-app = FastAPI(title="CallEval API - Full Modal Stack")
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
-# Parse FRONTEND_URL to support multiple origins (comma-separated)
-allowed_origins = [
-    origin.strip() 
-    for origin in settings.FRONTEND_URL.split(",")
-]
-# Always allow localhost for development
-if "http://localhost:5173" not in allowed_origins:
-    allowed_origins.append("http://localhost:5173")
+# ==========================================
+# COMPLETE BINARY SCORECARD CONFIGURATION
+# AI-ONLY (No Pattern Matching)
+# ==========================================
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=allowed_origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# Binary Scorecard Configuration (AI-only)
 SCORECARD_CONFIG = {
-    # All Phases (10%)
+    # All Phases (10%) - Universal metrics
     "enthusiasm_markers": {
         "weight": 5,
-        "threshold": 0.5
+        "threshold": 0.5,
+        "phase": "all"
     },
     "sounds_polite_courteous": {
         "weight": 5,
-        "threshold": 0.5
+        "threshold": 0.5,
+        "phase": "all"
     },
     
     # Opening Spiel (10%)
     "professional_greeting": {
         "weight": 5,
-        "threshold": 0.5
+        "threshold": 0.5,
+        "phase": "opening"
     },
     "verifies_patient_online": {
         "weight": 5,
-        "threshold": 0.5
+        "threshold": 0.5,
+        "phase": "opening"
     },
     
     # Middle/Climax (70%)
     "patient_verification": {
         "weight": 25,
-        "threshold": 0.5
+        "threshold": 0.5,
+        "phase": "middle"
     },
     "active_listening": {
         "weight": 10,
-        "threshold": 0.5
+        "threshold": 0.5,
+        "phase": "middle"
+    },
+    "asks_permission_hold": {
+        "weight": 5,
+        "threshold": 0.5,
+        "phase": "middle"
+    },
+    "returns_properly_from_hold": {
+        "weight": 5,
+        "threshold": 0.5,
+        "phase": "middle"
+    },
+    "no_fillers_stammers": {
+        "weight": 10,
+        "threshold": 0.5,
+        "phase": "middle"
     },
     "recaps_time_date": {
         "weight": 15,
-        "threshold": 0.5
+        "threshold": 0.5,
+        "phase": "middle"
     },
     
     # Closing/Wrap up (10%)
     "offers_further_assistance": {
         "weight": 5,
-        "threshold": 0.5
+        "threshold": 0.5,
+        "phase": "closing"
     },
     "ended_call_properly": {
         "weight": 5,
-        "threshold": 0.5
+        "threshold": 0.5,
+        "phase": "closing"
     }
 }
 
+# ==========================================
+# MODAL INTEGRATION FUNCTIONS
+# ==========================================
 
 def transcribe_with_modal_whisperx(audio_path: str, call_id: str):
     """Transcribe audio using Modal WhisperX"""
     try:
         print(f"🔍 Looking up Modal function: {settings.MODAL_WHISPERX_APP}/{settings.MODAL_WHISPERX_FUNCTION}")
         
-        # Import modal here to ensure env vars are set
         import modal
         
         try:
             f = modal.Function.lookup(settings.MODAL_WHISPERX_APP, settings.MODAL_WHISPERX_FUNCTION)
         except AttributeError:
-            # Fallback for older Modal SDK versions
             f = modal.Function.from_name(settings.MODAL_WHISPERX_APP, settings.MODAL_WHISPERX_FUNCTION)
         
         audio_url = f"{settings.BACKEND_URL}/api/temp-audio/{call_id}"
@@ -130,17 +154,15 @@ def transcribe_with_modal_whisperx(audio_path: str, call_id: str):
         return result
     except Exception as e:
         print(f"❌ WhisperX Modal error: {e}")
-        print(f"   App: {settings.MODAL_WHISPERX_APP}")
-        print(f"   Function: {settings.MODAL_WHISPERX_FUNCTION}")
         import traceback
         traceback.print_exc()
         raise
 
 
-def analyze_with_modal_bert(text: str):
+def analyze_with_modal_bert(text: str, task: str = "all"):
     """Analyze text using Modal BERT"""
     try:
-        print(f"🔍 Looking up Modal function: {settings.MODAL_BERT_APP}/{settings.MODAL_BERT_FUNCTION}")
+        print(f"🔍 Calling Modal BERT for task: {task}")
         
         import modal
         
@@ -149,14 +171,11 @@ def analyze_with_modal_bert(text: str):
         except AttributeError:
             f = modal.Function.from_name(settings.MODAL_BERT_APP, settings.MODAL_BERT_FUNCTION)
         
-        print(f"📝 Calling Modal BERT...")
-        result = f.remote(text=text, task="all")
+        result = f.remote(text=text, task=task)
         return result
         
     except Exception as e:
         print(f"❌ BERT Modal error: {e}")
-        print(f"   App: {settings.MODAL_BERT_APP}")
-        print(f"   Function: {settings.MODAL_BERT_FUNCTION}")
         import traceback
         traceback.print_exc()
         return None
@@ -165,7 +184,7 @@ def analyze_with_modal_bert(text: str):
 def analyze_with_modal_wav2vec2(audio_path: str, call_id: str, text: str):
     """Analyze audio+text using Modal Wav2Vec2-BERT"""
     try:
-        print(f"🔍 Looking up Modal function: {settings.MODAL_WAV2VEC2_APP}/{settings.MODAL_WAV2VEC2_FUNCTION}")
+        print(f"🔍 Calling Modal Wav2Vec2-BERT")
         
         import modal
         
@@ -175,93 +194,331 @@ def analyze_with_modal_wav2vec2(audio_path: str, call_id: str, text: str):
             f = modal.Function.from_name(settings.MODAL_WAV2VEC2_APP, settings.MODAL_WAV2VEC2_FUNCTION)
         
         audio_url = f"{settings.BACKEND_URL}/api/temp-audio/{call_id}"
-        print(f"🎵 Calling Modal Wav2Vec2-BERT...")
         
         result = f.remote(audio_url=audio_url, text=text)
         return result
         
     except Exception as e:
         print(f"❌ Wav2Vec2 Modal error: {e}")
-        print(f"   App: {settings.MODAL_WAV2VEC2_APP}")
-        print(f"   Function: {settings.MODAL_WAV2VEC2_FUNCTION}")
         import traceback
         traceback.print_exc()
         return None
 
+# ==========================================
+# BINARY SCORING EVALUATION ENGINE
+# ==========================================
 
-def evaluate_binary_metric(metric_name: str, text: str, bert_output: dict, wav2vec2_output: dict) -> float:
-    """
-    Evaluate a single metric using AI models only (BERT + Wav2Vec2)
-    Returns: 1.0 if ANY AI model detects it, 0.0 otherwise
-    """
-    # BERT-based score
-    ai_score = 0.0
-    if bert_output and bert_output.get("success") and metric_name in SCORECARD_CONFIG:
-        predictions = bert_output.get("predictions", {})
-        threshold = SCORECARD_CONFIG[metric_name].get("threshold", 0.5)
-        
-        if metric_name in predictions:
-            prediction_value = predictions[metric_name]
-            ai_score = 1.0 if prediction_value >= threshold else 0.0
-            print(f"  {metric_name}: BERT={prediction_value:.3f} (threshold={threshold}) → {ai_score}")
+class BinaryScoringEngine:
+    """Engine for evaluating binary scorecard metrics - AI-ONLY"""
     
-    # Wav2Vec2-based score (for enthusiasm and politeness)
-    wav2vec2_score = 0.0
-    if wav2vec2_output and wav2vec2_output.get("success"):
-        audio_features = wav2vec2_output.get("audio_features", {})
-        
-        if metric_name == "enthusiasm_markers":
-            energy = audio_features.get("energy", 0)
-            wav2vec2_score = 1.0 if energy > 0.6 else 0.0
-            print(f"  {metric_name}: Wav2Vec2 energy={energy:.3f} → {wav2vec2_score}")
-        
-        elif metric_name == "sounds_polite_courteous":
-            pitch = audio_features.get("pitch_mean", 0)
-            wav2vec2_score = 1.0 if 150 < pitch < 250 else 0.0
-            print(f"  {metric_name}: Wav2Vec2 pitch={pitch:.1f} → {wav2vec2_score}")
+    def __init__(self, scorecard_config: Dict):
+        self.scorecard_config = scorecard_config
     
-    # Return 1.0 if EITHER model detects it
-    final_score = max(ai_score, wav2vec2_score)
-    return final_score
-
-
-def calculate_binary_scores(text: str, bert_output: dict, wav2vec2_output: dict) -> dict:
-    """Calculate binary scores for all metrics"""
-    scores = {}
-    
-    for metric_name in SCORECARD_CONFIG.keys():
-        score = evaluate_binary_metric(metric_name, text, bert_output, wav2vec2_output)
-        weight = SCORECARD_CONFIG[metric_name]["weight"]
-        scores[metric_name] = {
-            "detected": score == 1.0,
-            "score": score,
-            "weight": weight,
-            "weighted_score": score * weight
+    def evaluate_metric_with_ai(
+        self, 
+        metric_name: str, 
+        text: str, 
+        phase: str,
+        bert_predictions: Optional[Dict] = None,
+        wav2vec2_predictions: Optional[Dict] = None
+    ) -> Dict[str, Any]:
+        """
+        Evaluate a single metric using AI-ONLY approach:
+        - BERT predictions (text-based AI)
+        - Wav2Vec2 predictions (audio+text AI)
+        - Combined logic (MAX operation - use highest confidence)
+        """
+        
+        if metric_name not in self.scorecard_config:
+            return {"score": 0, "found": False, "details": "Metric not configured"}
+        
+        config = self.scorecard_config[metric_name]
+        
+        # Check if metric applies to this phase
+        if config.get("phase") != "all" and config.get("phase") != phase:
+            return {"score": 0, "found": False, "details": f"Not applicable to {phase} phase"}
+        
+        # Initialize AI scores
+        bert_score = 0.0
+        wav2vec2_score = 0.0
+        
+        # 1. BERT PREDICTIONS (if available)
+        if bert_predictions and metric_name in bert_predictions:
+            bert_score = float(bert_predictions[metric_name])
+        
+        # 2. WAV2VEC2 PREDICTIONS (if available)
+        if wav2vec2_predictions and metric_name in wav2vec2_predictions:
+            wav2vec2_score = float(wav2vec2_predictions[metric_name])
+        
+        # 3. COMBINED LOGIC - Use the highest confidence score
+        combined_score = max(bert_score, wav2vec2_score)
+        
+        # 4. Apply threshold
+        threshold = config.get("threshold", 0.5)
+        passed = combined_score >= threshold
+        
+        # 5. Calculate final score
+        final_score = config["weight"] if passed else 0
+        
+        # 6. Build details
+        details = f"BERT: {bert_score:.2f}, Wav2Vec2: {wav2vec2_score:.2f} → Combined: {combined_score:.2f} → {'✓ PASS' if passed else '✗ FAIL'}"
+        
+        return {
+            "score": final_score,
+            "max_score": config["weight"],
+            "found": passed,
+            "details": details,
+            "bert_score": bert_score,
+            "wav2vec2_score": wav2vec2_score,
+            "combined_score": combined_score,
+            "threshold": threshold
         }
     
-    # Calculate total
-    total_score = sum(s["weighted_score"] for s in scores.values())
+    def detect_phase(self, segment_index: int, total_segments: int) -> str:
+        """Detect conversation phase based on segment position"""
+        position = segment_index / total_segments if total_segments > 0 else 0
+        
+        if position < 0.15:  # First 15%
+            return "opening"
+        elif position > 0.85:  # Last 15%
+            return "closing"
+        else:
+            return "middle"
     
-    return {
-        "metrics": scores,
-        "total_score": total_score,
-        "max_score": 100.0,
-        "percentage": total_score
-    }
+    def evaluate_call(
+        self, 
+        segments: List[Dict],
+        bert_predictions: Optional[Dict] = None,
+        wav2vec2_predictions: Optional[Dict] = None
+    ) -> Dict[str, Any]:
+        """
+        Evaluate entire call using binary scorecard - AI-ONLY
+        
+        Args:
+            segments: List of agent segments with text
+            bert_predictions: BERT model predictions {metric_name: score}
+            wav2vec2_predictions: Wav2Vec2 model predictions {metric_name: score}
+        
+        Returns:
+            Complete scorecard evaluation
+        """
+        
+        results = {}
+        total_segments = len(segments)
+        
+        # Combine all agent text
+        all_text = " ".join([seg.get("text", "") for seg in segments])
+        
+        # Evaluate each metric
+        for metric_name, config in self.scorecard_config.items():
+            phase = config.get("phase", "all")
+            
+            # Get segments for this phase
+            if phase == "all":
+                relevant_text = all_text
+            else:
+                phase_segments = [
+                    seg for idx, seg in enumerate(segments)
+                    if self.detect_phase(idx, total_segments) == phase
+                ]
+                relevant_text = " ".join([seg.get("text", "") for seg in phase_segments])
+            
+            # Evaluate metric using AI predictions only
+            result = self.evaluate_metric_with_ai(
+                metric_name=metric_name,
+                text=relevant_text,
+                phase=phase,
+                bert_predictions=bert_predictions,
+                wav2vec2_predictions=wav2vec2_predictions
+            )
+            
+            results[metric_name] = result
+        
+        # Calculate total score
+        total_score = sum(r["score"] for r in results.values())
+        max_possible = sum(config["weight"] for config in self.scorecard_config.values())
+        
+        # Calculate phase breakdowns
+        breakdown = {
+            "all_phases": {
+                "score": sum(r["score"] for k, r in results.items() if self.scorecard_config[k].get("phase") == "all"),
+                "max": sum(c["weight"] for k, c in self.scorecard_config.items() if c.get("phase") == "all")
+            },
+            "opening": {
+                "score": sum(r["score"] for k, r in results.items() if self.scorecard_config[k].get("phase") == "opening"),
+                "max": sum(c["weight"] for k, c in self.scorecard_config.items() if c.get("phase") == "opening")
+            },
+            "middle": {
+                "score": sum(r["score"] for k, r in results.items() if self.scorecard_config[k].get("phase") == "middle"),
+                "max": sum(c["weight"] for k, c in self.scorecard_config.items() if c.get("phase") == "middle")
+            },
+            "closing": {
+                "score": sum(r["score"] for k, r in results.items() if self.scorecard_config[k].get("phase") == "closing"),
+                "max": sum(c["weight"] for k, c in self.scorecard_config.items() if c.get("phase") == "closing")
+            }
+        }
+        
+        return {
+            "metrics": results,
+            "total_score": total_score,
+            "max_score": max_possible,
+            "percentage": (total_score / max_possible * 100) if max_possible > 0 else 0,
+            "breakdown": breakdown,
+            "ai_method": "BERT + Wav2Vec2-BERT (No Pattern Matching)"
+        }
 
+# ==========================================
+# BACKGROUND PROCESSING
+# ==========================================
+
+def process_call(call_id: str, file_path: str):
+    """Background task: Complete call processing with binary scoring"""
+    
+    db = SessionLocal()
+    
+    try:
+        call = db.query(CallEvaluation).filter(CallEvaluation.id == call_id).first()
+        
+        if not call:
+            print(f"Call {call_id} not found")
+            return
+        
+        # STEP 1: TRANSCRIBE WITH MODAL WHISPERX
+        print(f"\n{'='*60}")
+        print(f"STEP 1: TRANSCRIBING WITH MODAL WHISPERX")
+        print(f"{'='*60}")
+        
+        call.status = "transcribing"
+        call.analysis_status = "transcribing"
+        db.commit()
+        
+        whisperx_result = transcribe_with_modal_whisperx(file_path, call_id)
+        
+        if not whisperx_result or "segments" not in whisperx_result:
+            raise Exception("WhisperX transcription failed")
+        
+        # Store transcript
+        full_text = " ".join([seg["text"] for seg in whisperx_result["segments"]])
+        call.transcript = full_text
+        
+        # Calculate duration
+        if whisperx_result["segments"]:
+            last_segment = whisperx_result["segments"][-1]
+            duration_seconds = int(last_segment.get("end", 0))
+            minutes = duration_seconds // 60
+            seconds = duration_seconds % 60
+            call.duration = f"{minutes}:{seconds:02d}"
+        
+        # Store speakers
+        call.speakers = json.dumps(whisperx_result["segments"], indent=2)
+        
+        call.status = "completed"
+        call.analysis_status = "analyzing"
+        db.commit()
+        
+        print(f"✅ Transcription complete!")
+        
+        # STEP 2: IDENTIFY AGENT SEGMENTS
+        print(f"\n{'='*60}")
+        print(f"STEP 2: IDENTIFYING AGENT SEGMENTS")
+        print(f"{'='*60}")
+        
+        # Simple heuristic: speaker with more segments is likely the agent
+        speakers = {}
+        for seg in whisperx_result["segments"]:
+            speaker = seg.get("speaker", "UNKNOWN")
+            speakers[speaker] = speakers.get(speaker, 0) + 1
+        
+        agent_speaker = max(speakers, key=speakers.get) if speakers else None
+        
+        agent_segments = [
+            seg for seg in whisperx_result["segments"]
+            if seg.get("speaker") == agent_speaker
+        ]
+        
+        print(f"📊 Agent: {agent_speaker} ({len(agent_segments)} segments)")
+        
+        # STEP 3: RUN AI MODELS (OPTIONAL - for enhanced accuracy)
+        print(f"\n{'='*60}")
+        print(f"STEP 3: RUNNING AI MODELS")
+        print(f"{'='*60}")
+        
+        agent_text = " ".join([seg["text"] for seg in agent_segments])
+        
+        # Get BERT predictions
+        bert_predictions = analyze_with_modal_bert(agent_text, task="all")
+        
+        # Get Wav2Vec2 predictions
+        wav2vec2_predictions = analyze_with_modal_wav2vec2(file_path, call_id, agent_text)
+        
+        # STEP 4: BINARY SCORECARD EVALUATION
+        print(f"\n{'='*60}")
+        print(f"STEP 4: BINARY SCORECARD EVALUATION")
+        print(f"{'='*60}")
+        
+        scoring_engine = BinaryScoringEngine(SCORECARD_CONFIG)
+        
+        scorecard_results = scoring_engine.evaluate_call(
+            segments=agent_segments,
+            bert_predictions=bert_predictions,
+            wav2vec2_predictions=wav2vec2_predictions
+        )
+        
+        # Store results
+        call.scorecard_results = json.dumps(scorecard_results, indent=2)
+        call.analysis_status = "completed"
+        db.commit()
+        
+        print(f"\n✅ CALL EVALUATION COMPLETE!")
+        print(f"📊 Total Score: {scorecard_results['total_score']:.1f}/{scorecard_results['max_score']} ({scorecard_results['percentage']:.1f}%)")
+        
+    except Exception as e:
+        print(f"❌ Error processing call {call_id}: {e}")
+        import traceback
+        traceback.print_exc()
+        
+        call.status = "failed"
+        call.analysis_status = "failed"
+        db.commit()
+        
+    finally:
+        db.close()
+
+# ==========================================
+# FASTAPI APPLICATION
+# ==========================================
+
+os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
+
+app = FastAPI(title="CallEval API - AI-Only Binary Scoring")
+
+# CORS
+allowed_origins = [origin.strip() for origin in settings.FRONTEND_URL.split(",")]
+if "http://localhost:5173" not in allowed_origins:
+    allowed_origins.append("http://localhost:5173")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=allowed_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 @app.get("/")
 async def root():
     return {
-        "message": "CallEval API - Full Modal Stack (WhisperX + BERT + Wav2Vec2)",
+        "message": "CallEval API - AI-Only Binary Scoring System",
         "status": "running",
-        "models": {
-            "transcription": f"{settings.MODAL_WHISPERX_APP}/{settings.MODAL_WHISPERX_FUNCTION}",
-            "bert": f"{settings.MODAL_BERT_APP}/{settings.MODAL_BERT_FUNCTION}",
-            "wav2vec2": f"{settings.MODAL_WAV2VEC2_APP}/{settings.MODAL_WAV2VEC2_FUNCTION}"
-        }
+        "version": "2.0",
+        "features": {
+            "transcription": "Modal WhisperX",
+            "text_analysis": "Modal BERT",
+            "audio_analysis": "Modal Wav2Vec2-BERT",
+            "scoring": "Pure AI Binary Scorecard (BERT + Wav2Vec2)"
+        },
+        "note": "No pattern matching - 100% AI-powered evaluation"
     }
-
 
 @app.post("/api/upload")
 async def upload_audio(
@@ -301,9 +558,9 @@ async def upload_audio(
     return {
         "id": call_id,
         "filename": file.filename,
-        "status": "processing"
+        "status": "processing",
+        "message": "File uploaded successfully. Processing started."
     }
-
 
 @app.get("/api/calls/{call_id}")
 async def get_call(call_id: str, db: Session = Depends(get_db)):
@@ -313,77 +570,40 @@ async def get_call(call_id: str, db: Session = Depends(get_db)):
     if not call:
         raise HTTPException(status_code=404, detail="Call not found")
     
-    # Parse JSON fields safely
+    # Parse JSON fields
     result = {
         "id": call.id,
         "filename": call.filename,
-        "file_path": call.file_path,
-        "status": call.status or "pending",
-        "analysis_status": call.analysis_status or "pending",
-        "transcript": call.transcript,
         "duration": call.duration,
-        "score": call.score,
+        "status": call.status,
+        "analysis_status": call.analysis_status,
         "created_at": call.created_at.isoformat() if call.created_at else None,
-        "updated_at": call.updated_at.isoformat() if call.updated_at else None,
+        "updated_at": call.updated_at.isoformat() if call.updated_at else None
     }
     
-    # Add JSON fields if they exist
-    if hasattr(call, 'bert_analysis') and call.bert_analysis:
-        try:
-            result["bert_analysis"] = json.loads(call.bert_analysis)
-        except:
-            result["bert_analysis"] = None
+    # Add transcript if available
+    if call.transcript:
+        result["transcript"] = call.transcript
     
-    if hasattr(call, 'wav2vec2_analysis') and call.wav2vec2_analysis:
-        try:
-            result["wav2vec2_analysis"] = json.loads(call.wav2vec2_analysis)
-        except:
-            result["wav2vec2_analysis"] = None
-    
-    if hasattr(call, 'binary_scores') and call.binary_scores:
-        try:
-            result["binary_scores"] = json.loads(call.binary_scores)
-        except:
-            result["binary_scores"] = None
-    
-    if hasattr(call, 'speakers') and call.speakers:
+    # Add speakers if available
+    if call.speakers:
         try:
             result["speakers"] = json.loads(call.speakers)
         except:
-            result["speakers"] = None
+            result["speakers"] = call.speakers
     
-    if hasattr(call, 'scores') and call.scores:
+    # Add scorecard results if available
+    if call.scorecard_results:
         try:
-            result["scores"] = json.loads(call.scores)
+            result["scorecard"] = json.loads(call.scorecard_results)
         except:
-            result["scores"] = None
+            result["scorecard"] = call.scorecard_results
     
     return result
 
-
-@app.get("/api/calls")
-async def list_calls(db: Session = Depends(get_db)):
-    """List all call evaluations"""
-    calls = db.query(CallEvaluation).order_by(CallEvaluation.created_at.desc()).all()
-    
-    # Properly serialize with safe defaults
-    return [{
-        "id": call.id,
-        "filename": call.filename,
-        "file_path": call.file_path,
-        "status": call.status or "pending",
-        "analysis_status": call.analysis_status or "pending",
-        "transcript": call.transcript,
-        "duration": call.duration,
-        "score": call.score,
-        "created_at": call.created_at.isoformat() if call.created_at else None,
-        "updated_at": call.updated_at.isoformat() if call.updated_at else None,
-    } for call in calls]
-
-
 @app.get("/api/temp-audio/{call_id}")
 async def get_temp_audio(call_id: str, db: Session = Depends(get_db)):
-    """Serve audio file temporarily for Modal to download"""
+    """Serve audio file for Modal to download"""
     call = db.query(CallEvaluation).filter(CallEvaluation.id == call_id).first()
     
     if not call:
@@ -399,150 +619,14 @@ async def get_temp_audio(call_id: str, db: Session = Depends(get_db)):
         headers={"Content-Disposition": f"attachment; filename={call.filename}"}
     )
 
-
-def process_call(call_id: str, file_path: str):
-    """Background task: Process call with full Modal stack + Binary Scoring"""
-    
-    db = SessionLocal()
-    
-    try:
-        call = db.query(CallEvaluation).filter(CallEvaluation.id == call_id).first()
-        
-        if not call:
-            print(f"Call {call_id} not found")
-            return
-        
-        # STEP 1: TRANSCRIBE WITH MODAL WHISPERX
-        print(f"\n{'='*60}")
-        print(f"STEP 1: TRANSCRIBING WITH MODAL WHISPERX")
-        print(f"{'='*60}")
-        
-        call.status = "transcribing"
-        call.analysis_status = "transcribing"
-        db.commit()
-        
-        whisperx_result = transcribe_with_modal_whisperx(file_path, call_id)
-        
-        if not whisperx_result or "segments" not in whisperx_result:
-            raise Exception("WhisperX transcription failed")
-        
-        full_text = " ".join([seg["text"] for seg in whisperx_result["segments"]])
-        call.transcript = full_text
-        
-        # Calculate duration
-        if "segments" in whisperx_result and len(whisperx_result["segments"]) > 0:
-            last_segment = whisperx_result["segments"][-1]
-            duration_seconds = int(last_segment.get("end", 0))
-            minutes = duration_seconds // 60
-            seconds = duration_seconds % 60
-            call.duration = f"{minutes}:{seconds:02d}"
-        
-        # Store speakers
-        if "segments" in whisperx_result:
-            call.speakers = json.dumps(whisperx_result["segments"], indent=2)
-        
-        # IMPORTANT: Mark transcription as completed
-        call.status = "completed"  # Transcription is done!
-        call.analysis_status = "transcribed"  # Ready for analysis
-        
-        db.commit()
-        print(f"✅ Transcription complete! Status set to 'completed'")
-        
-        # STEP 2: ANALYZE WITH MODAL BERT
-        print(f"\n{'='*60}")
-        print(f"STEP 2: ANALYZING WITH MODAL BERT")
-        print(f"{'='*60}")
-        
-        # Status stays "completed", only analysis_status changes
-        call.analysis_status = "analyzing_bert"
-        db.commit()
-        
-        bert_result = analyze_with_modal_bert(full_text)
-        
-        if bert_result:
-            if hasattr(call, 'bert_analysis'):
-                call.bert_analysis = json.dumps(bert_result, indent=2)
-            db.commit()
-            print(f"✅ BERT analysis complete!")
-        else:
-            print(f"⚠️ BERT analysis failed, continuing...")
-        
-        # STEP 3: ANALYZE WITH MODAL WAV2VEC2-BERT
-        print(f"\n{'='*60}")
-        print(f"STEP 3: ANALYZING WITH MODAL WAV2VEC2-BERT")
-        print(f"{'='*60}")
-        
-        call.analysis_status = "analyzing_wav2vec2"
-        db.commit()
-        
-        wav2vec2_result = analyze_with_modal_wav2vec2(file_path, call_id, full_text)
-        
-        if wav2vec2_result:
-            if hasattr(call, 'wav2vec2_analysis'):
-                call.wav2vec2_analysis = json.dumps(wav2vec2_result, indent=2)
-            db.commit()
-            print(f"✅ Wav2Vec2 analysis complete!")
-        else:
-            print(f"⚠️ Wav2Vec2 analysis failed, continuing...")
-        
-        # STEP 4: CALCULATE BINARY SCORES
-        print(f"\n{'='*60}")
-        print(f"STEP 4: CALCULATING BINARY SCORES")
-        print(f"{'='*60}")
-        
-        binary_scores = calculate_binary_scores(full_text, bert_result, wav2vec2_result)
-        if hasattr(call, 'binary_scores'):
-            call.binary_scores = json.dumps(binary_scores, indent=2)
-        
-        total_score = binary_scores["total_score"]
-        print(f"\n🎯 FINAL SCORE: {total_score:.1f}/100")
-        
-        # STEP 5: UPDATE FINAL STATUS - THIS IS THE KEY PART!
-        print(f"\n{'='*60}")
-        print(f"STEP 5: UPDATING DATABASE WITH FINAL STATUS")
-        print(f"{'='*60}")
-        
-        call.score = total_score
-        # Status is already "completed" from Step 1, just update analysis_status
-        call.analysis_status = "completed"
-        
-        print(f"🔄 Status remains: {call.status}")
-        print(f"🔄 Setting analysis_status to: {call.analysis_status}")
-        print(f"🔄 Setting score to: {call.score}")
-        
-        db.commit()
-        print(f"✅ Database committed successfully!")
-        
-        # Verify the update
-        db.refresh(call)
-        print(f"✅ Verification - Status in DB: {call.status}")
-        print(f"✅ Verification - Analysis Status in DB: {call.analysis_status}")
-        print(f"✅ Verification - Score in DB: {call.score}")
-        
-        print(f"\n{'='*60}")
-        print(f"✅ PROCESSING COMPLETE FOR CALL {call_id}")
-        print(f"{'='*60}\n")
-        
-    except Exception as e:
-        print(f"\n❌ ERROR processing call {call_id}: {e}")
-        import traceback
-        traceback.print_exc()
-        
-        try:
-            # Try to update status even if there was an error
-            call = db.query(CallEvaluation).filter(CallEvaluation.id == call_id).first()
-            if call:
-                call.status = "failed"
-                call.analysis_status = f"error: {str(e)}"
-                db.commit()
-                print(f"✅ Error status saved to database")
-        except Exception as db_error:
-            print(f"❌ Failed to save error status: {db_error}")
-    
-    finally:
-        print(f"🔒 Closing database connection for call {call_id}")
-        db.close()
-
+@app.get("/api/scorecard-config")
+async def get_scorecard_config():
+    """Get current scorecard configuration"""
+    return {
+        "config": SCORECARD_CONFIG,
+        "total_weight": sum(c["weight"] for c in SCORECARD_CONFIG.values()),
+        "metrics_count": len(SCORECARD_CONFIG)
+    }
 
 if __name__ == "__main__":
     import uvicorn
