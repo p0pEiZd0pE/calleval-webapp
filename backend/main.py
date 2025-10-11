@@ -13,8 +13,7 @@ import json
 from config import settings
 from database import get_db, CallEvaluation, SessionLocal
 
-# ==================== MODAL AUTHENTICATION FIX ====================
-# Must configure Modal BEFORE using Function.from_name()
+# ==================== MODAL AUTHENTICATION ====================
 modal_token_id = os.getenv("MODAL_TOKEN_ID")
 modal_token_secret = os.getenv("MODAL_TOKEN_SECRET")
 
@@ -22,23 +21,17 @@ if modal_token_id and modal_token_secret:
     print(f"✓ Modal credentials found")
     print(f"  Token ID: {modal_token_id[:10]}...")
     
-    # Set environment variables
+    # Set environment variables for Modal
     os.environ["MODAL_TOKEN_ID"] = modal_token_id
     os.environ["MODAL_TOKEN_SECRET"] = modal_token_secret
     
-    # CRITICAL: Initialize Modal config explicitly
-    try:
-        import modal.config
-        # Force config reload with new credentials
-        modal.config._config = None
-        print(f"✓ Modal config initialized")
-    except Exception as e:
-        print(f"⚠ Warning: Could not initialize Modal config: {e}")
+    print(f"✓ Modal environment configured")
 else:
-    print("⚠ Warning: Modal credentials not found")
-    print(f"  MODAL_TOKEN_ID: {bool(modal_token_id)}")
-    print(f"  MODAL_TOKEN_SECRET: {bool(modal_token_secret)}")
-# ==================================================================
+    print("⚠ WARNING: Modal credentials NOT found!")
+    print(f"  MODAL_TOKEN_ID exists: {bool(modal_token_id)}")
+    print(f"  MODAL_TOKEN_SECRET exists: {bool(modal_token_secret)}")
+    print("  Modal functions will NOT work without credentials!")
+# ==============================================================
 
 os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
 
@@ -115,18 +108,14 @@ def transcribe_with_modal_whisperx(audio_path: str, call_id: str):
     try:
         print(f"🔍 Looking up Modal function: {settings.MODAL_WHISPERX_APP}/{settings.MODAL_WHISPERX_FUNCTION}")
         
-        # Use lookup() instead of from_name() - it's more reliable
+        # Import modal here to ensure env vars are set
+        import modal
+        
         try:
-            f = modal.Function.lookup(
-                settings.MODAL_WHISPERX_APP,
-                settings.MODAL_WHISPERX_FUNCTION
-            )
+            f = modal.Function.lookup(settings.MODAL_WHISPERX_APP, settings.MODAL_WHISPERX_FUNCTION)
         except AttributeError:
             # Fallback for older Modal SDK versions
-            f = modal.Function.from_name(
-                settings.MODAL_WHISPERX_APP,
-                settings.MODAL_WHISPERX_FUNCTION
-            )
+            f = modal.Function.from_name(settings.MODAL_WHISPERX_APP, settings.MODAL_WHISPERX_FUNCTION)
         
         audio_url = f"{settings.BACKEND_URL}/api/temp-audio/{call_id}"
         print(f"🎯 WhisperX audio URL: {audio_url}")
@@ -153,16 +142,12 @@ def analyze_with_modal_bert(text: str):
     try:
         print(f"🔍 Looking up Modal function: {settings.MODAL_BERT_APP}/{settings.MODAL_BERT_FUNCTION}")
         
+        import modal
+        
         try:
-            f = modal.Function.lookup(
-                settings.MODAL_BERT_APP,
-                settings.MODAL_BERT_FUNCTION
-            )
+            f = modal.Function.lookup(settings.MODAL_BERT_APP, settings.MODAL_BERT_FUNCTION)
         except AttributeError:
-            f = modal.Function.from_name(
-                settings.MODAL_BERT_APP,
-                settings.MODAL_BERT_FUNCTION
-            )
+            f = modal.Function.from_name(settings.MODAL_BERT_APP, settings.MODAL_BERT_FUNCTION)
         
         print(f"📝 Calling Modal BERT...")
         result = f.remote(text=text, task="all")
@@ -182,16 +167,12 @@ def analyze_with_modal_wav2vec2(audio_path: str, call_id: str, text: str):
     try:
         print(f"🔍 Looking up Modal function: {settings.MODAL_WAV2VEC2_APP}/{settings.MODAL_WAV2VEC2_FUNCTION}")
         
+        import modal
+        
         try:
-            f = modal.Function.lookup(
-                settings.MODAL_WAV2VEC2_APP,
-                settings.MODAL_WAV2VEC2_FUNCTION
-            )
+            f = modal.Function.lookup(settings.MODAL_WAV2VEC2_APP, settings.MODAL_WAV2VEC2_FUNCTION)
         except AttributeError:
-            f = modal.Function.from_name(
-                settings.MODAL_WAV2VEC2_APP,
-                settings.MODAL_WAV2VEC2_FUNCTION
-            )
+            f = modal.Function.from_name(settings.MODAL_WAV2VEC2_APP, settings.MODAL_WAV2VEC2_FUNCTION)
         
         audio_url = f"{settings.BACKEND_URL}/api/temp-audio/{call_id}"
         print(f"🎵 Calling Modal Wav2Vec2-BERT...")
@@ -309,7 +290,7 @@ async def upload_audio(
         filename=file.filename,
         file_path=file_path,
         status="processing",
-        analysis_status="pending"
+        analysis_status="queued"
     )
     db.add(call)
     db.commit()
@@ -332,30 +313,52 @@ async def get_call(call_id: str, db: Session = Depends(get_db)):
     if not call:
         raise HTTPException(status_code=404, detail="Call not found")
     
-    response = {
+    # Parse JSON fields safely
+    result = {
         "id": call.id,
         "filename": call.filename,
-        "status": call.status,
-        "analysis_status": call.analysis_status,
-        "duration": call.duration,
+        "file_path": call.file_path,
+        "status": call.status or "pending",
+        "analysis_status": call.analysis_status or "pending",
         "transcript": call.transcript,
-        "created_at": call.created_at.isoformat() if call.created_at else None
+        "duration": call.duration,
+        "score": call.score,
+        "created_at": call.created_at.isoformat() if call.created_at else None,
+        "updated_at": call.updated_at.isoformat() if call.updated_at else None,
     }
     
-    # Parse JSON fields
-    if call.bert_analysis:
-        response["bert_analysis"] = json.loads(call.bert_analysis)
+    # Add JSON fields if they exist
+    if hasattr(call, 'bert_analysis') and call.bert_analysis:
+        try:
+            result["bert_analysis"] = json.loads(call.bert_analysis)
+        except:
+            result["bert_analysis"] = None
     
-    if call.wav2vec2_analysis:
-        response["wav2vec2_analysis"] = json.loads(call.wav2vec2_analysis)
+    if hasattr(call, 'wav2vec2_analysis') and call.wav2vec2_analysis:
+        try:
+            result["wav2vec2_analysis"] = json.loads(call.wav2vec2_analysis)
+        except:
+            result["wav2vec2_analysis"] = None
     
-    if call.binary_scores:
-        response["binary_scores"] = json.loads(call.binary_scores)
+    if hasattr(call, 'binary_scores') and call.binary_scores:
+        try:
+            result["binary_scores"] = json.loads(call.binary_scores)
+        except:
+            result["binary_scores"] = None
     
-    if call.speakers:
-        response["speakers"] = json.loads(call.speakers)
+    if hasattr(call, 'speakers') and call.speakers:
+        try:
+            result["speakers"] = json.loads(call.speakers)
+        except:
+            result["speakers"] = None
     
-    return response
+    if hasattr(call, 'scores') and call.scores:
+        try:
+            result["scores"] = json.loads(call.scores)
+        except:
+            result["scores"] = None
+    
+    return result
 
 
 @app.get("/api/calls")
@@ -363,13 +366,18 @@ async def list_calls(db: Session = Depends(get_db)):
     """List all call evaluations"""
     calls = db.query(CallEvaluation).order_by(CallEvaluation.created_at.desc()).all()
     
+    # Properly serialize with safe defaults
     return [{
         "id": call.id,
         "filename": call.filename,
-        "status": call.status,
+        "file_path": call.file_path,
+        "status": call.status or "pending",
+        "analysis_status": call.analysis_status or "pending",
+        "transcript": call.transcript,
         "duration": call.duration,
+        "score": call.score,
         "created_at": call.created_at.isoformat() if call.created_at else None,
-        "total_score": json.loads(call.binary_scores).get("total_score") if call.binary_scores else None
+        "updated_at": call.updated_at.isoformat() if call.updated_at else None,
     } for call in calls]
 
 
@@ -447,7 +455,8 @@ def process_call(call_id: str, file_path: str):
         bert_result = analyze_with_modal_bert(full_text)
         
         if bert_result:
-            call.bert_analysis = json.dumps(bert_result, indent=2)
+            if hasattr(call, 'bert_analysis'):
+                call.bert_analysis = json.dumps(bert_result, indent=2)
             db.commit()
             print(f"✅ BERT analysis complete!")
         else:
@@ -464,7 +473,8 @@ def process_call(call_id: str, file_path: str):
         wav2vec2_result = analyze_with_modal_wav2vec2(file_path, call_id, full_text)
         
         if wav2vec2_result:
-            call.wav2vec2_analysis = json.dumps(wav2vec2_result, indent=2)
+            if hasattr(call, 'wav2vec2_analysis'):
+                call.wav2vec2_analysis = json.dumps(wav2vec2_result, indent=2)
             db.commit()
             print(f"✅ Wav2Vec2 analysis complete!")
         else:
@@ -476,15 +486,33 @@ def process_call(call_id: str, file_path: str):
         print(f"{'='*60}")
         
         binary_scores = calculate_binary_scores(full_text, bert_result, wav2vec2_result)
-        call.binary_scores = json.dumps(binary_scores, indent=2)
+        if hasattr(call, 'binary_scores'):
+            call.binary_scores = json.dumps(binary_scores, indent=2)
         
         total_score = binary_scores["total_score"]
         print(f"\n🎯 FINAL SCORE: {total_score:.1f}/100")
         
-        # Update status
+        # STEP 5: UPDATE FINAL STATUS - THIS IS THE KEY PART!
+        print(f"\n{'='*60}")
+        print(f"STEP 5: UPDATING DATABASE WITH FINAL STATUS")
+        print(f"{'='*60}")
+        
+        call.score = total_score
         call.status = "completed"
         call.analysis_status = "completed"
+        
+        print(f"🔄 Setting status to: {call.status}")
+        print(f"🔄 Setting analysis_status to: {call.analysis_status}")
+        print(f"🔄 Setting score to: {call.score}")
+        
         db.commit()
+        print(f"✅ Database committed successfully!")
+        
+        # Verify the update
+        db.refresh(call)
+        print(f"✅ Verification - Status in DB: {call.status}")
+        print(f"✅ Verification - Analysis Status in DB: {call.analysis_status}")
+        print(f"✅ Verification - Score in DB: {call.score}")
         
         print(f"\n{'='*60}")
         print(f"✅ PROCESSING COMPLETE FOR CALL {call_id}")
@@ -495,11 +523,19 @@ def process_call(call_id: str, file_path: str):
         import traceback
         traceback.print_exc()
         
-        call.status = "error"
-        call.analysis_status = f"error: {str(e)}"
-        db.commit()
+        try:
+            # Try to update status even if there was an error
+            call = db.query(CallEvaluation).filter(CallEvaluation.id == call_id).first()
+            if call:
+                call.status = "failed"
+                call.analysis_status = f"error: {str(e)}"
+                db.commit()
+                print(f"✅ Error status saved to database")
+        except Exception as db_error:
+            print(f"❌ Failed to save error status: {db_error}")
     
     finally:
+        print(f"🔒 Closing database connection for call {call_id}")
         db.close()
 
 
