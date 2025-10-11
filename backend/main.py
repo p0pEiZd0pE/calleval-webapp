@@ -195,22 +195,33 @@ def transcribe_with_modal_whisperx(audio_path: str, call_id: str):
         import modal
         
         try:
-            # Try new Modal API first (v0.63+)
+            # Modal v1.2.0+ API
+            app = modal.App.lookup(settings.MODAL_WHISPERX_APP)
+            print(f"✓ App '{settings.MODAL_WHISPERX_APP}' found")
+            
+            # Debug: List all available functions/methods in the app
+            app_methods = [m for m in dir(app) if not m.startswith('_')]
+            print(f"📋 Available methods in app: {app_methods}")
+            
+            # Try different ways to access the function
             try:
-                app = modal.App.lookup(settings.MODAL_WHISPERX_APP)
-                f = getattr(app, settings.MODAL_WHISPERX_FUNCTION)
-                print(f"✓ Using Modal App.lookup API")
-            except (AttributeError, Exception):
-                # Fallback to Stub API (older versions)
+                # Method 1: Dictionary-style access
+                f = app[settings.MODAL_WHISPERX_FUNCTION]
+                print(f"✓ Using Modal App dictionary access")
+            except (KeyError, TypeError) as e:
+                print(f"⚠ Dictionary access failed: {e}")
                 try:
-                    stub = modal.Stub.lookup(settings.MODAL_WHISPERX_APP)
-                    f = getattr(stub, settings.MODAL_WHISPERX_FUNCTION)
-                    print(f"✓ Using Modal Stub.lookup API")
-                except Exception:
-                    # Try direct function lookup
-                    from modal import Function
-                    f = Function.lookup(settings.MODAL_WHISPERX_APP, settings.MODAL_WHISPERX_FUNCTION)
-                    print(f"✓ Using Modal Function.lookup API")
+                    # Method 2: Direct attribute access
+                    f = getattr(app, settings.MODAL_WHISPERX_FUNCTION)
+                    print(f"✓ Using Modal App attribute access")
+                except AttributeError as e2:
+                    print(f"❌ Attribute access failed: {e2}")
+                    print(f"\n⚠ TROUBLESHOOTING:")
+                    print(f"   1. Check if Modal app is deployed: modal app list")
+                    print(f"   2. Verify function name in Modal dashboard")
+                    print(f"   3. Expected: '{settings.MODAL_WHISPERX_FUNCTION}'")
+                    print(f"   4. Available: {app_methods[:10]}")  # Show first 10
+                    raise Exception(f"Cannot find function '{settings.MODAL_WHISPERX_FUNCTION}' in app '{settings.MODAL_WHISPERX_APP}'")
                     
         except Exception as lookup_error:
             print(f"❌ Modal function lookup failed: {lookup_error}")
@@ -243,19 +254,16 @@ def analyze_with_modal_bert(text: str, call_id: str):
         import modal
         
         try:
-            # Try new Modal API first (v0.63+)
+            # Modal v1.2.0+ API
+            app = modal.App.lookup(settings.MODAL_BERT_APP)
+            
+            # Try different ways to access the function
             try:
-                app = modal.App.lookup(settings.MODAL_BERT_APP)
+                # Method 1: Dictionary-style access
+                f = app[settings.MODAL_BERT_FUNCTION]
+            except (KeyError, TypeError):
+                # Method 2: Direct attribute access
                 f = getattr(app, settings.MODAL_BERT_FUNCTION)
-            except (AttributeError, Exception):
-                # Fallback to Stub API (older versions)
-                try:
-                    stub = modal.Stub.lookup(settings.MODAL_BERT_APP)
-                    f = getattr(stub, settings.MODAL_BERT_FUNCTION)
-                except Exception:
-                    # Try direct function lookup
-                    from modal import Function
-                    f = Function.lookup(settings.MODAL_BERT_APP, settings.MODAL_BERT_FUNCTION)
                     
         except Exception as lookup_error:
             print(f"❌ Modal BERT lookup failed: {lookup_error}")
@@ -280,19 +288,16 @@ def analyze_with_modal_wav2vec2(audio_path: str, call_id: str, text: str):
         import modal
         
         try:
-            # Try new Modal API first (v0.63+)
+            # Modal v1.2.0+ API
+            app = modal.App.lookup(settings.MODAL_WAV2VEC2_APP)
+            
+            # Try different ways to access the function
             try:
-                app = modal.App.lookup(settings.MODAL_WAV2VEC2_APP)
+                # Method 1: Dictionary-style access
+                f = app[settings.MODAL_WAV2VEC2_FUNCTION]
+            except (KeyError, TypeError):
+                # Method 2: Direct attribute access
                 f = getattr(app, settings.MODAL_WAV2VEC2_FUNCTION)
-            except (AttributeError, Exception):
-                # Fallback to Stub API (older versions)
-                try:
-                    stub = modal.Stub.lookup(settings.MODAL_WAV2VEC2_APP)
-                    f = getattr(stub, settings.MODAL_WAV2VEC2_FUNCTION)
-                except Exception:
-                    # Try direct function lookup
-                    from modal import Function
-                    f = Function.lookup(settings.MODAL_WAV2VEC2_APP, settings.MODAL_WAV2VEC2_FUNCTION)
                     
         except Exception as lookup_error:
             print(f"❌ Modal Wav2Vec2 lookup failed: {lookup_error}")
