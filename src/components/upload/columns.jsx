@@ -49,6 +49,7 @@ export const columns = [
       
       const variants = {
         completed: "default",
+        transcribed: "default",
         classified: "default",
         pending: "secondary",
         processing: "secondary",
@@ -56,19 +57,20 @@ export const columns = [
         analyzing: "secondary",
         analyzing_bert: "secondary",
         analyzing_wav2vec2: "secondary",
+        queued: "secondary",
         failed: "destructive"
       };
       
-      // Safe string capitalization with null check
+      // Safe string capitalization with null check and replace underscores
       const displayStatus = status ? 
-        status.charAt(0).toUpperCase() + status.slice(1) : 
+        status.charAt(0).toUpperCase() + status.slice(1).replace(/_/g, ' ') : 
         "Pending";
       
       return (
         <Badge variant={variants[status] || "secondary"}>
           {(status === "processing" || status === "analyzing" || 
             status === "transcribing" || status === "analyzing_bert" || 
-            status === "analyzing_wav2vec2") && (
+            status === "analyzing_wav2vec2" || status === "queued") && (
             <Loader2 className="mr-1 h-3 w-3 animate-spin" />
           )}
           {displayStatus}

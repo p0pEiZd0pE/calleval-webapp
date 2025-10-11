@@ -441,15 +441,19 @@ def process_call(call_id: str, file_path: str):
         if "segments" in whisperx_result:
             call.speakers = json.dumps(whisperx_result["segments"], indent=2)
         
+        # IMPORTANT: Mark transcription as completed
+        call.status = "completed"  # Transcription is done!
+        call.analysis_status = "transcribed"  # Ready for analysis
+        
         db.commit()
-        print(f"✅ Transcription complete!")
+        print(f"✅ Transcription complete! Status set to 'completed'")
         
         # STEP 2: ANALYZE WITH MODAL BERT
         print(f"\n{'='*60}")
         print(f"STEP 2: ANALYZING WITH MODAL BERT")
         print(f"{'='*60}")
         
-        call.status = "analyzing"  # ← UPDATE STATUS HERE
+        # Status stays "completed", only analysis_status changes
         call.analysis_status = "analyzing_bert"
         db.commit()
         
@@ -499,10 +503,10 @@ def process_call(call_id: str, file_path: str):
         print(f"{'='*60}")
         
         call.score = total_score
-        call.status = "completed"
+        # Status is already "completed" from Step 1, just update analysis_status
         call.analysis_status = "completed"
         
-        print(f"🔄 Setting status to: {call.status}")
+        print(f"🔄 Status remains: {call.status}")
         print(f"🔄 Setting analysis_status to: {call.analysis_status}")
         print(f"🔄 Setting score to: {call.score}")
         
