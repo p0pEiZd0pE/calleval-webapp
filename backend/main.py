@@ -449,6 +449,7 @@ def process_call(call_id: str, file_path: str):
         print(f"STEP 2: ANALYZING WITH MODAL BERT")
         print(f"{'='*60}")
         
+        call.status = "analyzing"  # ← UPDATE STATUS HERE
         call.analysis_status = "analyzing_bert"
         db.commit()
         
