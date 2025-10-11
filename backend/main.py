@@ -414,7 +414,7 @@ async def get_temp_audio(call_id: str, db: Session = Depends(get_db)):
 
 
 def process_call(call_id: str, file_path: str):
-    """Background task: Process call with full Modal stack + Binary Scoring"""
+    """Background task: Process call with agent-only binary scoring"""
     
     db = SessionLocal()
     
@@ -443,117 +443,130 @@ def process_call(call_id: str, file_path: str):
         call.transcript = full_text
         
         # Calculate duration
-        if "segments" in whisperx_result and len(whisperx_result["segments"]) > 0:
+        if whisperx_result["segments"]:
             last_segment = whisperx_result["segments"][-1]
             duration_seconds = int(last_segment.get("end", 0))
             minutes = duration_seconds // 60
             seconds = duration_seconds % 60
             call.duration = f"{minutes}:{seconds:02d}"
         
-        # Store speakers
-        if "segments" in whisperx_result:
-            call.speakers = json.dumps(whisperx_result["segments"], indent=2)
+        print(f"✅ Transcription complete!")
         
-        # IMPORTANT: Mark transcription as completed
-        call.status = "completed"  # Transcription is done!
-        call.analysis_status = "transcribed"  # Ready for analysis
         
-        db.commit()
-        print(f"✅ Transcription complete! Status set to 'completed'")
-        
-        # STEP 2: ANALYZE WITH MODAL BERT
+        # STEP 2: IDENTIFY AGENT AND EXTRACT AGENT SEGMENTS
         print(f"\n{'='*60}")
-        print(f"STEP 2: ANALYZING WITH MODAL BERT")
+        print(f"STEP 2: IDENTIFYING AGENT SEGMENTS")
         print(f"{'='*60}")
         
-        # Status stays "completed", only analysis_status changes
-        call.analysis_status = "analyzing_bert"
-        db.commit()
+        # Count segments per speaker
+        speaker_counts = {}
+        for seg in whisperx_result["segments"]:
+            speaker = seg.get("speaker", "UNKNOWN")
+            speaker_counts[speaker] = speaker_counts.get(speaker, 0) + 1
         
-        bert_result = analyze_with_modal_bert(full_text)
+        print(f"📊 Speaker distribution: {speaker_counts}")
         
-        if bert_result:
-            if hasattr(call, 'bert_analysis'):
-                call.bert_analysis = json.dumps(bert_result, indent=2)
-            db.commit()
-            print(f"✅ BERT analysis complete!")
+        # Identify agent (usually first speaker if they have reasonable segments)
+        first_speakers = [whisperx_result["segments"][i].get("speaker") 
+                         for i in range(min(3, len(whisperx_result["segments"])))]
+        first_speaker = max(set(first_speakers), key=first_speakers.count) if first_speakers else None
+        
+        if first_speaker and speaker_counts.get(first_speaker, 0) > len(whisperx_result["segments"]) * 0.3:
+            agent_speaker = first_speaker
         else:
-            print(f"⚠️ BERT analysis failed, continuing...")
+            agent_speaker = max(speaker_counts, key=speaker_counts.get) if speaker_counts else None
         
-        # STEP 3: ANALYZE WITH MODAL WAV2VEC2-BERT
-        print(f"\n{'='*60}")
-        print(f"STEP 3: ANALYZING WITH MODAL WAV2VEC2-BERT")
-        print(f"{'='*60}")
+        print(f"🎯 Identified Agent: {agent_speaker}")
         
-        call.analysis_status = "analyzing_wav2vec2"
+        # Extract ONLY agent segments
+        agent_segments = [
+            seg for seg in whisperx_result["segments"]
+            if seg.get("speaker") == agent_speaker
+        ]
+        
+        # Get agent text only
+        agent_text = " ".join([seg["text"] for seg in agent_segments])
+        
+        print(f"📝 Agent segments: {len(agent_segments)}/{len(whisperx_result['segments'])}")
+        print(f"📝 Agent text preview: {agent_text[:200]}...")
+        
+        call.status = "completed"
+        call.analysis_status = "analyzing"
         db.commit()
         
-        wav2vec2_result = analyze_with_modal_wav2vec2(file_path, call_id, full_text)
         
-        if wav2vec2_result:
-            if hasattr(call, 'wav2vec2_analysis'):
-                call.wav2vec2_analysis = json.dumps(wav2vec2_result, indent=2)
-            db.commit()
-            print(f"✅ Wav2Vec2 analysis complete!")
-        else:
-            print(f"⚠️ Wav2Vec2 analysis failed, continuing...")
-        
-        # STEP 4: CALCULATE BINARY SCORES
+        # STEP 3: ANALYZE WITH AI MODELS (AGENT TEXT ONLY)
         print(f"\n{'='*60}")
-        print(f"STEP 4: CALCULATING BINARY SCORES")
+        print(f"STEP 3: ANALYZING AGENT PERFORMANCE")
         print(f"{'='*60}")
         
-        binary_scores = calculate_binary_scores(full_text, bert_result, wav2vec2_result)
-        if hasattr(call, 'binary_scores'):
-            call.binary_scores = json.dumps(binary_scores, indent=2)
+        print(f"🤖 Calling BERT with agent text...")
+        bert_output = analyze_with_modal_bert(agent_text, task="all")
         
+        print(f"🎵 Calling Wav2Vec2 with agent audio...")
+        wav2vec2_output = analyze_with_modal_wav2vec2(file_path, call_id, agent_text)
+        
+        
+        # STEP 4: BINARY SCORING (AGENT ONLY)
+        print(f"\n{'='*60}")
+        print(f"STEP 4: BINARY SCORECARD EVALUATION (AGENT ONLY)")
+        print(f"{'='*60}")
+        
+        binary_scores = calculate_binary_scores(agent_text, bert_output, wav2vec2_output)
         total_score = binary_scores["total_score"]
-        print(f"\n🎯 FINAL SCORE: {total_score:.1f}/100")
         
-        # STEP 5: UPDATE FINAL STATUS - THIS IS THE KEY PART!
+        print(f"\n📊 SCORING RESULTS:")
+        print(f"   Total Score: {total_score:.1f}/100")
+        print(f"   Percentage: {binary_scores['percentage']:.1f}%")
+        
+        for metric_name, metric_data in binary_scores["metrics"].items():
+            status = "✓" if metric_data["detected"] else "✗"
+            print(f"   {status} {metric_name}: {metric_data['weighted_score']:.1f} points")
+        
+        
+        # STEP 5: SAVE TO DATABASE
         print(f"\n{'='*60}")
-        print(f"STEP 5: UPDATING DATABASE WITH FINAL STATUS")
+        print(f"STEP 5: SAVING RESULTS")
         print(f"{'='*60}")
         
         call.score = total_score
-        # Status is already "completed" from Step 1, just update analysis_status
+        call.bert_analysis = json.dumps(bert_output) if bert_output else None
+        call.wav2vec2_analysis = json.dumps(wav2vec2_output) if wav2vec2_output else None
+        call.binary_scores = json.dumps(binary_scores)
         call.analysis_status = "completed"
         
-        print(f"🔄 Status remains: {call.status}")
-        print(f"🔄 Setting analysis_status to: {call.analysis_status}")
-        print(f"🔄 Setting score to: {call.score}")
+        # Add speaker roles to segments
+        speaker_info = {
+            "agent": agent_speaker,
+            "caller": [s for s in speaker_counts.keys() if s != agent_speaker],
+            "distribution": speaker_counts
+        }
+        
+        segments_with_role = whisperx_result["segments"]
+        for seg in segments_with_role:
+            seg["role"] = "agent" if seg.get("speaker") == agent_speaker else "caller"
+        
+        call.speakers = json.dumps({
+            "speaker_roles": speaker_info,
+            "segments": segments_with_role
+        }, indent=2)
         
         db.commit()
-        print(f"✅ Database committed successfully!")
         
-        # Verify the update
-        db.refresh(call)
-        print(f"✅ Verification - Status in DB: {call.status}")
-        print(f"✅ Verification - Analysis Status in DB: {call.analysis_status}")
-        print(f"✅ Verification - Score in DB: {call.score}")
-        
-        print(f"\n{'='*60}")
-        print(f"✅ PROCESSING COMPLETE FOR CALL {call_id}")
-        print(f"{'='*60}\n")
+        print(f"✅ PROCESSING COMPLETE!")
+        print(f"   - Final Score: {total_score:.1f}/100")
+        print(f"   - Agent: {agent_speaker}")
         
     except Exception as e:
         print(f"\n❌ ERROR processing call {call_id}: {e}")
         import traceback
         traceback.print_exc()
         
-        try:
-            # Try to update status even if there was an error
-            call = db.query(CallEvaluation).filter(CallEvaluation.id == call_id).first()
-            if call:
-                call.status = "failed"
-                call.analysis_status = f"error: {str(e)}"
-                db.commit()
-                print(f"✅ Error status saved to database")
-        except Exception as db_error:
-            print(f"❌ Failed to save error status: {db_error}")
+        call.status = "failed"
+        call.analysis_status = f"error: {str(e)}"
+        db.commit()
     
     finally:
-        print(f"🔒 Closing database connection for call {call_id}")
         db.close()
 
 
