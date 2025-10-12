@@ -97,14 +97,27 @@ SCORECARD_CONFIG = {
         ]
     },
     "active_listening": {
-        "weight": 10,
+        "weight": 10,  # This will be OR'ed with handled_with_care
         "threshold": 0.5,
         "patterns": [
             r"i (understand|see|hear you)",
-            r"let me (check|look|review)",
-            r"okay,? (so|let me)",
-            r"i'll (help|assist)",
-            r"got it"
+            r"that makes sense",
+            r"i apologize",
+            r"let me help you with that",
+            r"i can definitely help",
+            r"mm-hmm", r"uh-huh", r"okay", r"alright"
+        ]
+    },
+    "handled_with_care": {
+        "weight": 10,  # This will be OR'ed with active_listening  
+        "threshold": 0.5,
+        "patterns": [
+            r"take (good )?care",
+            r"careful(ly)?",
+            r"gently",
+            r"understand your (concern|situation|frustration)",
+            r"i'm sorry (to hear|you're experiencing)",
+            r"we'll take care of (this|that|it)"
         ]
     },
     "asks_permission_hold": {
@@ -318,16 +331,18 @@ def evaluate_binary_metric(metric_name: str, text: str, bert_output: dict, wav2v
 
 def calculate_binary_scores(agent_segments, call_structure, bert_output_combined, wav2vec2_output):
     """
-    Calculate binary scores with phase-aware evaluation - EXACT logic from inference.py
+    Calculate binary scores with phase-aware evaluation - FIXED VERSION
     """
     print(f"\n{'='*60}")
     print(f"PHASE-AWARE BINARY SCORECARD EVALUATION")
     print(f"{'='*60}")
     
+    # FIXED: Added 'handled_with_care' to the metrics list
     all_metrics = [
         'professional_greeting', 'verifies_patient_online',
-        'patient_verification', 'active_listening', 'asks_permission_hold',
-        'returns_properly_from_hold', 'no_fillers_stammers', 'recaps_time_date',
+        'patient_verification', 'active_listening', 'handled_with_care',  # ← ADDED
+        'asks_permission_hold', 'returns_properly_from_hold', 
+        'no_fillers_stammers', 'recaps_time_date',
         'offers_further_assistance', 'ended_call_properly',
         'enthusiasm_markers', 'sounds_polite_courteous'
     ]
@@ -354,8 +369,13 @@ def calculate_binary_scores(agent_segments, call_structure, bert_output_combined
             score = evaluate_binary_metric('patient_verification', segment_text, bert_output_combined, wav2vec2_output, phase)
             metric_scores['patient_verification'] = max(metric_scores['patient_verification'], score)
             
+            # FIXED: Evaluate both active_listening AND handled_with_care
             score = evaluate_binary_metric('active_listening', segment_text, bert_output_combined, wav2vec2_output, phase)
             metric_scores['active_listening'] = max(metric_scores['active_listening'], score)
+            
+            # ADDED: Evaluate handled_with_care
+            score = evaluate_binary_metric('handled_with_care', segment_text, bert_output_combined, wav2vec2_output, phase)
+            metric_scores['handled_with_care'] = max(metric_scores['handled_with_care'], score)
             
             score = evaluate_binary_metric('asks_permission_hold', segment_text, bert_output_combined, wav2vec2_output, phase)
             metric_scores['asks_permission_hold'] = max(metric_scores['asks_permission_hold'], score)
@@ -383,28 +403,38 @@ def calculate_binary_scores(agent_segments, call_structure, bert_output_combined
         score = evaluate_binary_metric('sounds_polite_courteous', segment_text, bert_output_combined, wav2vec2_output, phase)
         metric_scores['sounds_polite_courteous'] = max(metric_scores['sounds_polite_courteous'], score)
     
+    # Calculate OR condition: if EITHER is detected, give full 10 points
+    active_or_handled = max(metric_scores['active_listening'], metric_scores['handled_with_care'])
+    
     scores = {}
     for metric_name, best_score in metric_scores.items():
-        weight = SCORECARD_CONFIG[metric_name]["weight"]
-        scores[metric_name] = {
-            "detected": best_score == 1.0,
-            "score": best_score,
-            "weight": weight,
-            "weighted_score": best_score * weight
-        }
+        # Special handling for active_listening/handled_with_care OR condition
+        if metric_name in ['active_listening', 'handled_with_care']:
+            # Both metrics share the same 10 points via OR logic
+            detected = active_or_handled == 1.0
+            scores[metric_name] = {
+                "detected": detected,
+                "score": active_or_handled,
+                "weight": 10,  # They both have weight 10 but it's an OR condition
+                "weighted_score": active_or_handled * 10 if metric_name == 'active_listening' else 0  # Only count once
+            }
+        else:
+            weight = SCORECARD_CONFIG[metric_name]["weight"]
+            scores[metric_name] = {
+                "detected": best_score == 1.0,
+                "score": best_score,
+                "weight": weight,
+                "weighted_score": best_score * weight
+            }
     
+    # Calculate total (only count active_listening's weighted_score since handled_with_care is set to 0)
     total_score = sum(s["weighted_score"] for s in scores.values())
-    
-    print(f"\n{'='*60}")
-    print(f"FINAL RESULTS")
-    print(f"{'='*60}")
-    print(f"🎯 TOTAL SCORE: {total_score}/100")
     
     return {
         "metrics": scores,
         "total_score": total_score,
-        "max_score": 100.0,
-        "percentage": total_score
+        "percentage": total_score,
+        "active_listening_OR_handled_with_care": active_or_handled == 1.0  # Add this for clarity
     }
 
 
