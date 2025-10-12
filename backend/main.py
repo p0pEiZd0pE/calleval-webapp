@@ -194,8 +194,8 @@ def determine_phase(segment_start: float, total_duration: float) -> str:
     Returns:
         str: 'opening', 'middle', or 'closing'
     """
-    opening_threshold = min(10, total_duration * 0.11)  # First 30s or 15%
-    closing_threshold = max(total_duration - 13, total_duration * 0.88)  # Last 30s or 15%
+    opening_threshold = min(30, total_duration * 0.15)  # First 30s or 15%
+    closing_threshold = max(total_duration - 30, total_duration * 0.85)  # Last 30s or 15%
     
     if segment_start <= opening_threshold:
         return 'opening'
@@ -365,6 +365,15 @@ def evaluate_binary_metric(metric_name: str, text: str, phase: str, bert_output:
         predictions = bert_output.get("predictions", {})
         if metric_name in predictions:
             prediction_value = predictions[metric_name]
+            
+            # Handle both dict and float predictions
+            if isinstance(prediction_value, dict):
+                prediction_value = prediction_value.get("score", prediction_value.get("prediction", 0.0))
+            
+            # Convert to float if needed
+            if isinstance(prediction_value, str):
+                prediction_value = 1.0 if prediction_value == "positive" else 0.0
+            
             bert_score = 1.0 if prediction_value >= threshold else 0.0
             print(f"  {metric_name} (phase={phase}): BERT={prediction_value:.3f} → {bert_score}")
     
@@ -374,6 +383,15 @@ def evaluate_binary_metric(metric_name: str, text: str, phase: str, bert_output:
         predictions = wav2vec2_output.get("predictions", {})
         if metric_name in predictions:
             prediction_value = predictions[metric_name]
+            
+            # Handle both dict and float predictions
+            if isinstance(prediction_value, dict):
+                prediction_value = prediction_value.get("score", prediction_value.get("prediction", 0.0))
+            
+            # Convert to float if needed
+            if isinstance(prediction_value, str):
+                prediction_value = 1.0 if prediction_value == "positive" else 0.0
+            
             wav2vec2_score = 1.0 if prediction_value >= threshold else 0.0
             print(f"  {metric_name} (phase={phase}): Wav2Vec2={prediction_value:.3f} → {wav2vec2_score}")
     
