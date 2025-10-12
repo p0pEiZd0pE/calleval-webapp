@@ -235,6 +235,75 @@ def transcribe_with_modal_whisperx(audio_path: str, call_id: str):
         raise
 
 
+def assign_speaker_roles(segments):
+    """
+    Assign agent/caller roles to speakers based on conversation patterns
+    Similar to inference.py logic
+    """
+    if not segments:
+        return {}
+    
+    # Get unique speakers
+    speakers = list(set(seg.get('speaker', 'unknown') for seg in segments if 'speaker' in seg))
+    
+    if len(speakers) < 2:
+        return {speakers[0]: "unknown"} if speakers else {}
+    
+    # Score speakers based on patterns
+    agent_scores = {}
+    
+    for speaker_id in speakers:
+        speaker_segments = [seg for seg in segments if seg.get('speaker') == speaker_id]
+        
+        if not speaker_segments:
+            agent_scores[speaker_id] = 0
+            continue
+        
+        score = 0
+        
+        # Agent typically speaks first (greeting)
+        if segments[0].get('speaker') == speaker_id:
+            score += 2
+        
+        # Check first few segments for agent patterns
+        for seg in speaker_segments[:3]:
+            text = seg.get('text', '').lower()
+            
+            # Agent greeting patterns
+            if any(pattern in text for pattern in [
+                "thank you for calling",
+                "how can i help",
+                "good morning",
+                "good afternoon",
+                "this is"
+            ]):
+                score += 3
+                break
+        
+        # Check for solution-oriented language (agent)
+        all_text = " ".join([seg.get('text', '').lower() for seg in speaker_segments])
+        solution_keywords = ["let me check", "i can help", "our policy", "i'll assist"]
+        problem_keywords = ["i have a problem", "issue with", "help me", "i need"]
+        
+        solution_count = sum(1 for keyword in solution_keywords if keyword in all_text)
+        problem_count = sum(1 for keyword in problem_keywords if keyword in all_text)
+        
+        if solution_count > problem_count:
+            score += 2
+        elif problem_count > solution_count:
+            score -= 2
+        
+        agent_scores[speaker_id] = score
+    
+    # Assign roles based on scores
+    sorted_speakers = sorted(speakers, key=lambda s: agent_scores[s], reverse=True)
+    
+    return {
+        sorted_speakers[0]: "agent",
+        sorted_speakers[1]: "caller" if len(sorted_speakers) > 1 else "unknown"
+    }
+
+
 def analyze_with_modal_bert(text: str):
     """Analyze text using Modal BERT"""
     try:
@@ -532,9 +601,18 @@ def process_call(call_id: str, file_path: str):
         if not whisperx_result or "segments" not in whisperx_result:
             raise Exception("WhisperX transcription failed")
         
+        # Store full text transcript
         full_text = " ".join([seg["text"] for seg in whisperx_result["segments"]])
         call.transcript = full_text
-
+        
+        # UPDATED: Assign speaker roles
+        print("\n🎭 Assigning speaker roles (agent/caller)...")
+        speaker_roles = assign_speaker_roles(whisperx_result["segments"])
+        print(f"✅ Speaker roles assigned: {speaker_roles}")
+        
+        # Store speaker roles
+        call.speakers = json.dumps(speaker_roles)
+        
         # Store segments with speaker information
         segments_data = []
         for seg in whisperx_result["segments"]:
@@ -547,8 +625,9 @@ def process_call(call_id: str, file_path: str):
         
         # Store segments in the scores field
         call.scores = json.dumps({"segments": segments_data})
-        print(f"   Segments stored: {len(segments_data)}")
+        print(f"✅ Stored {len(segments_data)} segments")
         
+        # Calculate duration
         if whisperx_result["segments"]:
             last_segment = whisperx_result["segments"][-1]
             duration_seconds = int(last_segment.get("end", 0))
@@ -561,8 +640,9 @@ def process_call(call_id: str, file_path: str):
         print(f"✅ Transcription complete!")
         print(f"   Transcript length: {len(full_text)} characters")
         print(f"   Duration: {call.duration}")
+        print(f"   Segments: {len(segments_data)}")
+        print(f"   Speakers: {speaker_roles}")
         
-        call.speakers = json.dumps(whisperx_result.get("speaker_roles", {}))
         db.commit()
         
         # STEP 2: IDENTIFY AGENT SEGMENTS
