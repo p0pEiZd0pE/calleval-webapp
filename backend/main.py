@@ -9,7 +9,7 @@ import modal
 import librosa
 from pathlib import Path
 import json
-import re  # ADD THIS FOR PATTERN MATCHING
+import re
 
 from config import settings
 from database import get_db, CallEvaluation, SessionLocal
@@ -21,11 +21,8 @@ modal_token_secret = os.getenv("MODAL_TOKEN_SECRET")
 if modal_token_id and modal_token_secret:
     print(f"✓ Modal credentials found")
     print(f"  Token ID: {modal_token_id[:10]}...")
-    
-    # Set environment variables for Modal
     os.environ["MODAL_TOKEN_ID"] = modal_token_id
     os.environ["MODAL_TOKEN_SECRET"] = modal_token_secret
-    
     print(f"✓ Modal environment configured")
 else:
     print("⚠ WARNING: Modal credentials NOT found!")
@@ -33,19 +30,11 @@ else:
     print(f"  MODAL_TOKEN_SECRET exists: {bool(modal_token_secret)}")
     print("  Modal functions will NOT work without credentials!")
 
-# ==============================================================
-
 os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
 
-# FastAPI app
 app = FastAPI(title="CallEval API - Full Modal Stack")
 
-# Parse FRONTEND_URL to support multiple origins (comma-separated)
-allowed_origins = [
-    origin.strip() 
-    for origin in settings.FRONTEND_URL.split(",")
-]
-# Always allow localhost for development
+allowed_origins = [origin.strip() for origin in settings.FRONTEND_URL.split(",")]
 if "http://localhost:5173" not in allowed_origins:
     allowed_origins.append("http://localhost:5173")
 
@@ -57,9 +46,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Binary Scorecard Configuration - WITH PATTERN MATCHING (UPDATED!)
+# Binary Scorecard Configuration
 SCORECARD_CONFIG = {
-    # All Phases (10%)
     "enthusiasm_markers": {
         "weight": 5,
         "threshold": 0.5,
@@ -76,8 +64,6 @@ SCORECARD_CONFIG = {
             r"sir", r"ma'am", r"excuse me", r"pardon"
         ]
     },
-    
-    # Opening Spiel (10%)
     "professional_greeting": {
         "weight": 5,
         "threshold": 0.5,
@@ -98,8 +84,6 @@ SCORECARD_CONFIG = {
             r"patient.*on.*line"
         ]
     },
-    
-    # Middle/Climax (70%)
     "patient_verification": {
         "weight": 25,
         "threshold": 0.5,
@@ -146,7 +130,7 @@ SCORECARD_CONFIG = {
     "no_fillers_stammers": {
         "weight": 10,
         "threshold": 0.5,
-        "patterns": []  # Inverse logic
+        "patterns": []
     },
     "recaps_time_date": {
         "weight": 15,
@@ -160,13 +144,11 @@ SCORECARD_CONFIG = {
             r"scheduled.*\d{1,2}"
         ]
     },
-    
-    # Closing/Wrap up (10%)
     "offers_further_assistance": {
         "weight": 5,
         "threshold": 0.5,
         "patterns": [
-            r"(and |is there )?anything else",  # Catches "anything else", "and anything else", "is there anything else"
+            r"(and |is there )?anything else",
             r"can i help (you )?with anything else",
             r"what else can i"
         ]
@@ -185,7 +167,31 @@ SCORECARD_CONFIG = {
 }
 
 
-# ORIGINAL WORKING MODAL FUNCTIONS (NO CHANGES)
+def determine_phase(segment, call_structure):
+    """
+    Determine call phase for segment - EXACT copy from inference.py
+    
+    Args:
+        segment: dict with 'start' key
+        call_structure: dict with 'total_duration', 'opening_threshold', 'closing_threshold'
+    
+    Returns:
+        str: 'opening', 'middle', or 'closing'
+    """
+    start_time = segment.get('start', 0)
+    total_duration = call_structure['total_duration']
+    
+    opening_threshold = min(10, total_duration * 0.11)
+    closing_threshold = max(total_duration - 13, total_duration * 0.88)
+    
+    if start_time <= opening_threshold:
+        return 'opening'
+    elif start_time >= closing_threshold:
+        return 'closing'
+    else:
+        return 'middle'
+
+
 def transcribe_with_modal_whisperx(audio_path: str, call_id: str):
     """Transcribe audio using Modal WhisperX"""
     try:
@@ -196,7 +202,6 @@ def transcribe_with_modal_whisperx(audio_path: str, call_id: str):
         try:
             f = modal.Function.lookup(settings.MODAL_WHISPERX_APP, settings.MODAL_WHISPERX_FUNCTION)
         except AttributeError:
-            # Fallback for older Modal SDK versions
             f = modal.Function.from_name(settings.MODAL_WHISPERX_APP, settings.MODAL_WHISPERX_FUNCTION)
         
         audio_url = f"{settings.BACKEND_URL}/api/temp-audio/{call_id}"
@@ -232,7 +237,6 @@ def analyze_with_modal_bert(text: str):
             f = modal.Function.from_name(settings.MODAL_BERT_APP, settings.MODAL_BERT_FUNCTION)
         
         print(f"📝 Calling Modal BERT...")
-        # Removed task="all" parameter - not needed with fixed multi-task model
         result = f.remote(text=text)
         return result
         
@@ -270,32 +274,10 @@ def analyze_with_modal_wav2vec2(audio_path: str, call_id: str, text: str):
         return None
 
 
-# UPDATED FUNCTION - PATTERN MATCHING ADDED + PHASE-AWARE EVALUATION
 def evaluate_binary_metric(metric_name: str, text: str, bert_output: dict, wav2vec2_output: dict, phase: str = None) -> float:
-    """
-    Evaluate a single metric using PATTERN MATCHING + AI models
-    Returns: 1.0 if ANY method detects it, 0.0 otherwise
-    
-    Phase-aware: Only evaluates metrics appropriate for the segment's phase
-    """
+    """Evaluate a single metric using PATTERN MATCHING + AI models"""
     if metric_name not in SCORECARD_CONFIG:
         return 0.0
-    
-    # Phase-specific metric filtering (like inference.py)
-    phase_metrics = {
-        'opening': ['professional_greeting', 'verifies_patient_online'],
-        'middle': ['patient_verification', 'active_listening', 'asks_permission_hold', 
-                   'returns_properly_from_hold', 'no_fillers_stammers', 'recaps_time_date'],
-        'closing': ['offers_further_assistance', 'ended_call_properly']
-    }
-    
-    # Universal metrics apply to all phases
-    universal_metrics = ['enthusiasm_markers', 'sounds_polite_courteous']
-    
-    # Check if this metric should be evaluated for this phase
-    if phase and metric_name not in universal_metrics:
-        if metric_name not in phase_metrics.get(phase, []):
-            return 0.0  # Don't evaluate this metric for this phase
     
     config = SCORECARD_CONFIG[metric_name]
     threshold = config.get("threshold", 0.5)
@@ -330,45 +312,79 @@ def evaluate_binary_metric(metric_name: str, text: str, bert_output: dict, wav2v
             wav2vec2_score = 1.0 if prediction_value >= threshold else 0.0
             print(f"  {metric_name}: Wav2Vec2={prediction_value:.3f} → {wav2vec2_score}")
     
-    # OR LOGIC: Return 1.0 if ANY method detects it
     final_score = max(pattern_score, bert_score, wav2vec2_score)
     return final_score
 
 
-def calculate_binary_scores(text: str, segments: list, total_duration: float, bert_output: dict, wav2vec2_output: dict) -> dict:
-    """Calculate binary scores for all metrics with phase-aware evaluation"""
+def calculate_binary_scores(agent_segments, call_structure, bert_output_combined, wav2vec2_output):
+    """
+    Calculate binary scores with phase-aware evaluation - EXACT logic from inference.py
+    """
+    print(f"\n{'='*60}")
+    print(f"PHASE-AWARE BINARY SCORECARD EVALUATION")
+    print(f"{'='*60}")
     
-    # Helper function to determine phase
-    def determine_phase(start_time, total_duration):
-        opening_threshold = min(30, total_duration * 0.15)
-        closing_threshold = max(total_duration - 30, total_duration * 0.85)
+    all_metrics = [
+        'professional_greeting', 'verifies_patient_online',
+        'patient_verification', 'active_listening', 'asks_permission_hold',
+        'returns_properly_from_hold', 'no_fillers_stammers', 'recaps_time_date',
+        'offers_further_assistance', 'ended_call_properly',
+        'enthusiasm_markers', 'sounds_polite_courteous'
+    ]
+    
+    metric_scores = {metric: 0.0 for metric in all_metrics}
+    
+    for i, segment in enumerate(agent_segments):
+        phase = determine_phase(segment, call_structure)
         
-        if start_time <= opening_threshold:
-            return 'opening'
-        elif start_time >= closing_threshold:
-            return 'closing'
-        else:
-            return 'middle'
-    
-    # Track best score per metric across all segments
-    metric_best_scores = {}
-    
-    for segment in segments:
-        seg_text = segment.get('text', '')
+        segment_text = segment.get('text', '')
         start_time = segment.get('start', 0)
-        phase = determine_phase(start_time, total_duration)
         
-        for metric_name in SCORECARD_CONFIG.keys():
-            score = evaluate_binary_metric(metric_name, seg_text, bert_output, wav2vec2_output, phase)
+        print(f"\n📍 Segment {i+1}: [{start_time:.1f}s] Phase: {phase.upper()}")
+        print(f"   Text: {segment_text[:80]}...")
+        
+        if phase == 'opening':
+            score = evaluate_binary_metric('professional_greeting', segment_text, bert_output_combined, wav2vec2_output, phase)
+            metric_scores['professional_greeting'] = max(metric_scores['professional_greeting'], score)
             
-            if metric_name not in metric_best_scores:
-                metric_best_scores[metric_name] = score
-            else:
-                metric_best_scores[metric_name] = max(metric_best_scores[metric_name], score)
+            score = evaluate_binary_metric('verifies_patient_online', segment_text, bert_output_combined, wav2vec2_output, phase)
+            metric_scores['verifies_patient_online'] = max(metric_scores['verifies_patient_online'], score)
+            
+        elif phase == 'middle':
+            score = evaluate_binary_metric('patient_verification', segment_text, bert_output_combined, wav2vec2_output, phase)
+            metric_scores['patient_verification'] = max(metric_scores['patient_verification'], score)
+            
+            score = evaluate_binary_metric('active_listening', segment_text, bert_output_combined, wav2vec2_output, phase)
+            metric_scores['active_listening'] = max(metric_scores['active_listening'], score)
+            
+            score = evaluate_binary_metric('asks_permission_hold', segment_text, bert_output_combined, wav2vec2_output, phase)
+            metric_scores['asks_permission_hold'] = max(metric_scores['asks_permission_hold'], score)
+            
+            score = evaluate_binary_metric('returns_properly_from_hold', segment_text, bert_output_combined, wav2vec2_output, phase)
+            metric_scores['returns_properly_from_hold'] = max(metric_scores['returns_properly_from_hold'], score)
+            
+            score = evaluate_binary_metric('no_fillers_stammers', segment_text, bert_output_combined, wav2vec2_output, phase)
+            metric_scores['no_fillers_stammers'] = max(metric_scores['no_fillers_stammers'], score)
+            
+            score = evaluate_binary_metric('recaps_time_date', segment_text, bert_output_combined, wav2vec2_output, phase)
+            metric_scores['recaps_time_date'] = max(metric_scores['recaps_time_date'], score)
+            
+        elif phase == 'closing':
+            score = evaluate_binary_metric('offers_further_assistance', segment_text, bert_output_combined, wav2vec2_output, phase)
+            metric_scores['offers_further_assistance'] = max(metric_scores['offers_further_assistance'], score)
+            
+            score = evaluate_binary_metric('ended_call_properly', segment_text, bert_output_combined, wav2vec2_output, phase)
+            metric_scores['ended_call_properly'] = max(metric_scores['ended_call_properly'], score)
+        
+        # Universal metrics
+        score = evaluate_binary_metric('enthusiasm_markers', segment_text, bert_output_combined, wav2vec2_output, phase)
+        metric_scores['enthusiasm_markers'] = max(metric_scores['enthusiasm_markers'], score)
+        
+        score = evaluate_binary_metric('sounds_polite_courteous', segment_text, bert_output_combined, wav2vec2_output, phase)
+        metric_scores['sounds_polite_courteous'] = max(metric_scores['sounds_polite_courteous'], score)
     
-    # Build final scores
     scores = {}
-    for metric_name, best_score in metric_best_scores.items():
+    for metric_name, best_score in metric_scores.items():
         weight = SCORECARD_CONFIG[metric_name]["weight"]
         scores[metric_name] = {
             "detected": best_score == 1.0,
@@ -379,6 +395,11 @@ def calculate_binary_scores(text: str, segments: list, total_duration: float, be
     
     total_score = sum(s["weighted_score"] for s in scores.values())
     
+    print(f"\n{'='*60}")
+    print(f"FINAL RESULTS")
+    print(f"{'='*60}")
+    print(f"🎯 TOTAL SCORE: {total_score}/100")
+    
     return {
         "metrics": scores,
         "total_score": total_score,
@@ -387,10 +408,200 @@ def calculate_binary_scores(text: str, segments: list, total_duration: float, be
     }
 
 
+def process_call(call_id: str, file_path: str):
+    """Background task: Process call with phase-aware evaluation"""
+    
+    db = SessionLocal()
+    
+    try:
+        call = db.query(CallEvaluation).filter(CallEvaluation.id == call_id).first()
+        
+        if not call:
+            print(f"Call {call_id} not found")
+            return
+        
+        # STEP 1: TRANSCRIBE
+        print(f"\n{'='*60}")
+        print(f"STEP 1: TRANSCRIBING WITH MODAL WHISPERX")
+        print(f"{'='*60}")
+        
+        call.status = "transcribing"
+        call.analysis_status = "transcribing"
+        db.commit()
+        
+        whisperx_result = transcribe_with_modal_whisperx(file_path, call_id)
+        
+        if not whisperx_result or "segments" not in whisperx_result:
+            raise Exception("WhisperX transcription failed")
+        
+        full_text = " ".join([seg["text"] for seg in whisperx_result["segments"]])
+        call.transcript = full_text
+        
+        if whisperx_result["segments"]:
+            last_segment = whisperx_result["segments"][-1]
+            duration_seconds = int(last_segment.get("end", 0))
+            minutes = duration_seconds // 60
+            seconds = duration_seconds % 60
+            call.duration = f"{minutes}:{seconds:02d}"
+        else:
+            duration_seconds = 0
+        
+        print(f"✅ Transcription complete!")
+        print(f"   Transcript length: {len(full_text)} characters")
+        print(f"   Duration: {call.duration}")
+        
+        call.speakers = json.dumps(whisperx_result.get("speaker_roles", {}))
+        db.commit()
+        
+        # STEP 2: IDENTIFY AGENT SEGMENTS
+        print(f"\n{'='*60}")
+        print(f"STEP 2: IDENTIFYING AGENT SEGMENTS")
+        print(f"{'='*60}")
+        
+        speaker_roles = whisperx_result.get("speaker_roles", {})
+        agent_speaker = speaker_roles.get("agent", "SPEAKER_01")
+        
+        agent_segments = [
+            seg for seg in whisperx_result["segments"]
+            if seg.get("speaker") == agent_speaker
+        ]
+        
+        print(f"✅ Found {len(agent_segments)} agent segments")
+        
+        # STEP 3: ANALYZE WITH BERT
+        print(f"\n{'='*60}")
+        print(f"STEP 3: ANALYZING SEGMENTS WITH BERT")
+        print(f"{'='*60}")
+        
+        call.status = "analyzing"
+        call.analysis_status = "analyzing with BERT"
+        db.commit()
+        
+        all_bert_predictions = {}
+        
+        for i, segment in enumerate(agent_segments):
+            segment_text = segment["text"]
+            print(f"\n📝 Segment {i+1}/{len(agent_segments)}: '{segment_text[:50]}...'")
+            
+            bert_output = analyze_with_modal_bert(segment_text)
+            
+            if bert_output and bert_output.get("success"):
+                predictions = bert_output.get("predictions", {})
+                
+                for metric, value in predictions.items():
+                    if isinstance(value, dict) and "score" in value:
+                        score = value["score"]
+                        print(f"   {metric}: {score:.3f} ({value.get('prediction', 'N/A')})")
+                    else:
+                        score = value
+                        print(f"   {metric}: {score:.3f} (flat)")
+                    
+                    if metric not in all_bert_predictions:
+                        all_bert_predictions[metric] = score
+                    else:
+                        all_bert_predictions[metric] = max(all_bert_predictions[metric], score)
+        
+        # Wav2Vec2
+        print(f"\n🎵 Calling Wav2Vec2 with full agent audio...")
+        agent_text_combined = " ".join([seg["text"] for seg in agent_segments])
+        wav2vec2_output = analyze_with_modal_wav2vec2(file_path, call_id, agent_text_combined)
+        
+        bert_output_combined = {
+            "success": True,
+            "predictions": all_bert_predictions,
+            "method": "segment-by-segment evaluation"
+        }
+        
+        print(f"\n📊 Aggregated BERT Predictions:")
+        for metric, score in all_bert_predictions.items():
+            status = "✓" if score >= 0.5 else "✗"
+            print(f"   {status} {metric}: {score:.3f}")
+        
+        # STEP 4: CREATE CALL STRUCTURE
+        print(f"\n{'='*60}")
+        print(f"STEP 4: ANALYZING CALL STRUCTURE")
+        print(f"{'='*60}")
+        
+        call_structure = {
+            'total_duration': duration_seconds,
+            'opening_threshold': min(30, duration_seconds * 0.15),
+            'closing_threshold': max(duration_seconds - 30, duration_seconds * 0.85)
+        }
+        
+        print(f"✅ Call Structure:")
+        print(f"   Total Duration: {duration_seconds:.1f}s ({call.duration})")
+        print(f"   Opening: 0 - {call_structure['opening_threshold']:.1f}s")
+        print(f"   Middle: {call_structure['opening_threshold']:.1f}s - {call_structure['closing_threshold']:.1f}s")
+        print(f"   Closing: {call_structure['closing_threshold']:.1f}s - {duration_seconds:.1f}s")
+        
+        # STEP 5: PHASE-AWARE BINARY SCORING
+        print(f"\n{'='*60}")
+        print(f"STEP 5: PHASE-AWARE BINARY SCORECARD EVALUATION")
+        print(f"{'='*60}")
+        
+        binary_scores = calculate_binary_scores(
+            agent_segments,
+            call_structure,
+            bert_output_combined, 
+            wav2vec2_output
+        )
+        
+        total_score = binary_scores["total_score"]
+        
+        print(f"\n📊 FINAL SCORING RESULTS:")
+        print(f"   Total Score: {total_score:.1f}/100")
+        print(f"   Percentage: {binary_scores['percentage']:.1f}%")
+        
+        print(f"\n✓ PASSED METRICS:")
+        passed_count = 0
+        for metric_name, metric_data in binary_scores["metrics"].items():
+            if metric_data["detected"]:
+                passed_count += 1
+                print(f"   ✓ {metric_name}: {metric_data['weighted_score']:.1f}/{metric_data['weight']}")
+        
+        print(f"\n✗ FAILED METRICS:")
+        failed_count = 0
+        for metric_name, metric_data in binary_scores["metrics"].items():
+            if not metric_data["detected"]:
+                failed_count += 1
+                print(f"   ✗ {metric_name}: 0/{metric_data['weight']}")
+        
+        print(f"\nSUMMARY: {passed_count} passed, {failed_count} failed")
+        
+        # SAVE RESULTS
+        call.status = "completed"
+        call.analysis_status = "completed"
+        call.score = total_score
+        call.bert_analysis = json.dumps(bert_output_combined)
+        call.wav2vec2_analysis = json.dumps(wav2vec2_output) if wav2vec2_output else None
+        call.binary_scores = json.dumps(binary_scores)
+        
+        db.commit()
+        
+        print(f"\n{'='*60}")
+        print(f"✅ PROCESSING COMPLETE!")
+        print(f"   Call ID: {call_id}")
+        print(f"   Final Score: {total_score:.1f}/100")
+        print(f"{'='*60}\n")
+        
+    except Exception as e:
+        print(f"\n❌ ERROR processing call {call_id}: {e}")
+        import traceback
+        traceback.print_exc()
+        
+        if call:
+            call.status = "failed"
+            call.analysis_status = f"error: {str(e)}"
+            db.commit()
+    
+    finally:
+        db.close()
+
+
 @app.get("/")
 async def root():
     return {
-        "message": "CallEval API - Full Modal Stack with Pattern Matching",
+        "message": "CallEval API - Full Modal Stack with Phase-Aware Evaluation",
         "status": "running",
         "models": {
             "transcription": f"{settings.MODAL_WHISPERX_APP}/{settings.MODAL_WHISPERX_FUNCTION}",
@@ -408,20 +619,16 @@ async def upload_audio(
 ):
     """Upload and process audio file"""
     
-    # Validate file type
     if not file.filename.endswith(('.mp3', '.wav', '.m4a', '.ogg')):
         raise HTTPException(status_code=400, detail="Invalid file type")
     
-    # Generate unique ID
     call_id = str(uuid.uuid4())
     file_path = os.path.join(settings.UPLOAD_DIR, f"{call_id}_{file.filename}")
     
-    # Save file
     with open(file_path, "wb") as f:
         content = await file.read()
         f.write(content)
     
-    # Create database record
     call = CallEvaluation(
         id=call_id,
         filename=file.filename,
@@ -432,7 +639,6 @@ async def upload_audio(
     db.add(call)
     db.commit()
     
-    # Start background processing
     background_tasks.add_task(process_call, call_id, file_path)
     
     return {
@@ -450,7 +656,6 @@ async def get_call(call_id: str, db: Session = Depends(get_db)):
     if not call:
         raise HTTPException(status_code=404, detail="Call not found")
     
-    # Parse JSON fields
     bert_analysis = json.loads(call.bert_analysis) if call.bert_analysis else None
     wav2vec2_analysis = json.loads(call.wav2vec2_analysis) if call.wav2vec2_analysis else None
     binary_scores = json.loads(call.binary_scores) if call.binary_scores else None
@@ -507,186 +712,6 @@ async def get_temp_audio(call_id: str, db: Session = Depends(get_db)):
         media_type="audio/mpeg",
         headers={"Content-Disposition": f"attachment; filename={call.filename}"}
     )
-
-
-def process_call(call_id: str, file_path: str):
-    """Background task: Process call with segment-by-segment evaluation"""
-    
-    db = SessionLocal()
-    
-    try:
-        call = db.query(CallEvaluation).filter(CallEvaluation.id == call_id).first()
-        
-        if not call:
-            print(f"Call {call_id} not found")
-            return
-        
-        # STEP 1: TRANSCRIBE WITH MODAL WHISPERX
-        print(f"\n{'='*60}")
-        print(f"STEP 1: TRANSCRIBING WITH MODAL WHISPERX")
-        print(f"{'='*60}")
-        
-        call.status = "transcribing"
-        call.analysis_status = "transcribing"
-        db.commit()
-        
-        whisperx_result = transcribe_with_modal_whisperx(file_path, call_id)
-        
-        if not whisperx_result or "segments" not in whisperx_result:
-            raise Exception("WhisperX transcription failed")
-        
-        full_text = " ".join([seg["text"] for seg in whisperx_result["segments"]])
-        call.transcript = full_text
-        
-        # Calculate duration
-        if whisperx_result["segments"]:
-            last_segment = whisperx_result["segments"][-1]
-            duration_seconds = int(last_segment.get("end", 0))
-            minutes = duration_seconds // 60
-            seconds = duration_seconds % 60
-            call.duration = f"{minutes}:{seconds:02d}"
-        
-        print(f"✅ Transcription complete!")
-        print(f"   Transcript length: {len(full_text)} characters")
-        print(f"   Duration: {call.duration}")
-        
-        # Store speaker data
-        call.speakers = json.dumps(whisperx_result.get("speaker_roles", {}))
-        db.commit()
-        
-        # STEP 2: IDENTIFY AGENT SEGMENTS
-        print(f"\n{'='*60}")
-        print(f"STEP 2: IDENTIFYING AGENT SEGMENTS")
-        print(f"{'='*60}")
-        
-        speaker_roles = whisperx_result.get("speaker_roles", {})
-        agent_speaker = speaker_roles.get("agent", "SPEAKER_01")
-        
-        agent_segments = [
-            seg for seg in whisperx_result["segments"]
-            if seg.get("speaker") == agent_speaker
-        ]
-        
-        print(f"✅ Found {len(agent_segments)} agent segments")
-        
-        # STEP 3: ANALYZE EACH SEGMENT WITH BERT
-        print(f"\n{'='*60}")
-        print(f"STEP 3: ANALYZING SEGMENTS WITH BERT")
-        print(f"{'='*60}")
-        
-        call.status = "analyzing"
-        call.analysis_status = "analyzing with BERT"
-        db.commit()
-        
-        all_bert_predictions = {}
-        
-        for i, segment in enumerate(agent_segments):
-            segment_text = segment["text"]
-            print(f"\n📝 Segment {i+1}/{len(agent_segments)}: '{segment_text[:50]}...'")
-            
-            bert_output = analyze_with_modal_bert(segment_text)
-            
-            if bert_output and bert_output.get("success"):
-                predictions = bert_output.get("predictions", {})
-                
-                # Aggregate predictions (take maximum across segments)
-                for metric, value in predictions.items():
-                    # FIXED: Handle nested structure from multi-task BERT
-                    # BERT returns: {"metric": {"score": 0.999, "prediction": "positive"}}
-                    if isinstance(value, dict) and "score" in value:
-                        score = value["score"]
-                        print(f"   {metric}: {score:.3f} ({value.get('prediction', 'N/A')})")
-                    else:
-                        # Fallback for flat structure
-                        score = value
-                        print(f"   {metric}: {score:.3f} (flat)")
-                    
-                    if metric not in all_bert_predictions:
-                        all_bert_predictions[metric] = score
-                    else:
-                        all_bert_predictions[metric] = max(all_bert_predictions[metric], score)
-        
-        # Get Wav2Vec2 predictions for the full audio
-        print(f"\n🎵 Calling Wav2Vec2 with full agent audio...")
-        agent_text_combined = " ".join([seg["text"] for seg in agent_segments])
-        wav2vec2_output = analyze_with_modal_wav2vec2(file_path, call_id, agent_text_combined)
-        
-        # Create combined BERT output for storage
-        bert_output_combined = {
-            "success": True,
-            "predictions": all_bert_predictions,
-            "method": "segment-by-segment evaluation"
-        }
-        
-        print(f"\n📊 Aggregated BERT Predictions:")
-        for metric, score in all_bert_predictions.items():
-            status = "✓" if score >= 0.5 else "✗"
-            print(f"   {status} {metric}: {score:.3f}")
-        
-        
-        # STEP 4: BINARY SCORING (NOW WITH PATTERN MATCHING!)
-        print(f"\n{'='*60}")
-        print(f"STEP 4: BINARY SCORECARD EVALUATION")
-        print(f"{'='*60}")
-        
-        binary_scores = calculate_binary_scores(
-            agent_text_combined,
-            agent_segments,  # Pass segments
-            duration_seconds,  # Pass total duration
-            bert_output_combined, 
-            wav2vec2_output
-        )
-        
-        total_score = binary_scores["total_score"]
-        
-        print(f"\n📊 FINAL SCORING RESULTS:")
-        print(f"   Total Score: {total_score:.1f}/100")
-        print(f"   Percentage: {binary_scores['percentage']:.1f}%")
-        
-        print(f"\n✓ PASSED METRICS:")
-        passed_count = 0
-        for metric_name, metric_data in binary_scores["metrics"].items():
-            if metric_data["detected"]:
-                passed_count += 1
-                print(f"   ✓ {metric_name}: {metric_data['weighted_score']:.1f}/{metric_data['weight']}")
-        
-        print(f"\n✗ FAILED METRICS:")
-        failed_count = 0
-        for metric_name, metric_data in binary_scores["metrics"].items():
-            if not metric_data["detected"]:
-                failed_count += 1
-                print(f"   ✗ {metric_name}: 0/{metric_data['weight']}")
-        
-        print(f"\nSUMMARY: {passed_count} passed, {failed_count} failed")
-        
-        # STEP 5: SAVE RESULTS
-        call.status = "completed"
-        call.analysis_status = "completed"
-        call.score = total_score
-        call.bert_analysis = json.dumps(bert_output_combined)
-        call.wav2vec2_analysis = json.dumps(wav2vec2_output) if wav2vec2_output else None
-        call.binary_scores = json.dumps(binary_scores)
-        
-        db.commit()
-        
-        print(f"\n{'='*60}")
-        print(f"✅ PROCESSING COMPLETE!")
-        print(f"   Call ID: {call_id}")
-        print(f"   Final Score: {total_score:.1f}/100")
-        print(f"{'='*60}\n")
-        
-    except Exception as e:
-        print(f"\n❌ ERROR processing call {call_id}: {e}")
-        import traceback
-        traceback.print_exc()
-        
-        if call:
-            call.status = "failed"
-            call.analysis_status = f"error: {str(e)}"
-            db.commit()
-    
-    finally:
-        db.close()
 
 
 if __name__ == "__main__":
