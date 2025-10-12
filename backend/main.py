@@ -360,7 +360,8 @@ def evaluate_binary_metric(metric_name: str, text: str, bert_output: dict,
     """
     Evaluate a single metric using PATTERN MATCHING + AI models
     
-    CRITICAL FIX: no_fillers_stammers is an INVERSE metric that uses MIN instead of MAX
+    CRITICAL FIX: Distinguish between "no prediction" and "detected filler"
+    Only include actual predictions in MIN/MAX calculation
     """
     if metric_name not in SCORECARD_CONFIG:
         return 0.0
@@ -369,7 +370,7 @@ def evaluate_binary_metric(metric_name: str, text: str, bert_output: dict,
     threshold = config.get("threshold", 0.5)
     
     # ==================== 1. PATTERN MATCHING ====================
-    pattern_score = 0.0
+    pattern_score = None  # None = no prediction made
     patterns = config.get("patterns", [])
     
     if metric_name == 'no_fillers_stammers':
@@ -377,19 +378,18 @@ def evaluate_binary_metric(metric_name: str, text: str, bert_output: dict,
         filler_patterns = [
             r'\b(um|uh|er|ah|like|you know|sort of|kind of)\b',
             r'\b(uhm|umm|hmm|mhm|erm)\b',
-            r'\b(actually|basically|literally|seriously)\b',  # overused words
         ]
         has_filler = False
         for filler_pattern in filler_patterns:
             if re.search(filler_pattern, text.lower(), re.IGNORECASE):
                 has_filler = True
-                print(f"  ✗ {metric_name}: FILLER DETECTED in pattern ('{filler_pattern}')")
+                print(f"  ✗ {metric_name}: FILLER DETECTED via pattern")
                 break
         
-        # If fillers found → 0, if no fillers → 1
+        # Pattern made a prediction
         pattern_score = 0.0 if has_filler else 1.0
         if not has_filler:
-            print(f"  ✓ {metric_name}: NO FILLERS detected in pattern")
+            print(f"  ✓ {metric_name}: NO FILLERS via pattern")
     else:
         # Normal pattern matching for other metrics
         for pattern in patterns:
@@ -402,7 +402,7 @@ def evaluate_binary_metric(metric_name: str, text: str, bert_output: dict,
                 continue
     
     # ==================== 2. BERT PREDICTIONS ====================
-    bert_score = 0.0
+    bert_score = None  # None = no prediction made
     if bert_output and bert_output.get("success"):
         predictions = bert_output.get("predictions", {})
         
@@ -429,10 +429,6 @@ def evaluate_binary_metric(metric_name: str, text: str, bert_output: dict,
                 # LOW filler_detection = NO fillers → invert to 1
                 bert_score = 0.0 if prediction_value >= threshold else 1.0
                 print(f"  {metric_name}: BERT filler_detection={prediction_value:.6f} → INVERTED to {bert_score}")
-            else:
-                print(f"  ⚠️ {metric_name}: No filler-related predictions found in BERT output")
-                # Default to 0 (assume fillers present for safety)
-                bert_score = 0.0
         else:
             # Normal handling for other metrics
             if metric_name in predictions:
@@ -444,7 +440,7 @@ def evaluate_binary_metric(metric_name: str, text: str, bert_output: dict,
                 print(f"  {metric_name}: BERT={prediction_value:.3f} → {bert_score}")
     
     # ==================== 3. WAV2VEC2 PREDICTIONS ====================
-    wav2vec2_score = 0.0
+    wav2vec2_score = None  # None = no prediction made
     if wav2vec2_output and wav2vec2_output.get("success"):
         predictions = wav2vec2_output.get("predictions", {})
         if metric_name in predictions:
@@ -452,20 +448,33 @@ def evaluate_binary_metric(metric_name: str, text: str, bert_output: dict,
             wav2vec2_score = 1.0 if prediction_value >= threshold else 0.0
             print(f"  {metric_name}: Wav2Vec2={prediction_value:.3f} → {wav2vec2_score}")
     
-    # ==================== 4. FINAL SCORE CALCULATION ====================
-    # CRITICAL: Different logic for inverse metrics vs normal metrics
+    # ==================== 4. COLLECT VALID SCORES ====================
+    # Only include scores from methods that actually made a prediction
+    valid_scores = []
+    if pattern_score is not None:
+        valid_scores.append(pattern_score)
+    if bert_score is not None:
+        valid_scores.append(bert_score)
+    if wav2vec2_score is not None:
+        valid_scores.append(wav2vec2_score)
+    
+    # ==================== 5. FINAL SCORE CALCULATION ====================
+    if not valid_scores:
+        # No predictions made by any method
+        print(f"  ⚠️ {metric_name}: NO PREDICTIONS from any method, defaulting to 0.0")
+        return 0.0
     
     if metric_name == 'no_fillers_stammers':
-        # INVERSE METRIC: Use MIN
+        # INVERSE METRIC: Use MIN of valid predictions
         # If ANY method detects fillers (score=0), final should be 0
-        # Only if ALL methods agree no fillers (all scores=1), final should be 1
-        final_score = min(pattern_score, bert_score, wav2vec2_score)
-        print(f"  🔻 FINAL (MIN for inverse metric): {final_score} (pattern={pattern_score}, bert={bert_score}, wav2vec2={wav2vec2_score})")
+        final_score = min(valid_scores)
+        print(f"  🔻 FINAL (MIN of {len(valid_scores)} predictions): {final_score}")
+        print(f"     Valid scores: {valid_scores}")
     else:
-        # NORMAL METRIC: Use MAX
+        # NORMAL METRIC: Use MAX of valid predictions
         # If ANY method detects feature (score=1), final should be 1
-        final_score = max(pattern_score, bert_score, wav2vec2_score)
-        print(f"  🔺 FINAL (MAX): {final_score}")
+        final_score = max(valid_scores)
+        print(f"  🔺 FINAL (MAX of {len(valid_scores)} predictions): {final_score}")
     
     return final_score
 
