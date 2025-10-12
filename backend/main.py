@@ -56,7 +56,7 @@ SCORECARD_CONFIG = {
     "enthusiasm_markers": {
         "weight": 5,
         "threshold": 0.5,
-        "phases": ["all"],  # NEW: Evaluated in all phases
+        "phases": ["all"],
         "patterns": [
             r"happy to help", r"glad to assist", r"pleasure", r"absolutely", 
             r"of course", r"definitely", r"certainly", r"wonderful", r"great"
@@ -65,7 +65,7 @@ SCORECARD_CONFIG = {
     "sounds_polite_courteous": {
         "weight": 5,
         "threshold": 0.5,
-        "phases": ["all"],  # NEW: Evaluated in all phases
+        "phases": ["all"],
         "patterns": [
             r"please", r"thank you", r"you're welcome", r"my pleasure", 
             r"sir", r"ma'am", r"excuse me", r"pardon"
@@ -76,7 +76,7 @@ SCORECARD_CONFIG = {
     "professional_greeting": {
         "weight": 5,
         "threshold": 0.5,
-        "phases": ["opening"],  # NEW: Only in opening
+        "phases": ["opening"],
         "patterns": [
             r"thank you for calling.*practice",
             r"good (morning|afternoon|evening)",
@@ -87,7 +87,7 @@ SCORECARD_CONFIG = {
     "verifies_patient_online": {
         "weight": 5,
         "threshold": 0.5,
-        "phases": ["opening"],  # NEW: Only in opening
+        "phases": ["opening"],
         "patterns": [
             r"are you (still )?there",
             r"can you hear me",
@@ -100,7 +100,7 @@ SCORECARD_CONFIG = {
     "patient_verification": {
         "weight": 25,
         "threshold": 0.5,
-        "phases": ["middle"],  # NEW: Only in middle
+        "phases": ["middle"],
         "patterns": [
             r"first.*last name",
             r"(full )?name.*date of birth",
@@ -113,7 +113,7 @@ SCORECARD_CONFIG = {
     "active_listening": {
         "weight": 10,
         "threshold": 0.5,
-        "phases": ["middle"],  # NEW: Only in middle
+        "phases": ["middle"],
         "patterns": [
             r"\bi see\b",
             r"\buh-huh\b",
@@ -129,7 +129,7 @@ SCORECARD_CONFIG = {
     "asks_permission_hold": {
         "weight": 5,
         "threshold": 0.5,
-        "phases": ["middle"],  # NEW: Only in middle
+        "phases": ["middle"],
         "patterns": [
             r"(can|may|could) i (put|place) you on (a )?(brief |quick )?hold",
             r"(would|will) you mind (if i|holding)",
@@ -140,7 +140,7 @@ SCORECARD_CONFIG = {
     "returns_properly_from_hold": {
         "weight": 5,
         "threshold": 0.5,
-        "phases": ["middle"],  # NEW: Only in middle
+        "phases": ["middle"],
         "patterns": [
             r"thank you (for|so much).*(holding|waiting|patience)",
             r"(sorry|apologize).*(keeping you|wait|hold)",
@@ -150,15 +150,15 @@ SCORECARD_CONFIG = {
     "no_fillers_stammers": {
         "weight": 10,
         "threshold": 0.5,
-        "phases": ["middle"],  # NEW: Only in middle
+        "phases": ["middle"],
         "patterns": [
-            r"\b(um|uh|er|ah)\b"  # Negative pattern - presence = fail
+            r"\b(um|uh|er|ah)\b"
         ]
     },
     "recaps_time_date": {
         "weight": 15,
         "threshold": 0.5,
-        "phases": ["middle"],  # NEW: Only in middle
+        "phases": ["middle"],
         "patterns": [
             r"(scheduled|set|appointment|booked).*(for|on|at)",
             r"(coming|see you).*(on|at|this|next)",
@@ -174,7 +174,7 @@ SCORECARD_CONFIG = {
     "offers_further_assistance": {
         "weight": 5,
         "threshold": 0.5,
-        "phases": ["closing"],  # NEW: Only in closing
+        "phases": ["closing"],
         "patterns": [
             r"(and |is there )?anything else",
             r"can i help (you )?with anything else",
@@ -184,7 +184,7 @@ SCORECARD_CONFIG = {
     "ended_call_properly": {
         "weight": 5,
         "threshold": 0.5,
-        "phases": ["closing"],  # NEW: Only in closing
+        "phases": ["closing"],
         "patterns": [
             r"(have a|enjoy your) (great|good|nice|wonderful) (day|afternoon|evening)",
             r"take care",
@@ -197,22 +197,10 @@ SCORECARD_CONFIG = {
 
 
 def determine_phase(start_time: float, end_time: float, total_duration: float) -> str:
-    """
-    Determine call phase based on segment timing (matching inference.py logic)
+    """Determine call phase based on segment timing"""
+    opening_threshold = min(10, total_duration * 0.11)
+    closing_threshold = max(total_duration - 13, total_duration * 0.88)
     
-    Args:
-        start_time: Segment start time in seconds
-        end_time: Segment end time in seconds
-        total_duration: Total call duration in seconds
-    
-    Returns:
-        str: 'opening', 'middle', or 'closing'
-    """
-    # Calculate thresholds (same as inference.py)
-    opening_threshold = min(30, total_duration * 0.15)  # First 30s or 15%
-    closing_threshold = max(total_duration - 30, total_duration * 0.85)  # Last 30s or 15%
-    
-    # Use start time to determine phase
     if start_time <= opening_threshold:
         return 'opening'
     elif start_time >= closing_threshold:
@@ -300,29 +288,14 @@ def analyze_with_modal_wav2vec2(audio_path: str, call_id: str, text: str):
 
 
 def evaluate_binary_metric(metric_name: str, text: str, phase: str, bert_output: dict, wav2vec2_output: dict) -> float:
-    """
-    Evaluate a single metric using PATTERN MATCHING + AI models
-    Only evaluates if metric is applicable to the current phase
-    
-    Args:
-        metric_name: Name of the metric to evaluate
-        text: Text to evaluate
-        phase: Current phase ('opening', 'middle', 'closing')
-        bert_output: BERT model predictions
-        wav2vec2_output: Wav2Vec2 model predictions
-    
-    Returns:
-        float: 1.0 if detected, 0.0 otherwise
-    """
+    """Evaluate a single metric using PATTERN MATCHING + AI models"""
     if metric_name not in SCORECARD_CONFIG:
         return 0.0
     
     config = SCORECARD_CONFIG[metric_name]
-    
-    # NEW: Check if metric applies to this phase
     applicable_phases = config.get("phases", ["all"])
     if "all" not in applicable_phases and phase not in applicable_phases:
-        return 0.0  # Metric not evaluated in this phase
+        return 0.0
     
     threshold = config.get("threshold", 0.5)
     
@@ -330,14 +303,11 @@ def evaluate_binary_metric(metric_name: str, text: str, phase: str, bert_output:
     pattern_score = 0.0
     patterns = config.get("patterns", [])
     
-    # Special handling for no_fillers_stammers (negative pattern)
     if metric_name == "no_fillers_stammers":
-        # Check if fillers are present
         has_fillers = any(re.search(pattern, text.lower(), re.IGNORECASE) for pattern in patterns)
         pattern_score = 0.0 if has_fillers else 1.0
         print(f"  ✓ {metric_name} (Phase: {phase}): {'FILLERS DETECTED' if has_fillers else 'NO FILLERS'}")
     else:
-        # Normal pattern matching
         for pattern in patterns:
             try:
                 if re.search(pattern, text.lower(), re.IGNORECASE):
@@ -365,55 +335,37 @@ def evaluate_binary_metric(metric_name: str, text: str, phase: str, bert_output:
             wav2vec2_score = 1.0 if prediction_value >= threshold else 0.0
             print(f"  {metric_name} (Phase: {phase}): Wav2Vec2={prediction_value:.3f} → {wav2vec2_score}")
     
-    # OR LOGIC: Return 1.0 if ANY method detects it
     final_score = max(pattern_score, bert_score, wav2vec2_score)
     return final_score
 
 
 def calculate_binary_scores(segments: list, bert_output: dict, wav2vec2_output: dict, total_duration: float) -> dict:
-    """
-    Calculate binary scores for all metrics with phase-aware evaluation
-    
-    Args:
-        segments: List of transcript segments with timing info
-        bert_output: BERT model output
-        wav2vec2_output: Wav2Vec2 model output
-        total_duration: Total call duration in seconds
-    
-    Returns:
-        dict: Scores and metrics breakdown
-    """
+    """Calculate binary scores for all metrics with phase-aware evaluation"""
     print("\n" + "="*60)
     print("CALCULATING PHASE-AWARE BINARY SCORECARD")
     print("="*60)
     
-    # Track best score for each metric across all segments
     metric_best_scores = {metric: 0.0 for metric in SCORECARD_CONFIG.keys()}
     metric_phases_found = {metric: [] for metric in SCORECARD_CONFIG.keys()}
     
-    # Evaluate each segment
     for seg_idx, segment in enumerate(segments):
         text = segment.get('text', '')
         start_time = segment.get('start', 0)
         end_time = segment.get('end', 0)
         
-        # Determine phase for this segment
         phase = determine_phase(start_time, end_time, total_duration)
         
         print(f"\n📍 Segment {seg_idx + 1}: [{start_time:.1f}s - {end_time:.1f}s] Phase: {phase.upper()}")
         print(f"   Text: {text[:100]}...")
         
-        # Evaluate all metrics for this segment
         for metric_name in SCORECARD_CONFIG.keys():
             score = evaluate_binary_metric(metric_name, text, phase, bert_output, wav2vec2_output)
             
-            # Keep the best score across all segments
             if score > metric_best_scores[metric_name]:
                 metric_best_scores[metric_name] = score
                 if score > 0:
                     metric_phases_found[metric_name].append(phase)
     
-    # Build final scores
     scores = {}
     for metric_name, best_score in metric_best_scores.items():
         weight = SCORECARD_CONFIG[metric_name]["weight"]
@@ -426,7 +378,6 @@ def calculate_binary_scores(segments: list, bert_output: dict, wav2vec2_output: 
             "applicable_phases": SCORECARD_CONFIG[metric_name].get("phases", ["all"])
         }
     
-    # Calculate total
     total_score = sum(s["weighted_score"] for s in scores.values())
     
     print("\n" + "="*60)
@@ -457,13 +408,7 @@ async def root():
             "transcription": f"{settings.MODAL_WHISPERX_APP}/{settings.MODAL_WHISPERX_FUNCTION}",
             "bert": f"{settings.MODAL_BERT_APP}/{settings.MODAL_BERT_FUNCTION}",
             "wav2vec2": f"{settings.MODAL_WAV2VEC2_APP}/{settings.MODAL_WAV2VEC2_FUNCTION}"
-        },
-        "features": [
-            "Pattern matching evaluation",
-            "Multi-model scoring (Pattern + BERT + Wav2Vec2)",
-            "Phase-aware evaluation (Opening/Middle/Closing)",
-            "Binary OR logic"
-        ]
+        }
     }
 
 
@@ -492,7 +437,7 @@ async def upload_audio(
         file_size = len(content)
         print(f"✓ File saved: {file_size} bytes")
         
-        # Step 2: Transcribe with WhisperX (includes diarization and timing)
+        # Step 2: Transcribe with WhisperX
         print("\n🎤 Step 2: Transcribing with WhisperX...")
         whisperx_result = transcribe_with_modal_whisperx(audio_path, call_id)
         
@@ -501,14 +446,9 @@ async def upload_audio(
         
         full_transcript = whisperx_result.get("text", "")
         segments = whisperx_result.get("segments", [])
-        
-        # Calculate total duration
         total_duration = segments[-1].get('end', 0) if segments else 0
         
-        print(f"✓ Transcription complete")
-        print(f"  Total duration: {total_duration:.1f}s")
-        print(f"  Segments: {len(segments)}")
-        print(f"  Text length: {len(full_transcript)} chars")
+        print(f"✓ Transcription complete: {total_duration:.1f}s, {len(segments)} segments")
         
         # Step 3: Analyze with BERT
         print("\n🧠 Step 3: Analyzing with BERT...")
@@ -526,22 +466,24 @@ async def upload_audio(
         db_call = CallEvaluation(
             id=call_id,
             filename=file.filename,
-            audio_path=audio_path,
-            file_size=file_size,
+            file_path=audio_path,
+            status="completed",
+            analysis_status="completed",
             transcript=full_transcript,
+            duration=f"{int(total_duration//60)}:{int(total_duration%60):02d}",
             score=scorecard["total_score"],
-            max_score=scorecard["max_score"],
-            detailed_scores=json.dumps(scorecard["metrics"]),
-            created_at=datetime.utcnow()
+            binary_scores=json.dumps(scorecard["metrics"]),
+            bert_analysis=json.dumps(bert_output) if bert_output else None,
+            wav2vec2_analysis=json.dumps(wav2vec2_output) if wav2vec2_output else None,
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow()
         )
         
         db.add(db_call)
         db.commit()
         db.refresh(db_call)
         
-        print(f"\n✅ Call evaluation complete!")
-        print(f"   Score: {scorecard['total_score']}/100")
-        print(f"   Call ID: {call_id}")
+        print(f"\n✅ Call evaluation complete! Score: {scorecard['total_score']}/100")
         
         return {
             "success": True,
@@ -551,7 +493,7 @@ async def upload_audio(
             "segments": segments,
             "total_duration": total_duration,
             "scorecard": scorecard,
-            "message": "Audio processed successfully with phase-aware evaluation"
+            "message": "Audio processed successfully"
         }
         
     except Exception as e:
@@ -567,22 +509,23 @@ async def upload_audio(
 
 @app.get("/api/calls")
 async def get_calls(db: Session = Depends(get_db)):
-    """Get all call evaluations"""
+    """Get all call evaluations - Returns array directly for frontend"""
     calls = db.query(CallEvaluation).order_by(CallEvaluation.created_at.desc()).all()
-    return {
-        "success": True,
-        "calls": [
-            {
-                "id": call.id,
-                "filename": call.filename,
-                "score": call.score,
-                "max_score": call.max_score,
-                "percentage": (call.score / call.max_score * 100) if call.max_score > 0 else 0,
-                "created_at": call.created_at.isoformat()
-            }
-            for call in calls
-        ]
-    }
+    
+    # Return array directly (not wrapped in dict) - frontend expects this
+    return [
+        {
+            "id": call.id,
+            "filename": call.filename,
+            "status": call.status,
+            "analysis_status": call.analysis_status,
+            "duration": call.duration,
+            "score": call.score,
+            "created_at": call.created_at.isoformat() if call.created_at else None,
+            "updated_at": call.updated_at.isoformat() if call.updated_at else None,
+        }
+        for call in calls
+    ]
 
 
 @app.get("/api/calls/{call_id}")
@@ -593,35 +536,49 @@ async def get_call_details(call_id: str, db: Session = Depends(get_db)):
     if not call:
         raise HTTPException(status_code=404, detail="Call not found")
     
-    detailed_scores = json.loads(call.detailed_scores) if call.detailed_scores else {}
+    bert_analysis = json.loads(call.bert_analysis) if call.bert_analysis else None
+    wav2vec2_analysis = json.loads(call.wav2vec2_analysis) if call.wav2vec2_analysis else None
+    binary_scores = json.loads(call.binary_scores) if call.binary_scores else None
     
     return {
-        "success": True,
-        "call": {
-            "id": call.id,
-            "filename": call.filename,
-            "transcript": call.transcript,
-            "score": call.score,
-            "max_score": call.max_score,
-            "percentage": (call.score / call.max_score * 100) if call.max_score > 0 else 0,
-            "detailed_scores": detailed_scores,
-            "created_at": call.created_at.isoformat()
-        }
+        "id": call.id,
+        "filename": call.filename,
+        "status": call.status,
+        "analysis_status": call.analysis_status,
+        "transcript": call.transcript,
+        "duration": call.duration,
+        "score": call.score,
+        "bert_analysis": bert_analysis,
+        "wav2vec2_analysis": wav2vec2_analysis,
+        "binary_scores": binary_scores,
+        "created_at": call.created_at.isoformat() if call.created_at else None,
+        "updated_at": call.updated_at.isoformat() if call.updated_at else None,
     }
 
 
 @app.get("/api/temp-audio/{call_id}")
-async def serve_temp_audio(call_id: str):
+async def serve_temp_audio(call_id: str, db: Session = Depends(get_db)):
     """Serve audio file temporarily for Modal processing"""
-    audio_files = list(Path(settings.UPLOAD_DIR).glob(f"{call_id}.*"))
+    call = db.query(CallEvaluation).filter(CallEvaluation.id == call_id).first()
     
-    if not audio_files:
-        raise HTTPException(status_code=404, detail="Audio file not found")
+    if not call:
+        # Fallback: try to find by filename pattern
+        audio_files = list(Path(settings.UPLOAD_DIR).glob(f"{call_id}.*"))
+        if not audio_files:
+            raise HTTPException(status_code=404, detail="Audio file not found")
+        return FileResponse(
+            path=str(audio_files[0]),
+            media_type="audio/mpeg",
+            filename=audio_files[0].name
+        )
+    
+    if not os.path.exists(call.file_path):
+        raise HTTPException(status_code=404, detail="Audio file not found on disk")
     
     return FileResponse(
-        path=str(audio_files[0]),
+        path=call.file_path,
         media_type="audio/mpeg",
-        filename=audio_files[0].name
+        filename=call.filename
     )
 
 
