@@ -534,6 +534,20 @@ def process_call(call_id: str, file_path: str):
         
         full_text = " ".join([seg["text"] for seg in whisperx_result["segments"]])
         call.transcript = full_text
+
+        # Store segments with speaker information
+        segments_data = []
+        for seg in whisperx_result["segments"]:
+            segments_data.append({
+                "speaker": seg.get("speaker", "unknown"),
+                "text": seg.get("text", "").strip(),
+                "start": seg.get("start", 0),
+                "end": seg.get("end", 0)
+            })
+        
+        # Store segments in the scores field
+        call.scores = json.dumps({"segments": segments_data})
+        print(f"   Segments stored: {len(segments_data)}")
         
         if whisperx_result["segments"]:
             last_segment = whisperx_result["segments"][-1]
@@ -759,12 +773,23 @@ async def get_call(call_id: str, db: Session = Depends(get_db)):
     binary_scores = json.loads(call.binary_scores) if call.binary_scores else None
     speakers = json.loads(call.speakers) if call.speakers else None
     
+    # ADD THIS CODE BLOCK:
+    # Parse segments from scores field
+    segments = []
+    if call.scores:
+        try:
+            scores_data = json.loads(call.scores)
+            segments = scores_data.get("segments", [])
+        except:
+            pass
+    
     return {
         "id": call.id,
         "filename": call.filename,
         "status": call.status,
         "analysis_status": call.analysis_status,
         "transcript": call.transcript,
+        "segments": segments,  # ADD THIS LINE
         "duration": call.duration,
         "score": call.score,
         "bert_analysis": bert_analysis,
