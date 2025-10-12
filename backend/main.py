@@ -286,7 +286,11 @@ def analyze_with_modal_wav2vec2(audio_path: str, call_id: str, text: str):
 
 
 def evaluate_binary_metric(metric_name: str, text: str, bert_output: dict, wav2vec2_output: dict, phase: str = None) -> float:
-    """Evaluate a single metric using PATTERN MATCHING + AI models"""
+    """
+    Evaluate a single metric using PATTERN MATCHING + AI models
+    
+    FIXED: Special handling for no_fillers_stammers which is an INVERSE metric
+    """
     if metric_name not in SCORECARD_CONFIG:
         return 0.0
     
@@ -296,25 +300,80 @@ def evaluate_binary_metric(metric_name: str, text: str, bert_output: dict, wav2v
     # 1. PATTERN MATCHING
     pattern_score = 0.0
     patterns = config.get("patterns", [])
-    for pattern in patterns:
-        try:
-            if re.search(pattern, text.lower(), re.IGNORECASE):
-                pattern_score = 1.0
-                print(f"  ✓ {metric_name}: PATTERN MATCHED")
+    
+    # Special handling for no_fillers_stammers - check for ABSENCE of filler patterns
+    if metric_name == 'no_fillers_stammers':
+        # Define filler patterns
+        filler_patterns = [
+            r'\b(um|uh|er|ah|like|you know|sort of|kind of)\b',
+            r'\b(uhm|umm|hmm|mhm)\b'
+        ]
+        has_filler = False
+        for filler_pattern in filler_patterns:
+            if re.search(filler_pattern, text.lower(), re.IGNORECASE):
+                has_filler = True
+                print(f"  ✗ {metric_name}: FILLER DETECTED in pattern")
                 break
-        except re.error:
-            continue
+        
+        # If NO fillers found via pattern, score = 1
+        pattern_score = 0.0 if has_filler else 1.0
+    else:
+        # Normal pattern matching for other metrics
+        for pattern in patterns:
+            try:
+                if re.search(pattern, text.lower(), re.IGNORECASE):
+                    pattern_score = 1.0
+                    print(f"  ✓ {metric_name}: PATTERN MATCHED")
+                    break
+            except re.error:
+                continue
     
     # 2. BERT predictions
     bert_score = 0.0
     if bert_output and bert_output.get("success"):
         predictions = bert_output.get("predictions", {})
-        if metric_name in predictions:
-            prediction_value = predictions[metric_name]
-            bert_score = 1.0 if prediction_value >= threshold else 0.0
-            print(f"  {metric_name}: BERT={prediction_value:.3f} → {bert_score}")
+        
+        # CRITICAL FIX: Special handling for no_fillers_stammers
+        if metric_name == 'no_fillers_stammers':
+            # The BERT model might return BOTH filler_detection and no_fillers_stammers
+            # We need to check which one exists and handle accordingly
+            
+            if 'no_fillers_stammers' in predictions:
+                # If no_fillers_stammers exists, use it directly
+                prediction_value = predictions['no_fillers_stammers']
+                # Extract score if it's a dict
+                if isinstance(prediction_value, dict):
+                    prediction_value = prediction_value.get('score', 0)
+                
+                # HIGH score = NO fillers (good) → score = 1
+                # LOW score = HAS fillers (bad) → score = 0
+                bert_score = 1.0 if prediction_value >= threshold else 0.0
+                print(f"  {metric_name}: BERT={prediction_value:.3f} → {bert_score}")
+                
+            elif 'filler_detection' in predictions:
+                # If only filler_detection exists, INVERT it
+                prediction_value = predictions['filler_detection']
+                if isinstance(prediction_value, dict):
+                    prediction_value = prediction_value.get('score', 0)
+                
+                # HIGH filler_detection score = HAS fillers (bad)
+                # So we INVERT: score = 0 if high, score = 1 if low
+                bert_score = 0.0 if prediction_value >= threshold else 1.0
+                print(f"  {metric_name}: filler_detection BERT={prediction_value:.3f} → INVERTED to {bert_score}")
+            else:
+                print(f"  ⚠️ {metric_name}: Neither 'no_fillers_stammers' nor 'filler_detection' found in BERT predictions")
+        
+        else:
+            # Normal handling for other metrics
+            if metric_name in predictions:
+                prediction_value = predictions[metric_name]
+                if isinstance(prediction_value, dict):
+                    prediction_value = prediction_value.get('score', 0)
+                
+                bert_score = 1.0 if prediction_value >= threshold else 0.0
+                print(f"  {metric_name}: BERT={prediction_value:.3f} → {bert_score}")
     
-    # 3. Wav2Vec2 predictions
+    # 3. Wav2Vec2 predictions (if available)
     wav2vec2_score = 0.0
     if wav2vec2_output and wav2vec2_output.get("success"):
         predictions = wav2vec2_output.get("predictions", {})
@@ -323,6 +382,7 @@ def evaluate_binary_metric(metric_name: str, text: str, bert_output: dict, wav2v
             wav2vec2_score = 1.0 if prediction_value >= threshold else 0.0
             print(f"  {metric_name}: Wav2Vec2={prediction_value:.3f} → {wav2vec2_score}")
     
+    # Final score: MAX of all detection methods
     final_score = max(pattern_score, bert_score, wav2vec2_score)
     return final_score
 
