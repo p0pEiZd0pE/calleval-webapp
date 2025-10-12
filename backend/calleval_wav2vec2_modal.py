@@ -129,15 +129,33 @@ def analyze_audio_wav2vec2(audio_url: str, text: str):
         # Load your fine-tuned multi-modal model weights
         model_repo = "alino-hcdc/calleval-wav2vec2-bert"
         
-        print(f"⏳ Downloading fine-tuned weights from {model_repo}...")
-        model_weights_path = hf_hub_download(
-            repo_id=model_repo,
-            filename="best_calleval_wav2vec2_bert_model.pth",
-            cache_dir="/cache"
-        )
+        checkpoint_files = [
+            "best_calleval_wav2vec2_bert_model.pth",
+            "calleval_wav2vec2_bert_model.pth",
+            "pytorch_model.bin",
+            "model.safetensors"
+        ]
         
-        # Load fine-tuned weights
-        checkpoint = torch.load(model_weights_path, map_location="cpu")
+        checkpoint_path = None
+        for filename in checkpoint_files:
+            try:
+                print(f"⏳ Trying to download: {filename}")
+                checkpoint_path = hf_hub_download(
+                    repo_id=model_repo,
+                    filename=filename,
+                    cache_dir="/cache"
+                )
+                print(f"✓ Found checkpoint: {filename}")
+                break
+            except Exception as e:
+                print(f"⚠️ {filename} not found, trying next...")
+                continue
+        
+        if not checkpoint_path:
+            raise Exception(f"No model checkpoint found in {model_repo}")
+        
+        print(f"⏳ Loading checkpoint weights...")
+        checkpoint = torch.load(checkpoint_path, map_location="cpu")
         
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         print(f"✓ Using device: {device}")

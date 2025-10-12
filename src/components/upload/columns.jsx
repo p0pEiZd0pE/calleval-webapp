@@ -1,6 +1,8 @@
 import { Download, Eye, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { CallDetailsDialog } from "./call-details-dialog"
+import { useState } from "react"
 
 export const columns = [
   {
@@ -26,7 +28,6 @@ export const columns = [
         failed: "destructive"
       };
       
-      // Safe string capitalization with null check
       const displayStatus = status ? 
         status.charAt(0).toUpperCase() + status.slice(1) : 
         "Pending";
@@ -61,8 +62,7 @@ export const columns = [
         failed: "destructive"
       };
       
-      // Safe string capitalization with null check and replace underscores
-      const displayStatus = status ? 
+      const displayStatus = status ?
         status.charAt(0).toUpperCase() + status.slice(1).replace(/_/g, ' ') : 
         "Pending";
       
@@ -83,36 +83,87 @@ export const columns = [
     header: "Actions",
     cell: ({ row }) => {
       const call = row.original;
+      const [dialogOpen, setDialogOpen] = useState(false);
       
-      const handleView = () => {
-        // Navigate to call details page
-        console.log("View call:", call.id);
-        // TODO: Implement navigation to details page
-        // For now, show alert with call info
-        alert(`Call ID: ${call.id}\nStatus: ${call.status}\nFilename: ${call.fileName}`);
-      };
-      
-      const handleDownload = () => {
-        // Use the API_ENDPOINTS if available, otherwise construct URL
-        const backendUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-        window.open(`${backendUrl}/api/temp-audio/${call.id}`, '_blank');
+      const handleDownload = async () => {
+        try {
+          const backendUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+          
+          // Download audio
+          const audioUrl = `${backendUrl}/api/temp-audio/${call.id}`;
+          const audioLink = document.createElement('a');
+          audioLink.href = audioUrl;
+          audioLink.download = call.fileName || 'recording.mp3';
+          document.body.appendChild(audioLink);
+          audioLink.click();
+          document.body.removeChild(audioLink);
+          
+          // Download transcription
+          const response = await fetch(`${backendUrl}/api/calls/${call.id}`);
+          if (response.ok) {
+            const data = await response.json();
+            if (data.transcript) {
+              // Create formatted transcription with speakers
+              let transcriptText = `Call Transcription\n`;
+              transcriptText += `Filename: ${call.fileName}\n`;
+              transcriptText += `Date: ${call.uploadDate}\n`;
+              transcriptText += `Duration: ${data.duration || 'N/A'}\n`;
+              transcriptText += `Score: ${data.score || 'N/A'}/100\n\n`;
+              transcriptText += `${'='.repeat(60)}\n\n`;
+              
+              // Parse transcript and add speaker labels
+              if (data.speakers) {
+                const lines = data.transcript.split('\n');
+                lines.forEach(line => {
+                  if (line.trim()) {
+                    transcriptText += line + '\n';
+                  }
+                });
+              } else {
+                transcriptText += data.transcript;
+              }
+              
+              // Create and download transcript file
+              const blob = new Blob([transcriptText], { type: 'text/plain' });
+              const transcriptUrl = window.URL.createObjectURL(blob);
+              const transcriptLink = document.createElement('a');
+              transcriptLink.href = transcriptUrl;
+              transcriptLink.download = `transcript_${call.fileName?.replace(/\.[^/.]+$/, '')}.txt`;
+              document.body.appendChild(transcriptLink);
+              transcriptLink.click();
+              document.body.removeChild(transcriptLink);
+              window.URL.revokeObjectURL(transcriptUrl);
+            }
+          }
+        } catch (error) {
+          console.error('Download error:', error);
+          alert('Failed to download files. Please try again.');
+        }
       };
  
       return (
         <div className="flex gap-1">
-          <Button
-            variant="ghost"
-            className="h-8 w-8 p-0"
-            onClick={handleView}
-            title="View Details"
+          <CallDetailsDialog 
+            callId={call.id} 
+            open={dialogOpen}
+            onOpenChange={setDialogOpen}
           >
-            <Eye className="h-4 w-4" />
-          </Button>
+            <Button
+              variant="ghost"
+              className="h-8 w-8 p-0"
+              onClick={() => setDialogOpen(true)}
+              title="View Details"
+              disabled={call.status === "pending" || call.status === "processing"}
+            >
+              <Eye className="h-4 w-4" />
+            </Button>
+          </CallDetailsDialog>
+          
           <Button
             variant="ghost"
             className="h-8 w-8 p-0"
             onClick={handleDownload}
-            title="Download Audio"
+            title="Download Audio & Transcription"
             disabled={call.status === "pending" || call.status === "processing"}
           >
             <Download className="h-4 w-4" />
