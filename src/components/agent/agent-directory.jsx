@@ -30,7 +30,7 @@ import { Label } from "@/components/ui/label"
 import { Plus, Filter, X, RefreshCw } from 'lucide-react'
 import { Badge } from "@/components/ui/badge"
 import { API_ENDPOINTS } from '@/config/api'
-import { useToast } from "@/components/ui/use-toast"
+import { toast } from "sonner"  // UPDATED: Using sonner instead of useToast
 
 export default function AgentDirectory() {
   const [data, setData] = useState([])
@@ -39,7 +39,6 @@ export default function AgentDirectory() {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [editingAgent, setEditingAgent] = useState(null)
-  const { toast } = useToast()
   
   const [filters, setFilters] = useState({
     position: "all",
@@ -50,7 +49,6 @@ export default function AgentDirectory() {
     maxCalls: ""
   })
   
-  // Form state for adding new agent
   const [newAgent, setNewAgent] = useState({
     agentName: "",
     position: "",
@@ -59,7 +57,6 @@ export default function AgentDirectory() {
     callsHandled: ""
   })
 
-  // Fetch agents from API
   const fetchAgents = async () => {
     try {
       setLoading(true)
@@ -69,11 +66,7 @@ export default function AgentDirectory() {
       setData(agents)
     } catch (error) {
       console.error('Error fetching agents:', error)
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: "Failed to load agents"
-      })
+      toast.error("Failed to load agents")
     } finally {
       setLoading(false)
     }
@@ -83,7 +76,6 @@ export default function AgentDirectory() {
     fetchAgents()
   }, [])
 
-  // Get unique positions and statuses for filters
   const uniquePositions = useMemo(() => {
     return [...new Set(data.map(agent => agent.position))]
   }, [data])
@@ -92,7 +84,6 @@ export default function AgentDirectory() {
     return [...new Set(data.map(agent => agent.status))]
   }, [data])
 
-  // Filter and search logic
   const filteredData = useMemo(() => {
     return data.filter(agent => {
       const matchesSearch = searchTerm === "" || 
@@ -122,14 +113,9 @@ export default function AgentDirectory() {
     })
   }, [data, searchTerm, filters])
 
-  // Add agent function
   const handleAddAgent = async () => {
     if (!newAgent.agentName || !newAgent.position) {
-      toast({
-        variant: "destructive",
-        title: "Validation Error",
-        description: "Please fill in all required fields"
-      })
+      toast.error("Please fill in all required fields")
       return
     }
 
@@ -148,15 +134,11 @@ export default function AgentDirectory() {
 
       if (!response.ok) throw new Error('Failed to create agent')
 
-      await fetchAgents() // Refresh list
+      await fetchAgents()
       setIsAddDialogOpen(false)
       
-      toast({
-        title: "Success",
-        description: `${newAgent.agentName} has been added successfully.`
-      })
+      toast.success(`${newAgent.agentName} has been added successfully`)
 
-      // Reset form
       setNewAgent({
         agentName: "",
         position: "",
@@ -166,15 +148,10 @@ export default function AgentDirectory() {
       })
     } catch (error) {
       console.error('Error adding agent:', error)
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: "Failed to add agent"
-      })
+      toast.error("Failed to add agent")
     }
   }
 
-  // Edit agent function
   const handleEditAgent = async () => {
     if (!editingAgent) return
 
@@ -197,21 +174,13 @@ export default function AgentDirectory() {
       setIsEditDialogOpen(false)
       setEditingAgent(null)
       
-      toast({
-        title: "Success",
-        description: "Agent updated successfully"
-      })
+      toast.success("Agent updated successfully")
     } catch (error) {
       console.error('Error updating agent:', error)
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: "Failed to update agent"
-      })
+      toast.error("Failed to update agent")
     }
   }
 
-  // Delete agent function
   const handleDeleteAgent = async (agentId) => {
     if (!window.confirm("Are you sure you want to delete this agent?")) return
 
@@ -224,21 +193,13 @@ export default function AgentDirectory() {
 
       await fetchAgents()
       
-      toast({
-        title: "Success",
-        description: "Agent deleted successfully"
-      })
+      toast.success("Agent deleted successfully")
     } catch (error) {
       console.error('Error deleting agent:', error)
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: "Failed to delete agent"
-      })
+      toast.error("Failed to delete agent")
     }
   }
 
-  // Reset filters
   const resetFilters = () => {
     setFilters({
       position: "all",
@@ -251,7 +212,6 @@ export default function AgentDirectory() {
     setSearchTerm("")
   }
 
-  // Check if any filters are active
   const hasActiveFilters = useMemo(() => {
     return filters.position !== "all" || 
            filters.status !== "all" || 
@@ -262,7 +222,6 @@ export default function AgentDirectory() {
            searchTerm !== ""
   }, [filters, searchTerm])
 
-  // Pass handlers to columns
   const columnsWithHandlers = useMemo(() => {
     return columns.map(col => {
       if (col.id === "actions") {
@@ -412,7 +371,6 @@ export default function AgentDirectory() {
 
         <CardContent>
           <div className='space-y-4'>
-            {/* Search Bar */}
             <div className='flex justify-between items-center gap-4 flex-wrap'>
               <h4 className="scroll-m-20 text-xl font-semibold tracking-tight">
                 Agent List
@@ -436,7 +394,6 @@ export default function AgentDirectory() {
               </div>
             </div>
 
-            {/* Filters Section - FIXED ALIGNMENT */}
             <div className="border rounded-lg p-4 space-y-4 bg-muted/50">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
@@ -453,9 +410,7 @@ export default function AgentDirectory() {
                 )}
               </div>
 
-              {/* FIXED: Grid with proper alignment */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                {/* Position Filter */}
                 <div className="space-y-2">
                   <Label>Position</Label>
                   <Select 
@@ -476,7 +431,6 @@ export default function AgentDirectory() {
                   </Select>
                 </div>
 
-                {/* Status Filter */}
                 <div className="space-y-2">
                   <Label>Status</Label>
                   <Select 
@@ -497,7 +451,6 @@ export default function AgentDirectory() {
                   </Select>
                 </div>
 
-                {/* Score Range */}
                 <div className="space-y-2">
                   <Label>Score Range</Label>
                   <div className="flex gap-2">
@@ -518,7 +471,6 @@ export default function AgentDirectory() {
                   </div>
                 </div>
 
-                {/* Calls Handled Range */}
                 <div className="space-y-2">
                   <Label>Calls Handled</Label>
                   <div className="flex gap-2">
@@ -552,7 +504,6 @@ export default function AgentDirectory() {
         </CardContent>
       </Card>
 
-      {/* Edit Dialog */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
         <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
