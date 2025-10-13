@@ -1,6 +1,7 @@
 'use client'
 import { ThemeProvider } from "@/components/theme-provider"
 import { AppSidebar } from '@/components/app-sidebar'
+import { Toaster } from "@/components/ui/toaster"
 import {
   SidebarInset,
   SidebarProvider,
@@ -41,6 +42,7 @@ const App = () => {
           }
         />
       </Routes>
+      <Toaster />
     </ThemeProvider>
   );
 };
