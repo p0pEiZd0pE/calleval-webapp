@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react'
+import React, { useCallback, useState, useEffect } from 'react'
 import { useDropzone } from 'react-dropzone'
 import {
   Card,
@@ -10,10 +10,42 @@ import {
 import { Button } from "@/components/ui/button"
 import { CloudUpload, X, Loader2 } from "lucide-react";
 import { API_ENDPOINTS } from '@/config/api';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { Label } from "@/components/ui/label"
+import { toast } from "sonner"
 
 export default function UploadSection({ onUploadComplete }) {
   const [files, setFiles] = useState([]);
   const [uploading, setUploading] = useState(false);
+  const [agents, setAgents] = useState([]);
+  const [selectedAgent, setSelectedAgent] = useState("");
+  const [loadingAgents, setLoadingAgents] = useState(true);
+
+  // Fetch agents on component mount
+  useEffect(() => {
+    fetchAgents();
+  }, []);
+
+  const fetchAgents = async () => {
+    try {
+      setLoadingAgents(true);
+      const response = await fetch(API_ENDPOINTS.AGENTS);
+      if (!response.ok) throw new Error('Failed to fetch agents');
+      const data = await response.json();
+      setAgents(data.filter(agent => agent.status === 'Active'));
+    } catch (error) {
+      console.error('Error fetching agents:', error);
+      toast.error("Failed to load agents");
+    } finally {
+      setLoadingAgents(false);
+    }
+  };
 
   const onDrop = useCallback((acceptedFiles) => {
     setFiles(prev => [...prev, ...acceptedFiles]);
@@ -38,13 +70,24 @@ export default function UploadSection({ onUploadComplete }) {
   };
 
   const uploadAll = async () => {
-    if (files.length === 0) return;
+    if (files.length === 0) {
+      toast.error("Please select files to upload");
+      return;
+    }
+    
+    if (!selectedAgent) {
+      toast.error("Please select an agent before uploading");
+      return;
+    }
     
     setUploading(true);
+    let successCount = 0;
+    let errorCount = 0;
     
     for (const file of files) {
       const formData = new FormData();
       formData.append('file', file);
+      formData.append('agent_id', selectedAgent);
       
       try {
         const response = await fetch(API_ENDPOINTS.UPLOAD, {
@@ -58,13 +101,23 @@ export default function UploadSection({ onUploadComplete }) {
         
         const result = await response.json();
         console.log('Uploaded:', result);
+        successCount++;
       } catch (error) {
         console.error('Upload error:', error);
+        errorCount++;
       }
     }
     
     setUploading(false);
     setFiles([]);
+    
+    // Show results
+    if (successCount > 0) {
+      toast.success(`Successfully uploaded ${successCount} file(s)`);
+    }
+    if (errorCount > 0) {
+      toast.error(`Failed to upload ${errorCount} file(s)`);
+    }
     
     // Notify parent component to refresh the list
     if (onUploadComplete) {
@@ -77,10 +130,44 @@ export default function UploadSection({ onUploadComplete }) {
       <CardHeader>
         <CardTitle>New Call Upload</CardTitle>
         <CardDescription>
-          Drag and drop your audio files or browse to select for analysis.
+          Select an agent and drag and drop audio files for analysis.
         </CardDescription>
       </CardHeader>
       <CardContent>
+        {/* Agent Selector */}
+        <div className="mb-6 space-y-2">
+          <Label htmlFor="agent-select" className="text-base font-medium">
+            Select Agent *
+          </Label>
+          <Select 
+            value={selectedAgent} 
+            onValueChange={setSelectedAgent}
+            disabled={loadingAgents || uploading}
+          >
+            <SelectTrigger id="agent-select" className="w-full">
+              <SelectValue placeholder={loadingAgents ? "Loading agents..." : "Choose an agent..."} />
+            </SelectTrigger>
+            <SelectContent>
+              {agents.map((agent) => (
+                <SelectItem key={agent.agentId} value={agent.agentId}>
+                  {agent.agentName} - {agent.position}
+                </SelectItem>
+              ))}
+              {agents.length === 0 && !loadingAgents && (
+                <div className="p-2 text-sm text-muted-foreground">
+                  No active agents found
+                </div>
+              )}
+            </SelectContent>
+          </Select>
+          {!selectedAgent && files.length > 0 && (
+            <p className="text-sm text-orange-600">
+              ⚠️ Please select an agent to continue
+            </p>
+          )}
+        </div>
+
+        {/* File Drop Zone */}
         <div
           {...getRootProps()}
           className={`border-2 border-dashed rounded-md p-8 flex flex-col items-center justify-center text-center cursor-pointer transition-colors
@@ -147,7 +234,7 @@ export default function UploadSection({ onUploadComplete }) {
         <Button
           className='bg-ring hover:bg-primary-foreground text-white'
           onClick={uploadAll}
-          disabled={uploading || files.length === 0}
+          disabled={uploading || files.length === 0 || !selectedAgent}
         >
           {uploading ? (
             <>

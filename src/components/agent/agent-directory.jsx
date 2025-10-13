@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react'
 import { columns } from '@/components/agent/columns'
 import { DataTable } from '@/components/agent/data-table'
+import { AgentCallsDialog } from './agent-calls-dialog'
 import {
   Card,
   CardContent,
@@ -221,8 +222,26 @@ export default function AgentDirectory() {
           ...col,
           cell: ({ row }) => {
             const agent = row.original
+            const [callsDialogOpen, setCallsDialogOpen] = React.useState(false)
+            
             return (
               <div className="flex gap-2">
+                {/* View Calls Button */}
+                <AgentCallsDialog 
+                  agentId={agent.agentId}
+                  open={callsDialogOpen}
+                  onOpenChange={setCallsDialogOpen}
+                >
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => setCallsDialogOpen(true)}
+                  >
+                    View Calls
+                  </Button>
+                </AgentCallsDialog>
+                
+                {/* Edit Button */}
                 <Button 
                   variant="outline" 
                   size="sm"
@@ -233,6 +252,8 @@ export default function AgentDirectory() {
                 >
                   Edit
                 </Button>
+                
+                {/* Delete Button */}
                 <Button 
                   variant="destructive" 
                   size="sm"

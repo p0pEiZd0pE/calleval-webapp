@@ -19,6 +19,10 @@ class CallEvaluation(Base):
     file_path = Column(String, nullable=False)
     status = Column(String, default="pending")
     analysis_status = Column(String, default="pending")
+
+    # NEW: Link to agent
+    agent_id = Column(String, ForeignKey('agents.agentId'), nullable=True)
+    agent_name = Column(String, nullable=True)  # Denormalized for easy display
     
     # Results
     transcript = Column(Text, nullable=True)

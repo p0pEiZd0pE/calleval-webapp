@@ -16,6 +16,7 @@ from config import settings
 from database import get_db, CallEvaluation, SessionLocal
 from pydantic import BaseModel
 from typing import Optional
+from fastapi import Form
 
 
 class AgentBase(BaseModel):
@@ -613,6 +614,30 @@ def calculate_binary_scores(agent_segments, call_structure, bert_output_combined
         "active_listening_OR_handled_with_care": active_or_handled == 1.0  # Add this for clarity
     }
 
+def update_agent_stats(agent_id: str, db: Session):
+    """Update agent statistics after call processing"""
+    agent = db.query(Agent).filter(Agent.agentId == agent_id).first()
+    if not agent:
+        return
+    
+    # Get all completed calls for this agent
+    completed_calls = db.query(CallEvaluation).filter(
+        CallEvaluation.agent_id == agent_id,
+        CallEvaluation.status == "completed",
+        CallEvaluation.score != None
+    ).all()
+    
+    if completed_calls:
+        # Calculate new average score
+        total_score = sum(call.score for call in completed_calls)
+        agent.avgScore = round(total_score / len(completed_calls), 1)
+        agent.callsHandled = len(completed_calls)
+        agent.updated_at = datetime.utcnow()
+        db.commit()
+        
+        print(f"✅ Updated agent {agent.agentName} stats:")
+        print(f"   Calls Handled: {agent.callsHandled}")
+        print(f"   Average Score: {agent.avgScore}")
 
 def process_call(call_id: str, file_path: str):
     """Background task: Process call with phase-aware evaluation"""
@@ -814,6 +839,9 @@ def process_call(call_id: str, file_path: str):
         print(f"   Call ID: {call_id}")
         print(f"   Final Score: {total_score:.1f}/100")
         print(f"{'='*60}\n")
+
+        if call.agent_id and call.score:
+            update_agent_stats(call.agent_id, db)
         
     except Exception as e:
         print(f"\n❌ ERROR processing call {call_id}: {e}")
@@ -845,13 +873,19 @@ async def root():
 @app.post("/api/upload")
 async def upload_audio(
     file: UploadFile = File(...),
+    agent_id: str = Form(...),  # NEW: Agent ID required
     background_tasks: BackgroundTasks = None,
     db: Session = Depends(get_db)
 ):
-    """Upload and process audio file"""
+    """Upload and process audio file with agent assignment"""
     
     if not file.filename.endswith(('.mp3', '.wav', '.m4a', '.ogg')):
         raise HTTPException(status_code=400, detail="Invalid file type")
+    
+    # Verify agent exists
+    agent = db.query(Agent).filter(Agent.agentId == agent_id).first()
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
     
     call_id = str(uuid.uuid4())
     file_path = os.path.join(settings.UPLOAD_DIR, f"{call_id}_{file.filename}")
@@ -860,12 +894,15 @@ async def upload_audio(
         content = await file.read()
         f.write(content)
     
+    # Create call with agent assignment
     call = CallEvaluation(
         id=call_id,
         filename=file.filename,
         file_path=file_path,
         status="processing",
-        analysis_status="queued"
+        analysis_status="queued",
+        agent_id=agent_id,  # NEW: Store agent ID
+        agent_name=agent.agentName  # NEW: Store agent name
     )
     db.add(call)
     db.commit()
@@ -875,6 +912,8 @@ async def upload_audio(
     return {
         "id": call_id,
         "filename": file.filename,
+        "agent_id": agent_id,
+        "agent_name": agent.agentName,
         "status": "processing"
     }
 
@@ -932,6 +971,8 @@ async def list_calls(db: Session = Depends(get_db)):
         "analysis_status": call.analysis_status,
         "duration": call.duration,
         "score": call.score,
+        "agent_id": call.agent_id,
+        "agent_name": call.agent_name,
         "created_at": call.created_at.isoformat() if call.created_at else None,
         "updated_at": call.updated_at.isoformat() if call.updated_at else None,
     } for call in calls]
@@ -1051,6 +1092,37 @@ async def delete_agent(agent_id: str, db: Session = Depends(get_db)):
         db.rollback()
         print(f"Error deleting agent: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+    
+
+@app.get("/api/agents/{agent_id}/calls")
+async def get_agent_calls(agent_id: str, db: Session = Depends(get_db)):
+    """Get all calls for a specific agent"""
+    agent = db.query(Agent).filter(Agent.agentId == agent_id).first()
+    
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    
+    calls = db.query(CallEvaluation).filter(
+        CallEvaluation.agent_id == agent_id
+    ).order_by(CallEvaluation.created_at.desc()).all()
+    
+    return {
+        "agent": {
+            "agentId": agent.agentId,
+            "agentName": agent.agentName,
+            "position": agent.position,
+            "avgScore": agent.avgScore,
+            "callsHandled": agent.callsHandled
+        },
+        "calls": [{
+            "id": call.id,
+            "filename": call.filename,
+            "status": call.status,
+            "score": call.score,
+            "duration": call.duration,
+            "created_at": call.created_at.isoformat() if call.created_at else None
+        } for call in calls]
+    }
 
 
 @app.get("/api/agents/stats/summary")
