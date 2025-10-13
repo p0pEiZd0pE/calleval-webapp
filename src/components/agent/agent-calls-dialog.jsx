@@ -77,23 +77,19 @@ export function AgentCallsDialog({ agentId, open, onOpenChange, children }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       {children}
-      <DialogContent className="max-w-[95vw] w-[1200px] h-[85vh] flex flex-col p-0 gap-0">
-        {/* Header - Fixed */}
-        <div className="flex-shrink-0 px-6 pt-6 pb-4">
-          <DialogHeader className="space-y-2">
-            <DialogTitle className="text-2xl">Agent Call History</DialogTitle>
-            <DialogDescription>
-              View all calls and performance metrics for this agent
-            </DialogDescription>
-          </DialogHeader>
-        </div>
+      <DialogContent className="w-[95vw] max-w-4xl h-[90vh] max-h-[900px] p-0 gap-0">
+        <DialogHeader className="px-6 pt-6 pb-4 space-y-2">
+          <DialogTitle className="text-xl md:text-2xl">Agent Call History</DialogTitle>
+          <DialogDescription className="text-sm">
+            View all calls and performance metrics for this agent
+          </DialogDescription>
+        </DialogHeader>
 
-        <Separator className="flex-shrink-0" />
+        <Separator />
 
-        {/* Scrollable Content Area */}
-        <div className="flex-1 overflow-y-auto px-6 py-4 min-h-0">
+        <div className="flex-1 overflow-hidden px-6 pb-6">
           {loading && (
-            <div className="flex items-center justify-center h-full">
+            <div className="flex items-center justify-center py-12">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
               <span className="ml-2">Loading agent data...</span>
             </div>
@@ -106,115 +102,118 @@ export function AgentCallsDialog({ agentId, open, onOpenChange, children }) {
           )}
 
           {data && !loading && !error && (
-            <div className="space-y-6">
+            <div className="space-y-4 h-full flex flex-col">
               {/* Agent Summary Card */}
-              <Card>
-                <CardContent className="pt-6">
-                  <div className="flex items-center justify-between mb-6">
+              <Card className="flex-shrink-0">
+                <CardHeader className="pb-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                     <div>
-                      <h3 className="text-xl font-semibold">{data.agentName}</h3>
-                      <p className="text-sm text-muted-foreground">{data.position}</p>
+                      <CardTitle className="text-lg md:text-xl">{data.agentName}</CardTitle>
+                      <CardDescription className="text-sm">{data.position}</CardDescription>
                     </div>
                     <div className="flex items-center gap-2">
                       {getTrend(data.avgScore)}
                     </div>
                   </div>
-                  
-                  <div className="grid grid-cols-3 gap-8">
-                    <div className="text-center p-4 bg-muted/50 rounded-lg">
-                      <p className="text-sm text-muted-foreground mb-2">Average Score</p>
-                      <p className={`text-4xl font-bold ${getScoreColor(data.avgScore)}`}>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-3 gap-3 md:gap-6">
+                    <div className="text-center">
+                      <p className="text-xs md:text-sm text-muted-foreground mb-1">Average Score</p>
+                      <p className={`text-xl md:text-3xl font-bold ${getScoreColor(data.avgScore)}`}>
                         {data.avgScore}/100
                       </p>
                     </div>
-                    <div className="text-center p-4 bg-muted/50 rounded-lg">
-                      <p className="text-sm text-muted-foreground mb-2">Calls Handled</p>
-                      <p className="text-4xl font-bold">{data.callsHandled || 0}</p>
+                    <div className="text-center">
+                      <p className="text-xs md:text-sm text-muted-foreground mb-1">Calls Handled</p>
+                      <p className="text-xl md:text-3xl font-bold">{data.callsHandled || 0}</p>
                     </div>
-                    <div className="text-center p-4 bg-muted/50 rounded-lg">
-                      <p className="text-sm text-muted-foreground mb-2">Total Uploads</p>
-                      <p className="text-4xl font-bold">{data.totalUploads || 0}</p>
+                    <div className="text-center">
+                      <p className="text-xs md:text-sm text-muted-foreground mb-1">Total Uploads</p>
+                      <p className="text-xl md:text-3xl font-bold">{data.totalUploads || 0}</p>
                     </div>
                   </div>
                 </CardContent>
               </Card>
 
               {/* Call History */}
-              <div>
-                <h3 className="text-lg font-semibold mb-4">Call History</h3>
+              <div className="flex-1 overflow-hidden flex flex-col">
+                <h3 className="text-base md:text-lg font-semibold mb-3">Call History</h3>
                 
                 {data.calls && data.calls.length > 0 ? (
-                  <div className="space-y-3">
-                    {data.calls.map((call) => (
-                      <Card key={call.id} className="hover:shadow-md transition-shadow">
-                        <CardContent className="p-5">
-                          <div className="flex items-center justify-between gap-6">
-                            {/* Left: Call Info */}
-                            <div className="flex items-center gap-4 flex-1 min-w-0">
-                              <div className="flex-shrink-0">
-                                <div className="bg-primary/10 p-3 rounded-full">
-                                  <Phone className="h-5 w-5 text-primary" />
+                  <ScrollArea className="flex-1 pr-4">
+                    <div className="space-y-3">
+                      {data.calls.map((call) => (
+                        <Card key={call.id} className="hover:shadow-md transition-shadow">
+                          <CardContent className="p-4">
+                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                              <div className="flex items-start gap-3 flex-1 min-w-0">
+                                <div className="flex-shrink-0 mt-1">
+                                  <div className="bg-primary/10 p-2 rounded-full">
+                                    <Phone className="h-4 w-4 text-primary" />
+                                  </div>
+                                </div>
+                                
+                                <div className="flex-1 min-w-0">
+                                  <p className="font-medium text-sm md:text-base truncate">
+                                    {call.filename}
+                                  </p>
+                                  <p className="text-xs text-muted-foreground mt-1">
+                                    {call.created_at ? 
+                                      new Date(call.created_at).toLocaleString('en-US', {
+                                        month: 'short',
+                                        day: 'numeric',
+                                        year: 'numeric',
+                                        hour: '2-digit',
+                                        minute: '2-digit'
+                                      }) : 'N/A'}
+                                  </p>
                                 </div>
                               </div>
                               
-                              <div className="flex-1 min-w-0">
-                                <p className="font-medium text-base truncate mb-1">
-                                  {call.filename}
-                                </p>
-                                <p className="text-sm text-muted-foreground">
-                                  {call.created_at ? 
-                                    new Date(call.created_at).toLocaleString('en-US', {
-                                      month: 'short',
-                                      day: 'numeric',
-                                      year: 'numeric',
-                                      hour: '2-digit',
-                                      minute: '2-digit'
-                                    }) : 'N/A'}
-                                </p>
+                              <div className="flex items-center gap-3 sm:gap-4 flex-wrap">
+                                <div className="text-center">
+                                  <p className="text-xs text-muted-foreground">Duration</p>
+                                  <p className="text-sm font-medium">{call.duration || 'N/A'}</p>
+                                </div>
+                                
+                                <div className="text-center">
+                                  <p className="text-xs text-muted-foreground">Score</p>
+                                  {call.score ? (
+                                    <p className={`text-base md:text-lg font-bold ${getScoreColor(call.score)}`}>
+                                      {call.score}
+                                    </p>
+                                  ) : (
+                                    <p className="text-sm text-muted-foreground">Pending</p>
+                                  )}
+                                </div>
+                                
+                                <Badge 
+                                  variant={
+                                    call.status === 'completed' ? 'default' : 
+                                    call.status === 'failed' ? 'destructive' : 
+                                    'secondary'
+                                  }
+                                  className="text-xs"
+                                >
+                                  {call.status}
+                                </Badge>
                               </div>
                             </div>
-                            
-                            {/* Right: Call Stats */}
-                            <div className="flex items-center gap-8">
-                              <div className="text-center min-w-[80px]">
-                                <p className="text-xs text-muted-foreground mb-1">Duration</p>
-                                <p className="text-base font-semibold">{call.duration || 'N/A'}</p>
-                              </div>
-                              
-                              <div className="text-center min-w-[80px]">
-                                <p className="text-xs text-muted-foreground mb-1">Score</p>
-                                {call.score ? (
-                                  <p className={`text-2xl font-bold ${getScoreColor(call.score)}`}>
-                                    {call.score}
-                                  </p>
-                                ) : (
-                                  <p className="text-sm text-muted-foreground">Pending</p>
-                                )}
-                              </div>
-                              
-                              <Badge 
-                                variant={
-                                  call.status === 'completed' ? 'default' : 
-                                  call.status === 'failed' ? 'destructive' : 
-                                  'secondary'
-                                }
-                                className="min-w-[90px] justify-center py-1.5"
-                              >
-                                {call.status}
-                              </Badge>
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  </ScrollArea>
                 ) : (
-                  <div className="text-center py-16 border rounded-lg bg-muted/20">
-                    <Phone className="h-16 w-16 mx-auto mb-4 opacity-30" />
-                    <p className="text-lg font-medium mb-2">No calls found</p>
-                    <p className="text-sm text-muted-foreground">
-                      This agent hasn't had any calls uploaded yet.
-                    </p>
+                  <div className="flex-1 flex items-center justify-center">
+                    <div className="text-center py-12 text-muted-foreground">
+                      <Phone className="h-12 w-12 mx-auto mb-3 opacity-50" />
+                      <p className="font-medium">No calls found</p>
+                      <p className="text-sm mt-1">
+                        This agent hasn't had any calls uploaded yet.
+                      </p>
+                    </div>
                   </div>
                 )}
               </div>
