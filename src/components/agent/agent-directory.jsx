@@ -52,9 +52,7 @@ export default function AgentDirectory() {
   const [newAgent, setNewAgent] = useState({
     agentName: "",
     position: "",
-    status: "Active",
-    avgScore: "",
-    callsHandled: ""
+    status: "Active"
   })
 
   const fetchAgents = async () => {
@@ -126,9 +124,7 @@ export default function AgentDirectory() {
         body: JSON.stringify({
           agentName: newAgent.agentName,
           position: newAgent.position,
-          status: newAgent.status,
-          avgScore: parseFloat(newAgent.avgScore) || 0,
-          callsHandled: parseInt(newAgent.callsHandled) || 0,
+          status: newAgent.status
         })
       })
 
@@ -142,9 +138,7 @@ export default function AgentDirectory() {
       setNewAgent({
         agentName: "",
         position: "",
-        status: "Active",
-        avgScore: "",
-        callsHandled: ""
+        status: "Active"
       })
     } catch (error) {
       console.error('Error adding agent:', error)
@@ -329,32 +323,6 @@ export default function AgentDirectory() {
                           <SelectItem value="Inactive">Inactive</SelectItem>
                         </SelectContent>
                       </Select>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="grid gap-2">
-                        <Label htmlFor="avgScore">Avg. Score</Label>
-                        <Input
-                          id="avgScore"
-                          type="number"
-                          step="0.1"
-                          min="0"
-                          max="100"
-                          value={newAgent.avgScore}
-                          onChange={(e) => setNewAgent({...newAgent, avgScore: e.target.value})}
-                          placeholder="0.0"
-                        />
-                      </div>
-                      <div className="grid gap-2">
-                        <Label htmlFor="callsHandled">Calls Handled</Label>
-                        <Input
-                          id="callsHandled"
-                          type="number"
-                          min="0"
-                          value={newAgent.callsHandled}
-                          onChange={(e) => setNewAgent({...newAgent, callsHandled: e.target.value})}
-                          placeholder="0"
-                        />
-                      </div>
                     </div>
                   </div>
                   <DialogFooter>
