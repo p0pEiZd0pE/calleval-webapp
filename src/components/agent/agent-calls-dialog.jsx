@@ -76,7 +76,7 @@ export function AgentCallsDialog({ agentId, open, onOpenChange, children }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       {children}
-      <DialogContent className="max-w-5xl max-h-[85vh]">
+      <DialogContent className="xl:max-w-4xl max-h-[85vh]">
         <DialogHeader>
           <DialogTitle className="text-2xl">Agent Call History</DialogTitle>
           <DialogDescription>
