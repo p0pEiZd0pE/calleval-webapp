@@ -156,9 +156,7 @@ export default function AgentDirectory() {
         body: JSON.stringify({
           agentName: editingAgent.agentName,
           position: editingAgent.position,
-          status: editingAgent.status,
-          avgScore: parseFloat(editingAgent.avgScore),
-          callsHandled: parseInt(editingAgent.callsHandled),
+          status: editingAgent.status
         })
       })
 
@@ -520,30 +518,6 @@ export default function AgentDirectory() {
                     <SelectItem value="Inactive">Inactive</SelectItem>
                   </SelectContent>
                 </Select>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="grid gap-2">
-                  <Label htmlFor="editAvgScore">Avg. Score</Label>
-                  <Input
-                    id="editAvgScore"
-                    type="number"
-                    step="0.1"
-                    min="0"
-                    max="100"
-                    value={editingAgent.avgScore}
-                    onChange={(e) => setEditingAgent({...editingAgent, avgScore: e.target.value})}
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="editCallsHandled">Calls Handled</Label>
-                  <Input
-                    id="editCallsHandled"
-                    type="number"
-                    min="0"
-                    value={editingAgent.callsHandled}
-                    onChange={(e) => setEditingAgent({...editingAgent, callsHandled: e.target.value})}
-                  />
-                </div>
               </div>
             </div>
           )}
