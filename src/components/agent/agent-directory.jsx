@@ -8,7 +8,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
-import Agents from '@/components/agent/agents'
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import {
@@ -28,13 +27,20 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
-import { Plus, Filter, X } from 'lucide-react'
+import { Plus, Filter, X, RefreshCw } from 'lucide-react'
 import { Badge } from "@/components/ui/badge"
+import { API_ENDPOINTS } from '@/config/api'
+import { useToast } from "@/components/ui/use-toast"
 
 export default function AgentDirectory() {
   const [data, setData] = useState([])
+  const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
+  const [editingAgent, setEditingAgent] = useState(null)
+  const { toast } = useToast()
+  
   const [filters, setFilters] = useState({
     position: "all",
     status: "all",
@@ -53,8 +59,28 @@ export default function AgentDirectory() {
     callsHandled: ""
   })
 
+  // Fetch agents from API
+  const fetchAgents = async () => {
+    try {
+      setLoading(true)
+      const response = await fetch(API_ENDPOINTS.AGENTS)
+      if (!response.ok) throw new Error('Failed to fetch agents')
+      const agents = await response.json()
+      setData(agents)
+    } catch (error) {
+      console.error('Error fetching agents:', error)
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to load agents"
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
+
   useEffect(() => {
-    setData(Agents)
+    fetchAgents()
   }, [])
 
   // Get unique positions and statuses for filters
@@ -69,27 +95,22 @@ export default function AgentDirectory() {
   // Filter and search logic
   const filteredData = useMemo(() => {
     return data.filter(agent => {
-      // Search filter
       const matchesSearch = searchTerm === "" || 
         agent.agentName.toLowerCase().includes(searchTerm.toLowerCase()) ||
         agent.position.toLowerCase().includes(searchTerm.toLowerCase()) ||
         agent.agentId.toLowerCase().includes(searchTerm.toLowerCase())
 
-      // Position filter
       const matchesPosition = filters.position === "all" || 
         agent.position === filters.position
 
-      // Status filter
       const matchesStatus = filters.status === "all" || 
         agent.status === filters.status
 
-      // Score range filter
       const matchesMinScore = filters.minScore === "" || 
         agent.avgScore >= parseFloat(filters.minScore)
       const matchesMaxScore = filters.maxScore === "" || 
         agent.avgScore <= parseFloat(filters.maxScore)
 
-      // Calls handled range filter
       const matchesMinCalls = filters.minCalls === "" || 
         agent.callsHandled >= parseInt(filters.minCalls)
       const matchesMaxCalls = filters.maxCalls === "" || 
@@ -102,38 +123,118 @@ export default function AgentDirectory() {
   }, [data, searchTerm, filters])
 
   // Add agent function
-  const handleAddAgent = () => {
+  const handleAddAgent = async () => {
     if (!newAgent.agentName || !newAgent.position) {
-      alert("Please fill in all required fields")
+      toast({
+        variant: "destructive",
+        title: "Validation Error",
+        description: "Please fill in all required fields"
+      })
       return
     }
 
-    const agentToAdd = {
-      agentId: `C-${Math.floor(10000000 + Math.random() * 90000000)}`,
-      agentName: newAgent.agentName,
-      position: newAgent.position,
-      status: newAgent.status,
-      avgScore: parseFloat(newAgent.avgScore) || 0,
-      callsHandled: parseInt(newAgent.callsHandled) || 0,
-    }
+    try {
+      const response = await fetch(API_ENDPOINTS.AGENTS, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          agentName: newAgent.agentName,
+          position: newAgent.position,
+          status: newAgent.status,
+          avgScore: parseFloat(newAgent.avgScore) || 0,
+          callsHandled: parseInt(newAgent.callsHandled) || 0,
+        })
+      })
 
-    setData(prev => [...prev, agentToAdd])
-    setIsAddDialogOpen(false)
-    
-    // Reset form
-    setNewAgent({
-      agentName: "",
-      position: "",
-      status: "Active",
-      avgScore: "",
-      callsHandled: ""
-    })
+      if (!response.ok) throw new Error('Failed to create agent')
+
+      await fetchAgents() // Refresh list
+      setIsAddDialogOpen(false)
+      
+      toast({
+        title: "Success",
+        description: `${newAgent.agentName} has been added successfully.`
+      })
+
+      // Reset form
+      setNewAgent({
+        agentName: "",
+        position: "",
+        status: "Active",
+        avgScore: "",
+        callsHandled: ""
+      })
+    } catch (error) {
+      console.error('Error adding agent:', error)
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to add agent"
+      })
+    }
+  }
+
+  // Edit agent function
+  const handleEditAgent = async () => {
+    if (!editingAgent) return
+
+    try {
+      const response = await fetch(API_ENDPOINTS.AGENT_DETAIL(editingAgent.agentId), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          agentName: editingAgent.agentName,
+          position: editingAgent.position,
+          status: editingAgent.status,
+          avgScore: parseFloat(editingAgent.avgScore),
+          callsHandled: parseInt(editingAgent.callsHandled),
+        })
+      })
+
+      if (!response.ok) throw new Error('Failed to update agent')
+
+      await fetchAgents()
+      setIsEditDialogOpen(false)
+      setEditingAgent(null)
+      
+      toast({
+        title: "Success",
+        description: "Agent updated successfully"
+      })
+    } catch (error) {
+      console.error('Error updating agent:', error)
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to update agent"
+      })
+    }
   }
 
   // Delete agent function
-  const handleDeleteAgent = (agentId) => {
-    if (window.confirm("Are you sure you want to delete this agent?")) {
-      setData(prev => prev.filter(agent => agent.agentId !== agentId))
+  const handleDeleteAgent = async (agentId) => {
+    if (!window.confirm("Are you sure you want to delete this agent?")) return
+
+    try {
+      const response = await fetch(API_ENDPOINTS.AGENT_DETAIL(agentId), {
+        method: 'DELETE'
+      })
+
+      if (!response.ok) throw new Error('Failed to delete agent')
+
+      await fetchAgents()
+      
+      toast({
+        title: "Success",
+        description: "Agent deleted successfully"
+      })
+    } catch (error) {
+      console.error('Error deleting agent:', error)
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to delete agent"
+      })
     }
   }
 
@@ -161,8 +262,8 @@ export default function AgentDirectory() {
            searchTerm !== ""
   }, [filters, searchTerm])
 
-  // Enhanced columns with delete functionality
-  const enhancedColumns = useMemo(() => {
+  // Pass handlers to columns
+  const columnsWithHandlers = useMemo(() => {
     return columns.map(col => {
       if (col.id === "actions") {
         return {
@@ -170,13 +271,25 @@ export default function AgentDirectory() {
           cell: ({ row }) => {
             const agent = row.original
             return (
-              <Button 
-                variant="destructive" 
-                size="sm"
-                onClick={() => handleDeleteAgent(agent.agentId)}
-              >
-                Delete
-              </Button>
+              <div className="flex gap-2">
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => {
+                    setEditingAgent(agent)
+                    setIsEditDialogOpen(true)
+                  }}
+                >
+                  Edit
+                </Button>
+                <Button 
+                  variant="destructive" 
+                  size="sm"
+                  onClick={() => handleDeleteAgent(agent.agentId)}
+                >
+                  Delete
+                </Button>
+              </div>
             )
           }
         }
@@ -189,7 +302,7 @@ export default function AgentDirectory() {
     <div>
       <Card className="@container/card">
         <CardHeader>
-          <div className="flex justify-between items-start">
+          <div className="flex justify-between items-start flex-wrap gap-4">
             <div>
               <CardTitle className='@[250px]/card:text-3xl text-2xl font-semibold tabular-nums'>
                 Agent Directory
@@ -198,96 +311,102 @@ export default function AgentDirectory() {
                 Manage and view agent profiles and performance records.
               </CardDescription>
             </div>
-            <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-              <DialogTrigger asChild>
-                <Button className="gap-2">
-                  <Plus className="h-4 w-4" />
-                  Add Agent
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-[500px]">
-                <DialogHeader>
-                  <DialogTitle>Add New Agent</DialogTitle>
-                  <DialogDescription>
-                    Enter the details of the new agent. Click save when you're done.
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="grid gap-4 py-4">
-                  <div className="grid gap-2">
-                    <Label htmlFor="agentName">Agent Name *</Label>
-                    <Input
-                      id="agentName"
-                      value={newAgent.agentName}
-                      onChange={(e) => setNewAgent({...newAgent, agentName: e.target.value})}
-                      placeholder="Enter agent name"
-                    />
-                  </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="position">Position *</Label>
-                    <Select 
-                      value={newAgent.position} 
-                      onValueChange={(value) => setNewAgent({...newAgent, position: value})}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select position" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Customer Support">Customer Support</SelectItem>
-                        <SelectItem value="Technical Support">Technical Support</SelectItem>
-                        <SelectItem value="Sales Representative">Sales Representative</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="status">Status</Label>
-                    <Select 
-                      value={newAgent.status} 
-                      onValueChange={(value) => setNewAgent({...newAgent, status: value})}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Active">Active</SelectItem>
-                        <SelectItem value="Inactive">Inactive</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="grid gap-2">
-                      <Label htmlFor="avgScore">Avg. Score</Label>
-                      <Input
-                        id="avgScore"
-                        type="number"
-                        step="0.1"
-                        min="0"
-                        max="100"
-                        value={newAgent.avgScore}
-                        onChange={(e) => setNewAgent({...newAgent, avgScore: e.target.value})}
-                        placeholder="0.0"
-                      />
-                    </div>
-                    <div className="grid gap-2">
-                      <Label htmlFor="callsHandled">Calls Handled</Label>
-                      <Input
-                        id="callsHandled"
-                        type="number"
-                        min="0"
-                        value={newAgent.callsHandled}
-                        onChange={(e) => setNewAgent({...newAgent, callsHandled: e.target.value})}
-                        placeholder="0"
-                      />
-                    </div>
-                  </div>
-                </div>
-                <DialogFooter>
-                  <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
-                    Cancel
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={fetchAgents}>
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Refresh
+              </Button>
+              <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button className="gap-2">
+                    <Plus className="h-4 w-4" />
+                    Add Agent
                   </Button>
-                  <Button onClick={handleAddAgent}>Save Agent</Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-[500px]">
+                  <DialogHeader>
+                    <DialogTitle>Add New Agent</DialogTitle>
+                    <DialogDescription>
+                      Enter the details of the new agent. Click save when you're done.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="grid gap-4 py-4">
+                    <div className="grid gap-2">
+                      <Label htmlFor="agentName">Agent Name *</Label>
+                      <Input
+                        id="agentName"
+                        value={newAgent.agentName}
+                        onChange={(e) => setNewAgent({...newAgent, agentName: e.target.value})}
+                        placeholder="Enter agent name"
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="position">Position *</Label>
+                      <Select 
+                        value={newAgent.position} 
+                        onValueChange={(value) => setNewAgent({...newAgent, position: value})}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select position" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Customer Support">Customer Support</SelectItem>
+                          <SelectItem value="Technical Support">Technical Support</SelectItem>
+                          <SelectItem value="Sales Representative">Sales Representative</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="status">Status</Label>
+                      <Select 
+                        value={newAgent.status} 
+                        onValueChange={(value) => setNewAgent({...newAgent, status: value})}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Active">Active</SelectItem>
+                          <SelectItem value="Inactive">Inactive</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="grid gap-2">
+                        <Label htmlFor="avgScore">Avg. Score</Label>
+                        <Input
+                          id="avgScore"
+                          type="number"
+                          step="0.1"
+                          min="0"
+                          max="100"
+                          value={newAgent.avgScore}
+                          onChange={(e) => setNewAgent({...newAgent, avgScore: e.target.value})}
+                          placeholder="0.0"
+                        />
+                      </div>
+                      <div className="grid gap-2">
+                        <Label htmlFor="callsHandled">Calls Handled</Label>
+                        <Input
+                          id="callsHandled"
+                          type="number"
+                          min="0"
+                          value={newAgent.callsHandled}
+                          onChange={(e) => setNewAgent({...newAgent, callsHandled: e.target.value})}
+                          placeholder="0"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  <DialogFooter>
+                    <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
+                      Cancel
+                    </Button>
+                    <Button onClick={handleAddAgent}>Save Agent</Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            </div>
           </div>
         </CardHeader>
 
@@ -296,7 +415,7 @@ export default function AgentDirectory() {
             {/* Search Bar */}
             <div className='flex justify-between items-center gap-4 flex-wrap'>
               <h4 className="scroll-m-20 text-xl font-semibold tracking-tight">
-                Recent Call Evaluations
+                Agent List
               </h4>
               <div className="flex gap-2 items-center flex-1 max-w-sm">
                 <Input 
@@ -317,7 +436,7 @@ export default function AgentDirectory() {
               </div>
             </div>
 
-            {/* Filters Section */}
+            {/* Filters Section - FIXED ALIGNMENT */}
             <div className="border rounded-lg p-4 space-y-4 bg-muted/50">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
@@ -334,7 +453,8 @@ export default function AgentDirectory() {
                 )}
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {/* FIXED: Grid with proper alignment */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 {/* Position Filter */}
                 <div className="space-y-2">
                   <Label>Position</Label>
@@ -424,9 +544,98 @@ export default function AgentDirectory() {
         </CardContent>
 
         <CardContent>
-          <DataTable columns={enhancedColumns} data={filteredData} />
+          {loading ? (
+            <div className="text-center py-8">Loading agents...</div>
+          ) : (
+            <DataTable columns={columnsWithHandlers} data={filteredData} />
+          )}
         </CardContent>
       </Card>
+
+      {/* Edit Dialog */}
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Edit Agent</DialogTitle>
+            <DialogDescription>
+              Update the agent details. Click save when you're done.
+            </DialogDescription>
+          </DialogHeader>
+          {editingAgent && (
+            <div className="grid gap-4 py-4">
+              <div className="grid gap-2">
+                <Label htmlFor="editAgentName">Agent Name *</Label>
+                <Input
+                  id="editAgentName"
+                  value={editingAgent.agentName}
+                  onChange={(e) => setEditingAgent({...editingAgent, agentName: e.target.value})}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="editPosition">Position *</Label>
+                <Select 
+                  value={editingAgent.position} 
+                  onValueChange={(value) => setEditingAgent({...editingAgent, position: value})}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Customer Support">Customer Support</SelectItem>
+                    <SelectItem value="Technical Support">Technical Support</SelectItem>
+                    <SelectItem value="Sales Representative">Sales Representative</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="editStatus">Status</Label>
+                <Select 
+                  value={editingAgent.status} 
+                  onValueChange={(value) => setEditingAgent({...editingAgent, status: value})}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Active">Active</SelectItem>
+                    <SelectItem value="Inactive">Inactive</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="editAvgScore">Avg. Score</Label>
+                  <Input
+                    id="editAvgScore"
+                    type="number"
+                    step="0.1"
+                    min="0"
+                    max="100"
+                    value={editingAgent.avgScore}
+                    onChange={(e) => setEditingAgent({...editingAgent, avgScore: e.target.value})}
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="editCallsHandled">Calls Handled</Label>
+                  <Input
+                    id="editCallsHandled"
+                    type="number"
+                    min="0"
+                    value={editingAgent.callsHandled}
+                    onChange={(e) => setEditingAgent({...editingAgent, callsHandled: e.target.value})}
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleEditAgent}>Save Changes</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

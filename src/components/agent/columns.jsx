@@ -109,6 +109,8 @@ export const columns = [
   {
     id: "actions",
     header: "Actions",
+    // Note: The cell function will be overridden in agent-directory.jsx
+    // This is just a placeholder
     cell: ({ row }) => {
       const agent = row.original
  

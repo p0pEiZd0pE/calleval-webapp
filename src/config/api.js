@@ -15,6 +15,11 @@ export const API_ENDPOINTS = {
   // Audio
   AUDIO: (id) => `${API_URL}/api/audio/${id}`,
   TEMP_AUDIO: (id) => `${API_URL}/api/temp-audio/${id}`,
+
+  // Agents - NEW
+  AGENTS: `${API_URL}/api/agents`,
+  AGENT_DETAIL: (id) => `${API_URL}/api/agents/${id}`,
+  AGENT_STATS: `${API_URL}/api/agents/stats/summary`,
   
   // Health check
   ROOT: `${API_URL}/`,

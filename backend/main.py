@@ -10,9 +10,39 @@ import librosa
 from pathlib import Path
 import json
 import re
+from database import get_db, CallEvaluation, SessionLocal, Agent
 
 from config import settings
 from database import get_db, CallEvaluation, SessionLocal
+from pydantic import BaseModel
+from typing import Optional
+
+
+class AgentBase(BaseModel):
+    agentName: str
+    position: str
+    status: str = "Active"
+    avgScore: Optional[float] = 0.0
+    callsHandled: Optional[int] = 0
+
+class AgentCreate(AgentBase):
+    pass
+
+class AgentUpdate(BaseModel):
+    agentName: Optional[str] = None
+    position: Optional[str] = None
+    status: Optional[str] = None
+    avgScore: Optional[float] = None
+    callsHandled: Optional[int] = None
+
+class AgentResponse(AgentBase):
+    agentId: str
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
 
 # ==================== MODAL AUTHENTICATION ====================
 modal_token_id = os.getenv("MODAL_TOKEN_ID")
@@ -924,6 +954,135 @@ async def get_temp_audio(call_id: str, db: Session = Depends(get_db)):
         media_type="audio/mpeg",
         headers={"Content-Disposition": f"attachment; filename={call.filename}"}
     )
+
+
+@app.get("/api/agents")
+async def get_all_agents(db: Session = Depends(get_db)):
+    """Get all agents"""
+    try:
+        agents = db.query(Agent).all()
+        return agents
+    except Exception as e:
+        print(f"Error fetching agents: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/agents/{agent_id}")
+async def get_agent(agent_id: str, db: Session = Depends(get_db)):
+    """Get a specific agent by ID"""
+    agent = db.query(Agent).filter(Agent.agentId == agent_id).first()
+    
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    
+    return agent
+
+
+@app.post("/api/agents", response_model=AgentResponse)
+async def create_agent(agent: AgentCreate, db: Session = Depends(get_db)):
+    """Create a new agent"""
+    try:
+        # Generate unique agent ID
+        agent_id = f"C-{str(uuid.uuid4().int)[:8]}"
+        
+        # Create new agent
+        db_agent = Agent(
+            agentId=agent_id,
+            agentName=agent.agentName,
+            position=agent.position,
+            status=agent.status,
+            avgScore=agent.avgScore or 0.0,
+            callsHandled=agent.callsHandled or 0
+        )
+        
+        db.add(db_agent)
+        db.commit()
+        db.refresh(db_agent)
+        
+        return db_agent
+    except Exception as e:
+        db.rollback()
+        print(f"Error creating agent: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.put("/api/agents/{agent_id}", response_model=AgentResponse)
+async def update_agent(
+    agent_id: str, 
+    agent_update: AgentUpdate, 
+    db: Session = Depends(get_db)
+):
+    """Update an existing agent"""
+    db_agent = db.query(Agent).filter(Agent.agentId == agent_id).first()
+    
+    if not db_agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    
+    try:
+        # Update only provided fields
+        update_data = agent_update.dict(exclude_unset=True)
+        for field, value in update_data.items():
+            setattr(db_agent, field, value)
+        
+        db_agent.updated_at = datetime.utcnow()
+        db.commit()
+        db.refresh(db_agent)
+        
+        return db_agent
+    except Exception as e:
+        db.rollback()
+        print(f"Error updating agent: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/api/agents/{agent_id}")
+async def delete_agent(agent_id: str, db: Session = Depends(get_db)):
+    """Delete an agent"""
+    db_agent = db.query(Agent).filter(Agent.agentId == agent_id).first()
+    
+    if not db_agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    
+    try:
+        db.delete(db_agent)
+        db.commit()
+        return {"message": "Agent deleted successfully", "agentId": agent_id}
+    except Exception as e:
+        db.rollback()
+        print(f"Error deleting agent: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/agents/stats/summary")
+async def get_agent_stats(db: Session = Depends(get_db)):
+    """Get aggregate statistics for all agents"""
+    try:
+        agents = db.query(Agent).all()
+        
+        if not agents:
+            return {
+                "total": 0,
+                "active": 0,
+                "inactive": 0,
+                "avgScore": 0,
+                "totalCalls": 0
+            }
+        
+        total = len(agents)
+        active = len([a for a in agents if a.status == "Active"])
+        avg_score = sum(a.avgScore for a in agents) / total if total > 0 else 0
+        total_calls = sum(a.callsHandled for a in agents)
+        
+        return {
+            "total": total,
+            "active": active,
+            "inactive": total - active,
+            "avgScore": round(avg_score, 1),
+            "totalCalls": total_calls
+        }
+    except Exception as e:
+        print(f"Error fetching stats: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 if __name__ == "__main__":
