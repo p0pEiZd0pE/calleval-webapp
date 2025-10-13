@@ -10,6 +10,22 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
 
+class Agent(Base):
+    """Database model for agents"""
+    __tablename__ = "agents"
+    
+    agentId = Column(String, primary_key=True)
+    agentName = Column(String, nullable=False)
+    position = Column(String, nullable=False)
+    status = Column(String, default="Active")  # Active or Inactive
+    avgScore = Column(Float, default=0.0)
+    callsHandled = Column(Integer, default=0)
+    
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 class CallEvaluation(Base):
     """Database model for call evaluations"""
     __tablename__ = "call_evaluations"
@@ -19,10 +35,10 @@ class CallEvaluation(Base):
     file_path = Column(String, nullable=False)
     status = Column(String, default="pending")
     analysis_status = Column(String, default="pending")
-
-    # NEW: Link to agent
-    agent_id = Column(String, ForeignKey('agents.agentId'), nullable=True)
-    agent_name = Column(String, nullable=True)  # Denormalized for easy display
+    
+    # Link to agent (no ForeignKey to avoid order issues)
+    agent_id = Column(String, nullable=True)
+    agent_name = Column(String, nullable=True)
     
     # Results
     transcript = Column(Text, nullable=True)
@@ -37,22 +53,6 @@ class CallEvaluation(Base):
     # Legacy columns
     scores = Column(Text, nullable=True)
     speakers = Column(Text, nullable=True)
-    
-    # Timestamps
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-
-
-class Agent(Base):
-    """Database model for agents"""
-    __tablename__ = "agents"
-    
-    agentId = Column(String, primary_key=True)
-    agentName = Column(String, nullable=False)
-    position = Column(String, nullable=False)
-    status = Column(String, default="Active")  # Active or Inactive
-    avgScore = Column(Float, default=0.0)
-    callsHandled = Column(Integer, default=0)
     
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow)
