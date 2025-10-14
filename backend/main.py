@@ -266,73 +266,190 @@ def transcribe_with_modal_whisperx(audio_path: str, call_id: str):
         raise
 
 
-def assign_speaker_roles(segments):
+def assign_speaker_roles(segments, aggressive: bool = True):
     """
-    Assign agent/caller roles to speakers based on conversation patterns
-    Similar to inference.py logic
+    IMPROVED: Enhanced speaker role assignment with multiple heuristics
+    
+    REPLACE your existing assign_speaker_roles() function with this
+    
+    Args:
+        segments: List of segment dicts with speaker, text, start, end
+        aggressive: If True, apply stronger correction heuristics
+    
+    Returns:
+        dict: Mapping of speaker IDs to roles (agent/caller)
     """
     if not segments:
         return {}
     
     # Get unique speakers
-    speakers = list(set(seg.get('speaker', 'unknown') for seg in segments if 'speaker' in seg))
+    speakers = list(set(seg.get('speaker', 'unknown') for seg in segments 
+                       if seg.get('speaker') != 'unknown'))
     
     if len(speakers) < 2:
-        return {speakers[0]: "unknown"} if speakers else {}
+        return {speakers[0]: "agent"} if speakers else {}
     
-    # Score speakers based on patterns
-    agent_scores = {}
+    print(f"\n🎭 Analyzing {len(speakers)} speakers across {len(segments)} segments...")
+    
+    # Calculate scores for each speaker being the agent
+    agent_scores = {speaker: 0 for speaker in speakers}
     
     for speaker_id in speakers:
-        speaker_segments = [seg for seg in segments if seg.get('speaker') == speaker_id]
+        speaker_segments = [seg for seg in segments 
+                          if seg.get('speaker') == speaker_id]
         
         if not speaker_segments:
-            agent_scores[speaker_id] = 0
             continue
         
-        score = 0
+        # HEURISTIC 1: Agent typically speaks first (strong indicator)
+        first_speakers = [seg.get('speaker') for seg in segments[:3]]
+        if first_speakers.count(speaker_id) >= 2:
+            agent_scores[speaker_id] += 5
+            print(f"  ✓ {speaker_id}: Speaks first (+5)")
         
-        # Agent typically speaks first (greeting)
-        if segments[0].get('speaker') == speaker_id:
-            score += 2
+        # HEURISTIC 2: Agent greeting patterns in first 30 seconds
+        early_segments = [seg for seg in speaker_segments 
+                         if seg.get('start', 0) < 30]
         
-        # Check first few segments for agent patterns
-        for seg in speaker_segments[:3]:
+        for seg in early_segments:
             text = seg.get('text', '').lower()
             
-            # Agent greeting patterns
+            # Strong agent indicators
             if any(pattern in text for pattern in [
-                "thank you for calling",
-                "how can i help",
-                "good morning",
-                "good afternoon",
-                "this is"
+                'thank you for calling', 'thanks for calling',
+                'calling', 'this is', 'my name is',
+                'how may i help', 'how can i help',
+                'good morning', 'good afternoon'
             ]):
-                score += 3
+                agent_scores[speaker_id] += 3
+                print(f"  ✓ {speaker_id}: Agent greeting pattern (+3)")
                 break
         
-        # Check for solution-oriented language (agent)
-        all_text = " ".join([seg.get('text', '').lower() for seg in speaker_segments])
-        solution_keywords = ["let me check", "i can help", "our policy", "i'll assist"]
-        problem_keywords = ["i have a problem", "issue with", "help me", "i need"]
+        # HEURISTIC 3: Agent typically talks more (60-70% of call)
+        speaker_duration = sum(seg.get('end', 0) - seg.get('start', 0) 
+                              for seg in speaker_segments)
+        total_duration = segments[-1].get('end', 1) if segments else 1
+        talk_ratio = speaker_duration / total_duration
         
-        solution_count = sum(1 for keyword in solution_keywords if keyword in all_text)
-        problem_count = sum(1 for keyword in problem_keywords if keyword in all_text)
+        if 0.55 <= talk_ratio <= 0.75:
+            agent_scores[speaker_id] += 2
+            print(f"  ✓ {speaker_id}: Good talk ratio ({talk_ratio:.1%}) (+2)")
+        elif talk_ratio > 0.75:
+            agent_scores[speaker_id] += 1
         
-        if solution_count > problem_count:
-            score += 2
-        elif problem_count > solution_count:
-            score -= 2
+        # HEURISTIC 4: Agent uses verification language
+        verification_count = sum(1 for seg in speaker_segments 
+                                if any(term in seg.get('text', '').lower() 
+                                      for term in ['verify', 'confirm', 'date of birth',
+                                                  'phone number', 'address']))
+        if verification_count >= 2:
+            agent_scores[speaker_id] += 2
+            print(f"  ✓ {speaker_id}: Uses verification language (+2)")
         
-        agent_scores[speaker_id] = score
+        # HEURISTIC 5: Agent typically has more segments (asks questions)
+        segment_count = len(speaker_segments)
+        if segment_count > len(segments) * 0.55:
+            agent_scores[speaker_id] += 1
+            print(f"  ✓ {speaker_id}: More segments ({segment_count}) (+1)")
+        
+        # HEURISTIC 6: Agent uses closing patterns
+        late_segments = [seg for seg in speaker_segments 
+                        if seg.get('start', 0) > total_duration * 0.8]
+        for seg in late_segments:
+            text = seg.get('text', '').lower()
+            if any(pattern in text for pattern in [
+                'have a great day', 'thank you', 'anything else',
+                'is there anything', 'take care'
+            ]):
+                agent_scores[speaker_id] += 2
+                print(f"  ✓ {speaker_id}: Agent closing pattern (+2)")
+                break
     
-    # Assign roles based on scores
-    sorted_speakers = sorted(speakers, key=lambda s: agent_scores[s], reverse=True)
+    # Determine roles
+    print(f"\n📊 Final scores: {agent_scores}")
     
-    return {
-        sorted_speakers[0]: "agent",
-        sorted_speakers[1]: "caller" if len(sorted_speakers) > 1 else "unknown"
+    sorted_speakers = sorted(agent_scores.items(), key=lambda x: x[1], reverse=True)
+    agent_speaker = sorted_speakers[0][0]
+    caller_speaker = sorted_speakers[1][0] if len(sorted_speakers) > 1 else None
+    
+    roles = {
+        agent_speaker: "agent",
     }
+    
+    if caller_speaker:
+        roles[caller_speaker] = "caller"
+    
+    print(f"✅ Assigned roles: {roles}\n")
+    
+    return roles
+
+
+def validate_and_fix_diarization(segments, speaker_roles):
+    """
+    NEW FUNCTION: Add this to your main.py
+    
+    Validate diarization quality and fix common errors
+    
+    Common errors in 8kHz phone recordings:
+    - Very short segments (<0.5s) are often errors
+    - Rapid speaker switching (< 1s between switches) is suspicious
+    - Single-word segments often mislabeled
+    
+    Args:
+        segments: List of segment dicts
+        speaker_roles: Dict mapping speaker IDs to roles
+    
+    Returns:
+        List of corrected segments
+    """
+    if not segments or not speaker_roles:
+        return segments
+    
+    print(f"\n🔍 Validating diarization quality...")
+    
+    fixed_segments = []
+    corrections = 0
+    
+    for i, seg in enumerate(segments):
+        current_speaker = seg.get('speaker', 'unknown')
+        duration = seg.get('end', 0) - seg.get('start', 0)
+        text = seg.get('text', '').strip()
+        word_count = len(text.split())
+        
+        # FIX 1: Very short segments (<0.5s) with single words
+        if duration < 0.5 and word_count <= 2:
+            # Try to merge with adjacent segment
+            if i > 0:
+                prev_speaker = fixed_segments[-1].get('speaker')
+                # If previous segment is same speaker or longer, merge
+                if prev_speaker == current_speaker or \
+                   (fixed_segments[-1].get('end', 0) - fixed_segments[-1].get('start', 0)) > 2:
+                    fixed_segments[-1]['text'] += ' ' + text
+                    fixed_segments[-1]['end'] = seg.get('end')
+                    corrections += 1
+                    continue
+        
+        # FIX 2: Rapid speaker switches (might be cross-talk or error)
+        if i > 0 and i < len(segments) - 1:
+            prev_speaker = fixed_segments[-1].get('speaker') if fixed_segments else None
+            next_speaker = segments[i + 1].get('speaker')
+            
+            # If this segment is very short and surrounded by same speaker
+            if (duration < 1.0 and 
+                prev_speaker == next_speaker and 
+                prev_speaker != current_speaker):
+                # Reassign to surrounding speaker
+                seg['speaker'] = prev_speaker
+                corrections += 1
+        
+        fixed_segments.append(seg)
+    
+    if corrections > 0:
+        print(f"✅ Fixed {corrections} diarization errors")
+    else:
+        print(f"✓ Diarization quality looks good")
+    
+    return fixed_segments
 
 
 def analyze_with_modal_bert(text: str):
@@ -661,7 +778,7 @@ def process_call(call_id: str, file_path: str):
         db.commit()
         
         whisperx_result = transcribe_with_modal_whisperx(file_path, call_id)
-        
+    
         if not whisperx_result or "segments" not in whisperx_result:
             raise Exception("WhisperX transcription failed")
         
@@ -669,17 +786,24 @@ def process_call(call_id: str, file_path: str):
         full_text = " ".join([seg["text"] for seg in whisperx_result["segments"]])
         call.transcript = full_text
         
-        # UPDATED: Assign speaker roles
+        # IMPROVED: Enhanced speaker assignment
         print("\n🎭 Assigning speaker roles (agent/caller)...")
-        speaker_roles = assign_speaker_roles(whisperx_result["segments"])
+        speaker_roles = assign_speaker_roles(whisperx_result["segments"])  # Uses new function
         print(f"✅ Speaker roles assigned: {speaker_roles}")
+        
+        # NEW: Validate and fix diarization
+        print("\n🔍 Validating diarization...")
+        fixed_segments = validate_and_fix_diarization(
+            whisperx_result["segments"],
+            speaker_roles
+        )
         
         # Store speaker roles
         call.speakers = json.dumps(speaker_roles)
         
-        # Store segments with speaker information
+        # Store segments (USE FIXED SEGMENTS)
         segments_data = []
-        for seg in whisperx_result["segments"]:
+        for seg in fixed_segments:  # Changed from whisperx_result["segments"]
             segments_data.append({
                 "speaker": seg.get("speaker", "unknown"),
                 "text": seg.get("text", "").strip(),
@@ -687,9 +811,8 @@ def process_call(call_id: str, file_path: str):
                 "end": seg.get("end", 0)
             })
         
-        # Store segments in the scores field
         call.scores = json.dumps({"segments": segments_data})
-        print(f"✅ Stored {len(segments_data)} segments")
+        print(f"✅ Stored {len(segments_data)} validated segments")
         
         # Calculate duration
         if whisperx_result["segments"]:
