@@ -407,7 +407,7 @@ def evaluate_binary_metric(metric_name: str, text: str, bert_output: dict,
     if metric_name == 'no_fillers_stammers':
         # INVERSE LOGIC: Check for PRESENCE of filler patterns
         filler_patterns = [
-            r'\b(um|uh|er|ah|like|you know|sort of|kind of)\b',
+            r'\b(um|uh|er|ah)\b',
             r'\b(uhm|umm|hmm|mhm|erm)\b',
         ]
         has_filler = False
@@ -714,8 +714,8 @@ def process_call(call_id: str, file_path: str):
         print(f"STEP 2: IDENTIFYING AGENT SEGMENTS")
         print(f"{'='*60}")
 
-        speaker_roles = whisperx_result.get("speaker_roles", {})
-        print(f"📋 Speaker roles from WhisperX: {speaker_roles}")
+        speaker_roles = assign_speaker_roles(whisperx_result["segments"])
+        print(f"✅ Speaker roles assigned: {speaker_roles}")
 
         # FIX: Find which SPEAKER_ID has the role "agent"
         agent_speaker = next(
