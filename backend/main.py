@@ -713,16 +713,37 @@ def process_call(call_id: str, file_path: str):
         print(f"\n{'='*60}")
         print(f"STEP 2: IDENTIFYING AGENT SEGMENTS")
         print(f"{'='*60}")
-        
+
         speaker_roles = whisperx_result.get("speaker_roles", {})
-        agent_speaker = speaker_roles.get("agent", "SPEAKER_01")
-        
+        print(f"📋 Speaker roles from WhisperX: {speaker_roles}")
+
+        # FIX: Find which SPEAKER_ID has the role "agent"
+        agent_speaker = next(
+            (speaker_id for speaker_id, role in speaker_roles.items() if role == 'agent'),
+            'SPEAKER_01'  # fallback to SPEAKER_01 if not found
+        )
+
+        print(f"🎯 Identified agent speaker: {agent_speaker}")
+        print(f"   Role mapping: {speaker_roles}")
+
         agent_segments = [
             seg for seg in whisperx_result["segments"]
             if seg.get("speaker") == agent_speaker
         ]
-        
+
         print(f"✅ Found {len(agent_segments)} agent segments")
+
+        # Debug: Show caller segments count too
+        caller_speaker = next(
+            (speaker_id for speaker_id, role in speaker_roles.items() if role == 'caller'),
+            None
+        )
+        if caller_speaker:
+            caller_segments = [
+                seg for seg in whisperx_result["segments"]
+                if seg.get("speaker") == caller_speaker
+            ]
+            print(f"📞 Found {len(caller_segments)} caller segments (not evaluated)")
         
         # STEP 3: ANALYZE WITH BERT
         print(f"\n{'='*60}")
