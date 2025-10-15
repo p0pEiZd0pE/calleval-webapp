@@ -33,7 +33,7 @@ import { Badge } from "@/components/ui/badge"
 import { API_ENDPOINTS } from '@/config/api'
 import { toast } from "sonner"  // UPDATED: Using sonner instead of useToast
 
-export default function AgentDirectory() {
+export default function AgentDirectory({ onAgentSelect, onCallsUpdate }) {
   const [data, setData] = useState([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
@@ -224,8 +224,37 @@ export default function AgentDirectory() {
             const agent = row.original
             const [callsDialogOpen, setCallsDialogOpen] = React.useState(false)
             
+            const handleViewProfile = async () => {
+              // Set the selected agent
+              onAgentSelect(agent);
+              
+              // Fetch agent's calls
+              try {
+                const response = await fetch(API_ENDPOINTS.AGENT_CALLS(agent.agentId));
+                if (response.ok) {
+                  const data = await response.json();
+                  onCallsUpdate(data.calls || []);
+                }
+              } catch (error) {
+                console.error('Error fetching agent calls:', error);
+                onCallsUpdate([]);
+              }
+              
+              // Scroll to the card section
+              document.getElementById('agent-card-section')?.scrollIntoView({ behavior: 'smooth' });
+            };
+            
             return (
               <div className="flex gap-2">
+                {/* View Profile Button - NEW */}
+                <Button 
+                  variant="default" 
+                  size="sm"
+                  onClick={handleViewProfile}
+                >
+                  View Profile
+                </Button>
+                
                 {/* View Calls Button */}
                 <AgentCallsDialog 
                   agentId={agent.agentId}
@@ -268,7 +297,7 @@ export default function AgentDirectory() {
       }
       return col
     })
-  }, [data])
+  }, [data, onAgentSelect, onCallsUpdate])
 
   return (
     <div>

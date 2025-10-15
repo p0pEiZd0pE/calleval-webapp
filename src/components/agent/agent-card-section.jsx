@@ -1,6 +1,6 @@
-import React from 'react'
-import { TrendingDownIcon, TrendingUpIcon, TrendingUp } from "lucide-react"
-import { Area, AreaChart, CartesianGrid, Line, LineChart, XAxis } from "recharts";
+import React, { useEffect, useState } from 'react'
+import { TrendingDownIcon, TrendingUpIcon, TrendingUp, Phone, Clock, Award } from "lucide-react"
+import { Area, AreaChart, CartesianGrid, Line, LineChart, XAxis, BarChart, Bar } from "recharts";
 import { Separator } from "@/components/ui/separator"
 import { Link } from "react-router-dom";
 import {
@@ -17,289 +17,289 @@ import {
   ChartTooltipContent,
 } from "@/components/ui/chart";
 import { Progress } from "@/components/ui/progress";
-
-const callSentimentTrend = [
-  { date: "2024-04-01", sentiment: 90},
-  { date: "2024-04-02", sentiment: 95},
-  { date: "2024-04-03", sentiment: 83},
-  { date: "2024-04-04", sentiment: 88},
-  { date: "2024-04-05", sentiment: 97},
-  { date: "2024-04-06", sentiment: 79},
-  { date: "2024-04-07", sentiment: 94},
-];
-
-const callResolutionRate = [
-  { date: "2024-04-01", resolution: 75},
-  { date: "2024-04-02", resolution: 89},
-  { date: "2024-04-03", resolution: 45},
-  { date: "2024-04-04", resolution: 69},
-  { date: "2024-04-05", resolution: 93},
-  { date: "2024-04-06", resolution: 46},
-  { date: "2024-04-07", resolution: 88},
-];
-
-const callDurationDistribution = [
-  { comparison: "Agent Avg", minutes: 10 },
-  { comparison: "Team Avg", minutes: 7}
-]
+import { Badge } from "@/components/ui/badge";
 
 const chartConfig = {
   sentiment: {
     label: "Sentiment",
-    color: "var(--ring)",
+    color: "hsl(var(--chart-1))",
   },
 };
 
 const chartConfig2 = {
   resolution: {
     label: "Resolution",
-    color: "var(--ring)",
+    color: "hsl(var(--chart-2))",
   },
 };
 
 const chartConfig3 = {
-  minutes: {
-    label: "Call Duration",
-    color: "var(--ring)",
+  score: {
+    label: "Score",
+    color: "hsl(var(--chart-3))",
   },
 };
 
-const callInsights = [
-    {
-      id: "call-101",
-      date: "Jul 28, 2024",
-      classification: "Satisfactory",
-      classificationColor: "text-green-600",
-      tone: "Positive",
-      script: "High Adherence",
-    },
-    {
-      id: "call-102",
-      date: "Jul 27, 2024",
-      classification: "Needs Review",
-      classificationColor: "text-red-500",
-      tone: "Neutral",
-      script: "Moderate Adherence",
-    },
-    {
-      id: "call-103",
-      date: "Jul 26, 2024",
-      classification: "Satisfactory",
-      classificationColor: "text-green-600",
-      tone: "Positive",
-      script: "High Adherence",
-    },
-  ]
+export default function AgentCardSection({ agent, calls = [] }) {
+  const [callTrends, setCallTrends] = useState([]);
+  const [callInsights, setCallInsights] = useState([]);
+  const [performanceMetrics, setPerformanceMetrics] = useState({
+    avgHandleTime: "0:00",
+    firstCallResolution: 0,
+    customerSatisfaction: 0,
+    scriptAdherence: 0
+  });
 
+  useEffect(() => {
+    if (!agent || !calls) return;
 
+    // Process calls for trends (last 7 calls)
+    const recentCalls = calls.slice(0, 7).reverse();
+    const trends = recentCalls.map((call, index) => ({
+      date: new Date(call.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+      score: call.score || 0,
+      callIndex: `Call ${index + 1}`
+    }));
+    setCallTrends(trends);
 
+    // Process call insights (last 5 calls)
+    const insights = calls.slice(0, 5).map(call => {
+      const score = call.score || 0;
+      return {
+        id: call.id.substring(0, 8),
+        date: new Date(call.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+        classification: score >= 85 ? "Excellent" : score >= 70 ? "Satisfactory" : "Needs Review",
+        classificationColor: score >= 85 ? "text-green-600" : score >= 70 ? "text-yellow-600" : "text-red-500",
+        score: score,
+        duration: call.duration || "N/A",
+        status: call.status
+      };
+    });
+    setCallInsights(insights);
 
-export default function AgentCardSection() {
-  const [progress, setProgress] = React.useState();
+    // Calculate performance metrics
+    if (calls.length > 0) {
+      // Average handle time
+      const durations = calls
+        .filter(c => c.duration)
+        .map(c => {
+          const parts = c.duration.split(':');
+          return parseInt(parts[0]) * 60 + parseInt(parts[1] || 0);
+        });
+      
+      const avgDuration = durations.length > 0 
+        ? Math.round(durations.reduce((a, b) => a + b, 0) / durations.length)
+        : 0;
+      
+      const minutes = Math.floor(avgDuration / 60);
+      const seconds = avgDuration % 60;
+      
+      setPerformanceMetrics({
+        avgHandleTime: `${minutes}:${seconds.toString().padStart(2, '0')}`,
+        firstCallResolution: Math.round((calls.filter(c => c.score >= 80).length / calls.length) * 100),
+        customerSatisfaction: agent.avgScore || 0,
+        scriptAdherence: Math.round((calls.filter(c => c.score >= 70).length / calls.length) * 100)
+      });
+    }
+  }, [agent, calls]);
 
-  React.useEffect(() => {
-    const timer = setTimeout(() => setProgress(90), 500)
-    return () => clearTimeout(timer)
-  }, [])
+  if (!agent) {
+    return (
+      <div className="p-8 text-center text-muted-foreground">
+        <Award className="h-12 w-12 mx-auto mb-4 opacity-50" />
+        <p className="text-lg font-medium">No Agent Selected</p>
+        <p className="text-sm mt-2">Click "View Profile" on any agent to see their detailed performance metrics</p>
+      </div>
+    );
+  }
+
+  const getPerformanceTrend = (score) => {
+    if (score >= 90) {
+      return <div className="flex items-center text-green-600">
+        <TrendingUpIcon className="h-4 w-4 mr-1" />
+        <span className="text-sm">Excellent</span>
+      </div>;
+    } else if (score >= 80) {
+      return <div className="flex items-center text-yellow-600">
+        <TrendingUpIcon className="h-4 w-4 mr-1" />
+        <span className="text-sm">Good</span>
+      </div>;
+    } else {
+      return <div className="flex items-center text-red-600">
+        <TrendingDownIcon className="h-4 w-4 mr-1" />
+        <span className="text-sm">Needs Improvement</span>
+      </div>;
+    }
+  };
 
   return (
-    <div className="grid grid-cols-3 gap-4 p-4">
+    <div id="agent-card-section" className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-4">
+      {/* Performance Summary Card */}
       <Card>
         <CardHeader>
-            <CardTitle className="text-xl">Performance Summary</CardTitle>
-            <CardDescription>
-            Overall performance metrics for Alice Johnson.
-            </CardDescription>
-        </CardHeader>
-
-        <CardContent className="flex flex-col justify-evenly w-full h-full">
-            {/* Overall Score */}
+          <div className="flex items-start justify-between">
             <div>
-            <p className="text-sm text-muted-foreground">Overall Score</p>
-            <p className="text-3xl font-bold">92.5%</p>
-            <p className="text-xs text-green-600 font-medium">↑ 2% increase</p>
+              <CardTitle className="text-xl">Performance Summary</CardTitle>
+              <CardDescription>
+                Overall metrics for {agent.agentName}
+              </CardDescription>
             </div>
-
-            {/* Calls Handled */}
-            <div>
-            <p className="text-sm text-muted-foreground">
-                Calls Handled (Last 30 Days)
-            </p>
-            <p className="text-3xl font-bold">107</p>
-            <p className="text-xs text-red-600 font-medium">↓ 1% decrease</p>
+            <Badge variant={agent.status === "Active" ? "default" : "secondary"}>
+              {agent.status}
+            </Badge>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">Position</span>
+              <span className="font-medium">{agent.position}</span>
             </div>
-
-            {/* Last Evaluation */}
-            <div>
-            <p className="text-sm text-muted-foreground">Last Evaluation</p>
-            <p className="text-3xl font-bold">7/28/2024</p>
-            <p className="text-xs text-green-600 font-medium">↑ 5% increase</p>
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">Agent ID</span>
+              <span className="font-mono text-sm">{agent.agentId}</span>
             </div>
+            <Separator />
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">Overall Score</span>
+              <div className="flex items-center gap-2">
+                <span className={`text-2xl font-bold ${
+                  agent.avgScore >= 90 ? "text-green-600" :
+                  agent.avgScore >= 80 ? "text-yellow-600" :
+                  "text-red-600"
+                }`}>
+                  {agent.avgScore}/100
+                </span>
+                {getPerformanceTrend(agent.avgScore)}
+              </div>
+            </div>
+            <Progress value={agent.avgScore} className="h-2" />
+            
+            <div className="pt-2 space-y-2">
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Total Calls Handled</span>
+                <span className="font-semibold">{agent.callsHandled}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Avg Handle Time</span>
+                <span className="font-semibold">{performanceMetrics.avgHandleTime}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">First Call Resolution</span>
+                <span className="font-semibold">{performanceMetrics.firstCallResolution}%</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Script Adherence</span>
+                <span className="font-semibold">{performanceMetrics.scriptAdherence}%</span>
+              </div>
+            </div>
+          </div>
         </CardContent>
-      </Card>
-      <Card>
-        <CardHeader>
-            <CardTitle className="text-xl">Call Sentiment Trend</CardTitle>
-            <CardDescription>Average sentiment score over the last 30 days for Alice Johnson.</CardDescription>
-        </CardHeader>
-        <CardContent className="">
-            <ChartContainer config={chartConfig}>
-            <LineChart
-                data={callSentimentTrend}
-                margin={{ left: 12, right: 12 }}
-            >
-            <CartesianGrid vertical={false} />
-            <XAxis
-                dataKey="date"
-                tickLine={false}
-                axisLine={false}
-                tickMargin={8}
-                interval="preserveStartEnd"
-                tickFormatter={(value) =>
-                    new Date(value).toLocaleDateString("en-US", {
-                    month: "short",
-                    day: "numeric",
-                    })
-                }
-            />
-
-            <ChartTooltip
-                cursor={false}
-                content={<ChartTooltipContent hideLabel />}
-            />
-            <Line
-                dataKey="sentiment"
-                type="natural"
-                stroke="var(--color-sentiment)"
-                strokeWidth={2}
-                dot={false}
-            />
-            </LineChart>
-            </ChartContainer>
-        </CardContent>
-      </Card>
-      <Card>
-        <CardHeader>
-            <CardTitle className="text-xl">Call Resolution Rate</CardTitle>
-            <CardDescription>Percentage of resolved calls over the last 30 days for Alice Johnson.</CardDescription>
-        </CardHeader>
-        <CardContent>
-            <ChartContainer config={chartConfig2}>
-            <AreaChart
-                data={callResolutionRate}
-                margin={{ left: 12, right: 12 }}
-            >
-            <CartesianGrid vertical={false} />
-            <XAxis
-                dataKey="date"
-                tickLine={false}
-                axisLine={false}
-                tickMargin={8}
-                interval="preserveStartEnd"
-                tickFormatter={(value) =>
-                    new Date(value).toLocaleDateString("en-US", {
-                    month: "short",
-                    day: "numeric",
-                    })
-                }
-            />
-
-            <ChartTooltip
-                cursor={false}
-                content={<ChartTooltipContent hideLabel />}
-            />
-            <Area
-                dataKey="resolution"
-                type="natural"
-                stroke="var(--color-resolution)"
-                fill="var(--color-resolution)"
-                fillOpacity={0.4}
-            />
-            </AreaChart>
-            </ChartContainer>
-        </CardContent>
-      </Card>
-      <Card className="h-full flex flex-col justify-between">
-        <CardHeader>
-          <CardTitle className="text-xl">Script Adherence</CardTitle>
-          <CardDescription>
-            Consistency in following prescribed scripts for Alice Johnson.
-          </CardDescription>
-        </CardHeader>
-
-        {/* Flex-grow section to center the content */}
-        <CardContent className="flex-1 flex flex-col items-center justify-center gap-4">
-          <h4 className="text-3xl font-semibold">90%</h4>
-          <Progress value={90} className="w-[80%]" />
-          <small className="text-sm">Adherence</small>
-        </CardContent>
-
-        <CardFooter className="flex justify-center pb-4">
-          <small className="text-sm text-center text-muted-foreground">
-            This score reflects how closely the agent followed predefined scripts.
+        <CardFooter>
+          <small className="text-muted-foreground">
+            Last updated: {new Date().toLocaleDateString()}
           </small>
         </CardFooter>
       </Card>
+
+      {/* Recent Call Insights Card */}
       <Card>
         <CardHeader>
-            <CardTitle className="text-xl">Recent Call Insights</CardTitle>
-            <CardDescription>Detailed summary of Alice Johnson's latest evaluations.</CardDescription>
+          <CardTitle className="text-xl">Recent Call Insights</CardTitle>
+          <CardDescription>Latest evaluation results for {agent.agentName}</CardDescription>
         </CardHeader>
-        <CardContent className="flex flex-col justify-evenly w-full h-full">
-          {callInsights.map((call, idx) => (
-            <div key={call.id}>
-              <div className="flex justify-between text-sm font-medium">
-                <span>Call ID: {call.id}</span>
-                <span className="text-muted-foreground">{call.date}</span>
+        <CardContent className="space-y-3">
+          {callInsights.length > 0 ? (
+            callInsights.map((call, idx) => (
+              <div key={call.id} className="space-y-2">
+                <div className="flex justify-between items-start">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <Phone className="h-3 w-3 text-muted-foreground" />
+                      <span className="text-sm font-medium">Call #{call.id}</span>
+                      <Badge variant={
+                        call.status === 'completed' ? 'default' : 
+                        call.status === 'failed' ? 'destructive' : 
+                        'secondary'
+                      } className="text-xs">
+                        {call.status}
+                      </Badge>
+                    </div>
+                    <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                      <span>{call.date}</span>
+                      <span className="flex items-center gap-1">
+                        <Clock className="h-3 w-3" />
+                        {call.duration}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className={`text-lg font-bold ${call.classificationColor}`}>
+                      {call.score.toFixed(1)}
+                    </div>
+                    <div className={`text-xs ${call.classificationColor}`}>
+                      {call.classification}
+                    </div>
+                  </div>
+                </div>
+                {idx < callInsights.length - 1 && <Separator />}
               </div>
-              <div className={`text-sm font-semibold ${call.classificationColor}`}>
-                Classification: {call.classification}
-              </div>
-              <div className="text-sm text-muted-foreground">
-                Tone: {call.tone} | Script: {call.script}
-              </div>
-              <Link href="#" className="text-sm text-blue-600 hover:underline">
-                View Full Evaluation
-              </Link>
-              {idx < callInsights.length - 1 && <Separator className="my-3" />}
+            ))
+          ) : (
+            <div className="text-center py-8 text-muted-foreground">
+              <Phone className="h-8 w-8 mx-auto mb-2 opacity-50" />
+              <p className="text-sm">No calls recorded yet</p>
             </div>
-          ))}
+          )}
         </CardContent>
       </Card>
+
+      {/* Score Trend Chart Card */}
       <Card>
         <CardHeader>
-            <CardTitle className="text-xl">Call Duration Distribution</CardTitle>
-            <CardDescription>Average call duration for Alice Johnson compared to team average.</CardDescription>
+          <CardTitle className="text-xl">Score Trend</CardTitle>
+          <CardDescription>Performance over recent calls</CardDescription>
         </CardHeader>
         <CardContent>
-            <ChartContainer config={chartConfig3}>
-            <LineChart
-                data={callDurationDistribution}
+          {callTrends.length > 0 ? (
+            <ChartContainer config={chartConfig3} className="h-[300px]">
+              <AreaChart
+                data={callTrends}
                 margin={{ left: 12, right: 12 }}
-            >
-            <CartesianGrid vertical={false} />
-            <XAxis
-                dataKey="comparison"
-                tickLine={false}
-                axisLine={false}
-                tickMargin={8}
-                interval="preserveStartEnd"
-                
-            />
-
-            <ChartTooltip
-                cursor={false}
-                content={<ChartTooltipContent hideLabel />}
-            />
-            <Line
-                dataKey="minutes"
-                type="natural"
-                stroke="var(--color-minutes)"
-                strokeWidth={2}
-                dot={true}
-            />
-            </LineChart>
+              >
+                <CartesianGrid vertical={false} strokeDasharray="3 3" />
+                <XAxis
+                  dataKey="callIndex"
+                  tickLine={false}
+                  axisLine={false}
+                  tickMargin={8}
+                />
+                <ChartTooltip
+                  cursor={false}
+                  content={
+                    <ChartTooltipContent 
+                      formatter={(value) => `Score: ${value}`}
+                    />
+                  }
+                />
+                <Area
+                  dataKey="score"
+                  type="monotone"
+                  stroke="hsl(var(--chart-3))"
+                  fill="hsl(var(--chart-3))"
+                  fillOpacity={0.2}
+                  strokeWidth={2}
+                />
+              </AreaChart>
             </ChartContainer>
+          ) : (
+            <div className="flex items-center justify-center h-[300px] text-muted-foreground">
+              <div className="text-center">
+                <TrendingUpIcon className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                <p className="text-sm">No trend data available</p>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
