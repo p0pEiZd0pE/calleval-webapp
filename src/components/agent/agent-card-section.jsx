@@ -246,7 +246,7 @@ export default function AgentCardSection({ agent, calls = [] }) {
               </div>
             ))
           ) : (
-            <div className="text-center py-8 text-muted-foreground">
+            <div className="flex items-center justify-center text-center py-8 text-muted-foreground">
               <Phone className="h-8 w-8 mx-auto mb-2 opacity-50" />
               <p className="text-sm">No calls recorded yet</p>
             </div>
