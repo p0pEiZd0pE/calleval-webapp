@@ -54,14 +54,34 @@ function ScoreDetailsDialog({ callId }) {
     try {
       const backendUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
       
+      // Fetch audio file
+      const audioResponse = await fetch(`${backendUrl}/api/temp-audio/${callId}`)
+      
+      if (!audioResponse.ok) {
+        throw new Error('Failed to fetch audio file')
+      }
+      
+      // Get filename from Content-Disposition header
+      const contentDisposition = audioResponse.headers.get('Content-Disposition')
+      let audioFilename = 'recording.mp3'
+      
+      if (contentDisposition) {
+        const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/)
+        if (filenameMatch && filenameMatch[1]) {
+          audioFilename = filenameMatch[1].replace(/['"]/g, '')
+        }
+      }
+      
       // Download audio
-      const audioUrl = `${backendUrl}/api/temp-audio/${callId}`
+      const audioBlob = await audioResponse.blob()
+      const audioUrl = window.URL.createObjectURL(audioBlob)
       const audioLink = document.createElement('a')
       audioLink.href = audioUrl
-      audioLink.download = callData?.filename || 'recording.mp3'
+      audioLink.download = audioFilename
       document.body.appendChild(audioLink)
       audioLink.click()
       document.body.removeChild(audioLink)
+      window.URL.revokeObjectURL(audioUrl)
       
       // Download transcription
       if (callData?.segments) {
@@ -85,7 +105,7 @@ function ScoreDetailsDialog({ callId }) {
         const transcriptUrl = window.URL.createObjectURL(blob)
         const transcriptLink = document.createElement('a')
         transcriptLink.href = transcriptUrl
-        transcriptLink.download = `transcript_${callData.filename?.replace(/\.[^/.]+$/, '')}.txt`
+        transcriptLink.download = `transcript_${audioFilename.replace(/\.[^/.]+$/, '')}.txt`
         document.body.appendChild(transcriptLink)
         transcriptLink.click()
         document.body.removeChild(transcriptLink)
@@ -348,14 +368,34 @@ export const columns = [
         try {
           const backendUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
           
-          // Download audio
-          const audioUrl = `${backendUrl}/api/temp-audio/${recording.id}`
-          const audioLink = document.createElement('a')
-          audioLink.href = audioUrl
-          audioLink.download = `recording_${recording.id}.mp3`
-          document.body.appendChild(audioLink)
-          audioLink.click()
-          document.body.removeChild(audioLink)
+          // Fetch the audio file
+          const response = await fetch(`${backendUrl}/api/temp-audio/${recording.id}`)
+          
+          if (!response.ok) {
+            throw new Error('Failed to fetch audio file')
+          }
+          
+          // Get filename from Content-Disposition header or use default
+          const contentDisposition = response.headers.get('Content-Disposition')
+          let filename = 'recording.mp3'
+          
+          if (contentDisposition) {
+            const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/)
+            if (filenameMatch && filenameMatch[1]) {
+              filename = filenameMatch[1].replace(/['"]/g, '')
+            }
+          }
+          
+          // Get the blob and create download link
+          const blob = await response.blob()
+          const url = window.URL.createObjectURL(blob)
+          const link = document.createElement('a')
+          link.href = url
+          link.download = filename
+          document.body.appendChild(link)
+          link.click()
+          document.body.removeChild(link)
+          window.URL.revokeObjectURL(url)
           
           toast.success('Download started!')
         } catch (error) {
