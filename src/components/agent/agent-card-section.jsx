@@ -45,7 +45,6 @@ export default function AgentCardSection({ agent, calls = [] }) {
   const [callInsights, setCallInsights] = useState([]);
   const [performanceMetrics, setPerformanceMetrics] = useState({
     avgHandleTime: "0:00",
-    firstCallResolution: 0,
     customerSatisfaction: 0,
     scriptAdherence: 0
   });
@@ -96,7 +95,6 @@ export default function AgentCardSection({ agent, calls = [] }) {
       
       setPerformanceMetrics({
         avgHandleTime: `${minutes}:${seconds.toString().padStart(2, '0')}`,
-        firstCallResolution: Math.round((calls.filter(c => c.score >= 80).length / calls.length) * 100),
         customerSatisfaction: agent.avgScore || 0,
         scriptAdherence: Math.round((calls.filter(c => c.score >= 70).length / calls.length) * 100)
       });
@@ -185,10 +183,6 @@ export default function AgentCardSection({ agent, calls = [] }) {
                 <span className="font-semibold">{performanceMetrics.avgHandleTime}</span>
               </div>
               <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">First Call Resolution</span>
-                <span className="font-semibold">{performanceMetrics.firstCallResolution}%</span>
-              </div>
-              <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Script Adherence</span>
                 <span className="font-semibold">{performanceMetrics.scriptAdherence}%</span>
               </div>
@@ -246,11 +240,9 @@ export default function AgentCardSection({ agent, calls = [] }) {
               </div>
             ))
           ) : (
-            <div className="flex items-center justify-center h-[300px] text-muted-foreground">
-              <div className="text-center py-8 text-muted-foreground">
-                <Phone className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                <p className="text-sm">No calls recorded yet</p>
-              </div>
+            <div className="flex items-center justify-center text-center py-8 text-muted-foreground">
+              <Phone className="h-8 w-8 mx-auto mb-2 opacity-50" />
+              <p className="text-sm">No calls recorded yet</p>
             </div>
           )}
         </CardContent>
@@ -264,42 +256,35 @@ export default function AgentCardSection({ agent, calls = [] }) {
         </CardHeader>
         <CardContent>
           {callTrends.length > 0 ? (
-            <ChartContainer config={chartConfig3} className="h-[300px]">
-              <AreaChart
+            <ChartContainer config={chartConfig3}>
+              <LineChart
                 data={callTrends}
                 margin={{ left: 12, right: 12 }}
               >
-                <CartesianGrid vertical={false} strokeDasharray="3 3" />
+                <CartesianGrid vertical={false} />
                 <XAxis
-                  dataKey="callIndex"
+                  dataKey="date"
                   tickLine={false}
                   axisLine={false}
                   tickMargin={8}
+                  interval="preserveStartEnd"
                 />
                 <ChartTooltip
                   cursor={false}
-                  content={
-                    <ChartTooltipContent 
-                      formatter={(value) => `Score: ${value}`}
-                    />
-                  }
+                  content={<ChartTooltipContent hideLabel />}
                 />
-                <Area
+                <Line
                   dataKey="score"
                   type="monotone"
-                  stroke="hsl(var(--chart-3))"
-                  fill="hsl(var(--chart-3))"
-                  fillOpacity={0.2}
+                  stroke="var(--color-score)"
                   strokeWidth={2}
+                  dot={true}
                 />
-              </AreaChart>
+              </LineChart>
             </ChartContainer>
           ) : (
-            <div className="flex items-center justify-center h-[300px] text-muted-foreground">
-              <div className="text-center">
-                <TrendingUpIcon className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                <p className="text-sm">No trend data available</p>
-              </div>
+            <div className="flex items-center justify-center h-[200px] text-muted-foreground">
+              <p className="text-sm">Not enough data for trend analysis</p>
             </div>
           )}
         </CardContent>
