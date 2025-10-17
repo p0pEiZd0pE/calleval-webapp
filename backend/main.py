@@ -908,7 +908,8 @@ async def upload_audio(
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
     
-    call_id = str(uuid.uuid4())
+    timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
+    call_id = f"REC-{timestamp}-{str(uuid.uuid4().int)[:4]}"
     file_path = os.path.join(settings.UPLOAD_DIR, f"{call_id}_{file.filename}")
     
     with open(file_path, "wb") as f:
@@ -1045,7 +1046,7 @@ async def create_agent(agent: AgentCreate, db: Session = Depends(get_db)):
     """Create a new agent"""
     try:
         # Generate unique agent ID
-        agent_id = f"C-{str(uuid.uuid4().int)[:8]}"
+        agent_id = f"AGT-{datetime.now().strftime('%Y%m')}-{str(uuid.uuid4().int)[:6]}"
         
         # Create new agent
         db_agent = Agent(
