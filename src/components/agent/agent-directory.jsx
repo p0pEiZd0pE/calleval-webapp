@@ -319,7 +319,7 @@ export default function AgentDirectory({ onAgentSelect, onCallsUpdate }) {
               </Button>
               <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
                 <DialogTrigger asChild>
-                  <Button className="gap-2">
+                  <Button className="gap-2" size="sm">
                     <Plus className="h-4 w-4" />
                     Add Agent
                   </Button>

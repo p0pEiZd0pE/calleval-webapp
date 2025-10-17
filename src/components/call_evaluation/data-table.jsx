@@ -5,7 +5,7 @@ import {
   useReactTable,
   getPaginationRowModel,
   getSortedRowModel,
-} from "@tanstack/react-table";
+} from "@tanstack/react-table"
 import {
   Table,
   TableBody,
@@ -13,15 +13,25 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
+} from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
 
-export function DataTable({ columns, data }) {
-  const [sorting, setSorting] = React.useState([]);
+export function DataTable({ columns, data, columnVisibility }) {
+  const [sorting, setSorting] = React.useState([])
+
+  // Filter columns based on visibility
+  const visibleColumns = React.useMemo(() => {
+    if (!columnVisibility) return columns
+    
+    return columns.filter(column => {
+      const accessor = column.accessorKey || column.id
+      return columnVisibility[accessor] !== false
+    })
+  }, [columns, columnVisibility])
 
   const table = useReactTable({
     data,
-    columns,
+    columns: visibleColumns,
     getCoreRowModel: getCoreRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
     onSortingChange: setSorting,
@@ -29,11 +39,11 @@ export function DataTable({ columns, data }) {
     state: {
       sorting,
     },
-  });
+  })
 
   return (
-    <div>
-      <div className="overflow-hidden rounded-md border">
+    <div className="space-y-4">
+      <div className="rounded-md border">
         <Table>
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
@@ -67,7 +77,7 @@ export function DataTable({ columns, data }) {
               ))
             ) : (
               <TableRow>
-                <TableCell colSpan={columns.length} className="h-24 text-center">
+                <TableCell colSpan={visibleColumns.length} className="h-24 text-center">
                   No results.
                 </TableCell>
               </TableRow>
@@ -75,7 +85,9 @@ export function DataTable({ columns, data }) {
           </TableBody>
         </Table>
       </div>
-      <div className="flex items-center justify-end space-x-2 py-4">
+      
+      {/* Pagination */}
+      <div className="flex items-center justify-end space-x-2">
         <Button
           variant="outline"
           size="sm"
@@ -94,5 +106,5 @@ export function DataTable({ columns, data }) {
         </Button>
       </div>
     </div>
-  );
+  )
 }
