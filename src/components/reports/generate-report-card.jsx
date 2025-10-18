@@ -52,10 +52,19 @@ export default function GenerateReportCard({ filters, onReportGenerated }) {
       const callsResponse = await fetch(API_ENDPOINTS.CALLS);
       const callsData = await callsResponse.json();
       
+      console.log('Date range:', { startDate, endDate });
+      console.log('Total calls:', callsData.length);
+      
       let filteredCalls = callsData.filter(call => {
+        if (call.status !== 'completed') return false;
+        
         const callDate = new Date(call.created_at);
-        return callDate >= startDate && callDate <= endDate && call.status === 'completed';
+        const isInRange = callDate >= startDate && callDate <= endDate;
+        
+        return isInRange;
       });
+      
+      console.log('Calls after date filter:', filteredCalls.length);
       
       if (filters?.agentId && filters.agentId !== 'all') {
         filteredCalls = filteredCalls.filter(call => call.agent_id === filters.agentId);
