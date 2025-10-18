@@ -191,7 +191,7 @@ export default function RecentReports({ refreshTrigger }) {
   
   const generatePDF = async (data, report) => {
     const jsPDF = (await import('jspdf')).default;
-    await import('jspdf-autotable');
+    const autoTable = (await import('jspdf-autotable')).default;
     
     const doc = new jsPDF();
     
@@ -213,7 +213,8 @@ export default function RecentReports({ refreshTrigger }) {
       new Date(call.created_at).toLocaleDateString()
     ]);
     
-    doc.autoTable({
+    // Use autoTable as a function, not a method
+    autoTable(doc, {
       startY: 50,
       head: [['Call ID', 'Agent', 'Filename', 'Score', 'Duration', 'Status', 'Date']],
       body: tableData,
