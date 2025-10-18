@@ -36,7 +36,7 @@ const chartConfig = {
     label: "Visitors",
   },
   adherenceScore: {
-    label: "Adherence Score",
+    label: "Script Adherence Score",
     color: "var(--ring)",
   },
   avgCallScore: {
@@ -101,26 +101,22 @@ export function ChartAreaInteractive({ className = "" }) {
           }
         }
         
+        // Add overall call score
         if (call.score) {
           callsByDate[dateKey].scores.push(call.score)
         }
         
-        // Calculate adherence score from binary_scores if available
+        // Extract adherence score from binary_scores
         if (call.binary_scores) {
           try {
             const binaryScores = JSON.parse(call.binary_scores)
-            let adherenceSum = 0
-            let adherenceCount = 0
             
-            Object.values(binaryScores).forEach(score => {
-              if (typeof score === 'number') {
-                adherenceSum += score * 100
-                adherenceCount++
-              }
-            })
+            // The adherence score is the total_score or percentage from binary_scores
+            // This represents how well the agent followed the script/protocol
+            const adherenceScore = binaryScores.total_score || binaryScores.percentage
             
-            if (adherenceCount > 0) {
-              callsByDate[dateKey].adherenceScores.push(adherenceSum / adherenceCount)
+            if (adherenceScore !== undefined && adherenceScore !== null) {
+              callsByDate[dateKey].adherenceScores.push(adherenceScore)
             }
           } catch (e) {
             console.error('Error parsing binary scores:', e)
@@ -163,7 +159,7 @@ export function ChartAreaInteractive({ className = "" }) {
       <CardHeader className="relative">
         <CardTitle>Performance Trends</CardTitle>
         <CardDescription>
-          Monthly trends for average call score and agent adherence score.
+          Daily trends for average call score and script adherence score.
         </CardDescription>
         <div className="absolute right-4 top-4">
           <ToggleGroup
