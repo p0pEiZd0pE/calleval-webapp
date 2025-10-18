@@ -13,9 +13,15 @@ export default function Reports() {
     agentId: 'all',
     classification: 'all'
   });
+  const [refreshKey, setRefreshKey] = React.useState(0);
 
   const handleFilterChange = (newFilters) => {
     setFilters(newFilters);
+  };
+  
+  const handleReportGenerated = () => {
+    // Trigger refresh of RecentReports component
+    setRefreshKey(prev => prev + 1);
   };
 
   return (
@@ -31,7 +37,7 @@ export default function Reports() {
             <ReportFilteringCard onFilterChange={handleFilterChange} />
             
             <div className='grid grid-cols-1 md:grid-cols-2 auto-rows-fr py-4 gap-4'>
-              <GenerateReportCard filters={filters} />
+              <GenerateReportCard filters={filters} onReportGenerated={handleReportGenerated} />
               <StatsCards filters={filters} />
               <CallEvalMetricsCard filters={filters} />
               <AgentPerformanceScores filters={filters} />
@@ -39,7 +45,7 @@ export default function Reports() {
             
             <div className='flex flex-col gap-4'>
               <CallClassificationBreakdown filters={filters} />
-              <RecentReports />
+              <RecentReports refreshTrigger={refreshKey} />
             </div>
         </div>
     </>
