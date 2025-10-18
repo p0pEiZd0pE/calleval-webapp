@@ -166,15 +166,15 @@ function ReportTypeCard({ icon, title, subtitle, selected, onClick }) {
   return (
     <div 
       className={cn(
-        "border rounded-lg p-2 md:p-4 text-center cursor-pointer transition",
+        "border rounded-lg p-2 md:p-4 text-center cursor-pointer transition flex items-center justify-center min-h-[80px] md:min-h-[100px]",
         selected ? "border-ring bg-ring/10" : "hover:border-ring"
       )}
       onClick={onClick}
     >
       <div className="flex flex-col items-center justify-center gap-1 md:gap-2">
         {icon}
-        <div className="text-xs md:text-sm font-medium">{title}</div>
-        <div className="text-[10px] md:text-xs text-muted-foreground">{subtitle}</div>
+        <div className="text-xs md:text-sm font-medium leading-tight">{title}</div>
+        <div className="text-[10px] md:text-xs text-muted-foreground leading-tight">{subtitle}</div>
       </div>
     </div>
   );
