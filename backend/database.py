@@ -59,10 +59,6 @@ class CallEvaluation(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
-# Create all tables
-Base.metadata.create_all(bind=engine)
-
-
 class Report(Base):
     """Database model for generated reports"""
     __tablename__ = "reports"
@@ -90,6 +86,10 @@ class Report(Base):
     
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow)
+
+
+# Create all tables
+Base.metadata.create_all(bind=engine)
 
 
 # Dependency for FastAPI
