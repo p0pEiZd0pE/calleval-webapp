@@ -94,14 +94,8 @@ export function ChartAreaInteractive({ className = "" }) {
         
         if (!callsByDate[dateKey]) {
           callsByDate[dateKey] = {
-            scores: [],
             adherenceScores: []
           }
-        }
-        
-        // Add overall call score
-        if (call.score) {
-          callsByDate[dateKey].scores.push(call.score)
         }
         
         // Debug first call's binary_scores
@@ -164,19 +158,15 @@ export function ChartAreaInteractive({ className = "" }) {
       
       // Calculate averages and format data
       const formattedData = Object.keys(callsByDate).map(date => {
-        const { scores, adherenceScores } = callsByDate[date]
-        
-        const avgScore = scores.length > 0
-          ? scores.reduce((a, b) => a + b, 0) / scores.length
-          : 0
+        const { adherenceScores } = callsByDate[date]
         
         const avgAdherence = adherenceScores.length > 0
           ? adherenceScores.reduce((a, b) => a + b, 0) / adherenceScores.length
           : 0
         
+        // ONLY return adherenceScore, no avgCallScore
         return {
           date,
-          avgCallScore: Math.round(avgScore),
           adherenceScore: Math.round(avgAdherence)
         }
       })
@@ -186,6 +176,7 @@ export function ChartAreaInteractive({ className = "" }) {
       
       console.log('Final formatted data:', formattedData)
       console.log('Sample:', formattedData[0])
+      console.log('Keys in sample:', formattedData[0] ? Object.keys(formattedData[0]) : 'none')
       console.log('=== END DEBUG ===')
       
       setChartData(formattedData)
@@ -201,7 +192,7 @@ export function ChartAreaInteractive({ className = "" }) {
       <CardHeader className="relative">
         <CardTitle>Performance Trends</CardTitle>
         <CardDescription>
-          Daily trends for average call score and script adherence score.
+          Daily trends for script adherence score based on call evaluations.
         </CardDescription>
         <div className="absolute right-4 top-4">
           <ToggleGroup
@@ -270,18 +261,6 @@ export function ChartAreaInteractive({ className = "" }) {
                     stopOpacity={0.1}
                   />
                 </linearGradient>
-                <linearGradient id="fillAvgCallScore" x1="0" y1="0" x2="0" y2="1">
-                  <stop
-                    offset="5%"
-                    stopColor="var(--color-avgCallScore)"
-                    stopOpacity={0.8}
-                  />
-                  <stop
-                    offset="95%"
-                    stopColor="var(--color-avgCallScore)"
-                    stopOpacity={0.1}
-                  />
-                </linearGradient>
               </defs>
               <CartesianGrid vertical={false} />
               <XAxis
@@ -301,18 +280,10 @@ export function ChartAreaInteractive({ className = "" }) {
                 }
               />
               <Area
-                dataKey="avgCallScore"
-                type="natural"
-                fill="url(#fillAvgCallScore)"
-                stroke="var(--color-avgCallScore)"
-                stackId="a"
-              />
-              <Area
                 dataKey="adherenceScore"
                 type="natural"
                 fill="url(#fillAdherenceScore)"
                 stroke="var(--color-adherenceScore)"
-                stackId="a"
               />
               <ChartLegend content={<ChartLegendContent />} />
             </AreaChart>
