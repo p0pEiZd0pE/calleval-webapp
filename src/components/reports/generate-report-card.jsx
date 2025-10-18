@@ -52,11 +52,11 @@ export default function GenerateReportCard({ filters }) {
           <p className="text-xs md:text-sm text-muted-foreground">Configure and download performance reports.</p>
         </CardHeader>
 
-        <CardContent className="flex-1 flex flex-col justify-center space-y-4 md:space-y-6">
+        <CardContent className="flex-1 flex flex-col space-y-3 md:space-y-4 py-4">
           {/* Report Type */}
-          <div>
-            <Label className="text-xs md:text-sm font-medium mb-2 block">Report Type</Label>
-            <div className="grid grid-cols-3 gap-2 md:gap-4">
+          <div className="flex-1 flex flex-col min-h-0">
+            <Label className="text-xs md:text-sm font-medium mb-2 flex-shrink-0">Report Type</Label>
+            <div className="grid grid-cols-3 gap-2 md:gap-3 flex-1 min-h-0">
               <ReportTypeCard
                 icon={<CalendarDays className="h-4 w-4 md:h-5 md:w-5" />}
                 title="Weekly"
