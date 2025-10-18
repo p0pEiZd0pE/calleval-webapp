@@ -49,42 +49,56 @@ export function PerformanceLeaderboard({ className = "" }) {
       })
       
       // Calculate performance for each agent within date range
-      const agentPerformance = agentsData
-        .map(agent => {
-          const agentCalls = filteredCalls.filter(call => call.agent_id === agent.agentId)
-          const scores = agentCalls.filter(c => c.score).map(c => c.score)
-          const avgScore = scores.length > 0
-            ? scores.reduce((a, b) => a + b, 0) / scores.length
-            : 0
-          
-          return {
-            agentId: agent.agentId,
-            agentName: agent.agentName,
-            avgScore: avgScore,
-            callsInPeriod: agentCalls.length,
-            hasData: agentCalls.length > 0 && scores.length > 0
-          }
-        })
-        // ONLY include agents with actual call data
-        .filter(agent => agent.hasData)
+      const agentPerformance = agentsData.map(agent => {
+        const agentCalls = filteredCalls.filter(call => call.agent_id === agent.agentId)
+        const scores = agentCalls.filter(c => c.score).map(c => c.score)
+        const avgScore = scores.length > 0
+          ? scores.reduce((a, b) => a + b, 0) / scores.length
+          : 0
+        
+        return {
+          agentId: agent.agentId,
+          agentName: agent.agentName,
+          avgScore: avgScore,
+          callsInPeriod: agentCalls.length,
+          evaluatedCalls: scores.length,
+          hasEvaluatedCalls: scores.length > 0
+        }
+      })
       
-      // Sort by score descending
-      agentPerformance.sort((a, b) => b.avgScore - a.avgScore)
+      // Sort: agents with evaluated calls first (by score desc), then agents without evaluated calls
+      agentPerformance.sort((a, b) => {
+        if (a.hasEvaluatedCalls && !b.hasEvaluatedCalls) return -1
+        if (!a.hasEvaluatedCalls && b.hasEvaluatedCalls) return 1
+        if (a.hasEvaluatedCalls && b.hasEvaluatedCalls) return b.avgScore - a.avgScore
+        return a.agentName.localeCompare(b.agentName)
+      })
       
-      // Get top 3 performers and bottom 2 performers (if available)
-      const top3 = agentPerformance.slice(0, 3)
-      const bottom2 = agentPerformance.length > 3 
-        ? agentPerformance.slice(-2).reverse() 
+      // Get agents with evaluated calls
+      const agentsWithScores = agentPerformance.filter(a => a.hasEvaluatedCalls)
+      
+      // Get top 3 and bottom 2 from agents with scores
+      const top3 = agentsWithScores.slice(0, 3)
+      const bottom2 = agentsWithScores.length > 3 
+        ? agentsWithScores.slice(-2).reverse() 
         : []
       
-      // Combine top 3 and bottom 2, ensuring no duplicates
+      // Combine and ensure no duplicates
       const leaderboard = [...top3]
       bottom2.forEach(agent => {
-        // Only add if not already in top 3
         if (!top3.find(t => t.agentId === agent.agentId)) {
           leaderboard.push(agent)
         }
       })
+      
+      // If we have less than 5 agents total, fill with agents without scores
+      const agentsWithoutScores = agentPerformance.filter(a => !a.hasEvaluatedCalls)
+      const remainingSlots = 5 - leaderboard.length
+      
+      if (remainingSlots > 0 && agentsWithoutScores.length > 0) {
+        const toAdd = agentsWithoutScores.slice(0, remainingSlots)
+        leaderboard.push(...toAdd)
+      }
       
       setAgents(leaderboard)
     } catch (error) {
@@ -142,13 +156,16 @@ export function PerformanceLeaderboard({ className = "" }) {
       ) : agents.length === 0 ? (
         <CardContent>
           <div className="text-center text-muted-foreground py-4">
-            No agent performance data available for the selected period
+            No agents found in the system
           </div>
         </CardContent>
       ) : (
         <>
           {agents.map((agent) => {
-            const classification = getPerformanceClassification(agent.avgScore)
+            const classification = agent.hasEvaluatedCalls 
+              ? getPerformanceClassification(agent.avgScore)
+              : null
+            
             return (
               <CardContent key={agent.agentId}>
                 <div className='flex flex-row gap-2'>
@@ -158,16 +175,21 @@ export function PerformanceLeaderboard({ className = "" }) {
                   </Avatar>
                   <div className="grid flex-1 text-left text-sm leading-tight">
                     <span className='truncate font-semibold'>{agent.agentName}</span>
-                    <span className='truncate text-xs'>
-                      Score: {agent.avgScore.toFixed(1)}% ({agent.callsInPeriod} {agent.callsInPeriod === 1 ? 'call' : 'calls'})
+                    <span className='truncate text-xs text-muted-foreground'>
+                      {agent.hasEvaluatedCalls 
+                        ? `Score: ${agent.avgScore.toFixed(1)}% (${agent.evaluatedCalls} ${agent.evaluatedCalls === 1 ? 'call' : 'calls'})`
+                        : 'No evaluated calls yet'
+                      }
                     </span>
                   </div>
-                  <Badge 
-                    variant={classification.variant}
-                    className={`${classification.className} min-w-30 rounded-full`}
-                  >
-                    {classification.label}
-                  </Badge>
+                  {classification && (
+                    <Badge 
+                      variant={classification.variant}
+                      className={`${classification.className} min-w-30 rounded-full`}
+                    >
+                      {classification.label}
+                    </Badge>
+                  )}
                 </div>
               </CardContent>
             )
