@@ -30,19 +30,11 @@ export default function Reports() {
             
             <ReportFilteringCard onFilterChange={handleFilterChange} />
             
-            <div className='grid grid-cols-2 grid-rows-2 py-4 gap-4'>
-              <div className='col-span-1 w-full h-full'>
-                <GenerateReportCard filters={filters} />
-              </div>
-              <div className='col-span-1 w-full h-full'>
-                <StatsCards filters={filters} />
-              </div>
-              <div className='col-span-1 w-full h-full'>
-                <CallEvalMetricsCard filters={filters} />
-              </div>
-              <div className='col-span-1 w-full h-full'>
-                <AgentPerformanceScores filters={filters} />
-              </div>
+            <div className='grid grid-cols-1 md:grid-cols-2 auto-rows-fr py-4 gap-4'>
+              <GenerateReportCard filters={filters} />
+              <StatsCards filters={filters} />
+              <CallEvalMetricsCard filters={filters} />
+              <AgentPerformanceScores filters={filters} />
             </div>
             
             <div className='flex flex-col gap-4'>
