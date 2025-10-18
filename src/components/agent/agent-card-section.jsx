@@ -278,7 +278,7 @@ export default function AgentCardSection({ agent, calls = [] }) {
                 <Line
                   dataKey="score"
                   type="monotone"
-                  stroke="var(--color-score)"
+                  stroke="var(--primary)"
                   strokeWidth={2}
                   dot={true}
                 />

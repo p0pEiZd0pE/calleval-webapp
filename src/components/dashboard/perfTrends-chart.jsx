@@ -252,12 +252,12 @@ export function ChartAreaInteractive({ className = "" }) {
                 <linearGradient id="fillAdherenceScore" x1="0" y1="0" x2="0" y2="1">
                   <stop
                     offset="5%"
-                    stopColor="var(--color-adherenceScore)"
+                    stopColor="var(--primary)"
                     stopOpacity={1.0}
                   />
                   <stop
                     offset="95%"
-                    stopColor="var(--color-adherenceScore)"
+                    stopColor="var(--primary)"
                     stopOpacity={0.1}
                   />
                 </linearGradient>
@@ -283,7 +283,7 @@ export function ChartAreaInteractive({ className = "" }) {
                 dataKey="adherenceScore"
                 type="natural"
                 fill="url(#fillAdherenceScore)"
-                stroke="var(--color-adherenceScore)"
+                stroke="var(--primary)"
               />
               <ChartLegend content={<ChartLegendContent />} />
             </AreaChart>
