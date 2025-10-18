@@ -13,11 +13,24 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover"
 
-export function DateRangePicker() {
+// Create a context to share date range across dashboard components
+export const DateRangeContext = React.createContext()
+
+export function DateRangeProvider({ children }) {
   const [dateRange, setDateRange] = React.useState({
-    from: new Date(2025, 7, 1), // August 1, 2025
-    to: new Date(2025, 7, 10),
+    from: new Date(2025, 0, 1), // January 1, 2025
+    to: new Date(),
   })
+
+  return (
+    <DateRangeContext.Provider value={{ dateRange, setDateRange }}>
+      {children}
+    </DateRangeContext.Provider>
+  )
+}
+
+export function DateRangePicker() {
+  const { dateRange, setDateRange } = React.useContext(DateRangeContext)
 
   const formattedRange =
     dateRange?.from && dateRange?.to

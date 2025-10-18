@@ -1,8 +1,7 @@
 "use client"
 
-import React, { useEffect, useState } from "react"
+import React, { useEffect, useState, useContext } from "react"
 import { Area, AreaChart, CartesianGrid, XAxis } from "recharts"
-
 import { useIsMobile } from "@/hooks/use-mobile"
 import {
   Card,
@@ -29,8 +28,8 @@ import {
   ToggleGroup,
   ToggleGroupItem,
 } from "@/components/ui/toggle-group"
-
-import chartData from "./chartData" // Assuming you move chartData to its own file
+import { API_ENDPOINTS } from '@/config/api'
+import { DateRangeContext } from './date-picker'
 
 const chartConfig = {
   visitors: {
@@ -40,15 +39,18 @@ const chartConfig = {
     label: "Adherence Score",
     color: "var(--ring)",
   },
-  satisfactoryRate: {
-    label: "Satisfactory Rate",
+  avgCallScore: {
+    label: "Average Call Score",
     color: "var(--primary-foreground)",
   },
 }
 
 export function ChartAreaInteractive({ className = "" }) {
   const isMobile = useIsMobile()
+  const { dateRange } = useContext(DateRangeContext)
   const [timeRange, setTimeRange] = useState("30d")
+  const [chartData, setChartData] = useState([])
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     if (isMobile) {
@@ -56,26 +58,112 @@ export function ChartAreaInteractive({ className = "" }) {
     }
   }, [isMobile])
 
-  const filteredData = chartData.filter((item) => {
-    const date = new Date(item.date)
-    const referenceDate = new Date("2024-06-30")
-    let daysToSubtract = 90
-    if (timeRange === "30d") {
-      daysToSubtract = 30
-    } else if (timeRange === "7d") {
-      daysToSubtract = 7
+  useEffect(() => {
+    fetchChartData()
+  }, [timeRange, dateRange])
+
+  const fetchChartData = async () => {
+    try {
+      setLoading(true)
+      const response = await fetch(API_ENDPOINTS.CALLS)
+      const calls = await response.json()
+      
+      // Filter by date range and time range
+      const now = new Date()
+      let startDate = new Date()
+      
+      if (timeRange === "7d") {
+        startDate.setDate(now.getDate() - 7)
+      } else if (timeRange === "30d") {
+        startDate.setDate(now.getDate() - 30)
+      } else {
+        startDate.setDate(now.getDate() - 90)
+      }
+      
+      const filteredCalls = calls.filter(call => {
+        const callDate = new Date(call.created_at)
+        return callDate >= startDate && callDate <= now &&
+               callDate >= dateRange.from && callDate <= dateRange.to
+      })
+      
+      // Group calls by date
+      const callsByDate = {}
+      filteredCalls.forEach(call => {
+        const dateKey = new Date(call.created_at).toLocaleDateString('en-US', { 
+          month: 'short', 
+          day: 'numeric' 
+        })
+        
+        if (!callsByDate[dateKey]) {
+          callsByDate[dateKey] = {
+            scores: [],
+            adherenceScores: []
+          }
+        }
+        
+        if (call.score) {
+          callsByDate[dateKey].scores.push(call.score)
+        }
+        
+        // Calculate adherence score from binary_scores if available
+        if (call.binary_scores) {
+          try {
+            const binaryScores = JSON.parse(call.binary_scores)
+            let adherenceSum = 0
+            let adherenceCount = 0
+            
+            Object.values(binaryScores).forEach(score => {
+              if (typeof score === 'number') {
+                adherenceSum += score * 100
+                adherenceCount++
+              }
+            })
+            
+            if (adherenceCount > 0) {
+              callsByDate[dateKey].adherenceScores.push(adherenceSum / adherenceCount)
+            }
+          } catch (e) {
+            console.error('Error parsing binary scores:', e)
+          }
+        }
+      })
+      
+      // Calculate averages and format data
+      const formattedData = Object.keys(callsByDate).map(date => {
+        const { scores, adherenceScores } = callsByDate[date]
+        
+        const avgScore = scores.length > 0
+          ? scores.reduce((a, b) => a + b, 0) / scores.length
+          : 0
+        
+        const avgAdherence = adherenceScores.length > 0
+          ? adherenceScores.reduce((a, b) => a + b, 0) / adherenceScores.length
+          : 0
+        
+        return {
+          date,
+          avgCallScore: Math.round(avgScore),
+          adherenceScore: Math.round(avgAdherence)
+        }
+      })
+      
+      // Sort by date
+      formattedData.sort((a, b) => new Date(a.date) - new Date(b.date))
+      
+      setChartData(formattedData)
+    } catch (error) {
+      console.error('Error fetching chart data:', error)
+    } finally {
+      setLoading(false)
     }
-    const startDate = new Date(referenceDate)
-    startDate.setDate(startDate.getDate() - daysToSubtract)
-    return date >= startDate
-  })
+  }
 
   return (
-    <Card  className={`h-full flex flex-col ${className}`}>
+    <Card className={`h-full flex flex-col ${className}`}>
       <CardHeader className="relative">
         <CardTitle>Performance Trends</CardTitle>
         <CardDescription>
-            Monthly trends for satisfactory rate and agent adherence score.
+          Monthly trends for average call score and agent adherence score.
         </CardDescription>
         <div className="absolute right-4 top-4">
           <ToggleGroup
@@ -117,83 +205,81 @@ export function ChartAreaInteractive({ className = "" }) {
         </div>
       </CardHeader>
       <CardContent className="flex-grow px-2 pt-4 sm:px-6 sm:pt-6">
-        <ChartContainer
-          config={chartConfig}
-          className="aspect-auto h-full w-full"
-        >
-          <AreaChart data={filteredData}>
-            <defs>
-              <linearGradient id="fillAdherenceScore" x1="0" y1="0" x2="0" y2="1">
-                <stop
-                  offset="5%"
-                  stopColor="var(--color-adherenceScore)"
-                  stopOpacity={1.0}
-                />
-                <stop
-                  offset="95%"
-                  stopColor="var(--color-adherenceScore)"
-                  stopOpacity={0.1}
-                />
-              </linearGradient>
-              <linearGradient id="fillSatisfactoryRate" x1="0" y1="0" x2="0" y2="1">
-                <stop
-                  offset="5%"
-                  stopColor="var(--color-satisfactoryRate)"
-                  stopOpacity={0.8}
-                />
-                <stop
-                  offset="95%"
-                  stopColor="var(--color-satisfactoryRate)"
-                  stopOpacity={0.1}
-                />
-              </linearGradient>
-            </defs>
-            <CartesianGrid vertical={false} />
-            <XAxis
-              dataKey="date"
-              tickLine={false}
-              axisLine={false}
-              tickMargin={8}
-              minTickGap={32}
-              tickFormatter={(value) => {
-                const date = new Date(value)
-                return date.toLocaleDateString("en-US", {
-                  month: "short",
-                  day: "numeric",
-                })
-              }}
-            />
-            <ChartTooltip
-              cursor={false}
-              content={
-                <ChartTooltipContent
-                  labelFormatter={(value) => {
-                    return new Date(value).toLocaleDateString("en-US", {
-                      month: "short",
-                      day: "numeric",
-                    })
-                  }}
-                  indicator="dot"
-                />
-              }
-            />
-            <Area
-              dataKey="satisfactoryRate"
-              type="natural"
-              fill="url(#fillSatisfactoryRate)"
-              stroke="var(--color-satisfactoryRate)"
-              stackId="a"
-            />
-            <Area
-              dataKey="adherenceScore"
-              type="natural"
-              fill="url(#fillAdherenceScore)"
-              stroke="var(--color-adherenceScore)"
-              stackId="a"
-            />
-            <ChartLegend content={<ChartLegendContent />} />
-          </AreaChart>
-        </ChartContainer>
+        {loading ? (
+          <div className="flex items-center justify-center h-full">
+            <p className="text-muted-foreground">Loading chart data...</p>
+          </div>
+        ) : chartData.length === 0 ? (
+          <div className="flex items-center justify-center h-full">
+            <p className="text-muted-foreground">No data available for selected period</p>
+          </div>
+        ) : (
+          <ChartContainer
+            config={chartConfig}
+            className="aspect-auto h-full w-full"
+          >
+            <AreaChart data={chartData}>
+              <defs>
+                <linearGradient id="fillAdherenceScore" x1="0" y1="0" x2="0" y2="1">
+                  <stop
+                    offset="5%"
+                    stopColor="var(--color-adherenceScore)"
+                    stopOpacity={1.0}
+                  />
+                  <stop
+                    offset="95%"
+                    stopColor="var(--color-adherenceScore)"
+                    stopOpacity={0.1}
+                  />
+                </linearGradient>
+                <linearGradient id="fillAvgCallScore" x1="0" y1="0" x2="0" y2="1">
+                  <stop
+                    offset="5%"
+                    stopColor="var(--color-avgCallScore)"
+                    stopOpacity={0.8}
+                  />
+                  <stop
+                    offset="95%"
+                    stopColor="var(--color-avgCallScore)"
+                    stopOpacity={0.1}
+                  />
+                </linearGradient>
+              </defs>
+              <CartesianGrid vertical={false} />
+              <XAxis
+                dataKey="date"
+                tickLine={false}
+                axisLine={false}
+                tickMargin={8}
+                minTickGap={32}
+              />
+              <ChartTooltip
+                cursor={false}
+                content={
+                  <ChartTooltipContent
+                    labelFormatter={(value) => value}
+                    indicator="dot"
+                  />
+                }
+              />
+              <Area
+                dataKey="avgCallScore"
+                type="natural"
+                fill="url(#fillAvgCallScore)"
+                stroke="var(--color-avgCallScore)"
+                stackId="a"
+              />
+              <Area
+                dataKey="adherenceScore"
+                type="natural"
+                fill="url(#fillAdherenceScore)"
+                stroke="var(--color-adherenceScore)"
+                stackId="a"
+              />
+              <ChartLegend content={<ChartLegendContent />} />
+            </AreaChart>
+          </ChartContainer>
+        )}
       </CardContent>
     </Card>
   )
