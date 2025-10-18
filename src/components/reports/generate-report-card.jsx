@@ -37,14 +37,16 @@ export default function GenerateReportCard({ filters, onReportGenerated }) {
         startDate = new Date(today);
         startDate.setDate(startDate.getDate() - 30);
       } else if (reportType === 'custom') {
-        if (!dateRange.from || !dateRange.to) {
+        if (!dateRange?.from) {
           toast.error("Please select a date range");
           setGenerating(false);
           return;
         }
         startDate = new Date(dateRange.from);
         startDate.setHours(0, 0, 0, 0); // Start of day
-        endDate = new Date(dateRange.to);
+        
+        // If 'to' is not set, use 'from' as the end date (same day)
+        endDate = dateRange.to ? new Date(dateRange.to) : new Date(dateRange.from);
         endDate.setHours(23, 59, 59, 999); // End of day
       }
       
@@ -332,8 +334,8 @@ export default function GenerateReportCard({ filters, onReportGenerated }) {
                     )}
                   >
                     <CalendarIcon className="mr-2 h-3 w-3 md:h-4 md:w-4" />
-                    {dateRange.from ? (
-                      dateRange.to ? (
+                    {dateRange?.from ? (
+                      dateRange?.to ? (
                         <>
                           {format(dateRange.from, "LLL dd, y")} -{" "}
                           {format(dateRange.to, "LLL dd, y")}
@@ -379,7 +381,7 @@ export default function GenerateReportCard({ filters, onReportGenerated }) {
           <Button 
             className="w-full bg-ring hover:bg-primary-foreground text-white text-xs md:text-sm"
             onClick={handleGenerateReport}
-            disabled={generating || (reportType === "custom" && (!dateRange.from || !dateRange.to))}
+            disabled={generating || (reportType === "custom" && !dateRange?.from)}
           >
             {generating ? (
               <>
