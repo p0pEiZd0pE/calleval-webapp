@@ -11,6 +11,8 @@ import { CalendarIcon } from "lucide-react";
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { toast } from "sonner";
 import { API_ENDPOINTS } from '@/config/api';
+import { jsPDF } from 'jspdf';
+import 'jspdf-autotable';
 
 export default function GenerateReportCard({ filters }) {
   const [reportType, setReportType] = React.useState("weekly");
@@ -179,13 +181,6 @@ export default function GenerateReportCard({ filters }) {
   };
   
   const generatePDF = async (data) => {
-    // Import jsPDF
-    const jsPDFModule = await import('jspdf');
-    const jsPDF = jsPDFModule.default || jsPDFModule.jsPDF;
-    
-    // Import autotable - it extends jsPDF automatically
-    await import('jspdf-autotable');
-    
     const doc = new jsPDF();
     
     doc.setFontSize(18);
