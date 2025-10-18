@@ -102,8 +102,7 @@ SCORECARD_CONFIG = {
         "patterns": [
             r"thank you for calling.*practice",
             r"good (morning|afternoon|evening)",
-            r"this is \w+",
-            r"how (can|may) i (help|assist)"
+            r"this is \w+"
         ]
     },
     "verifies_patient_online": {
@@ -113,7 +112,8 @@ SCORECARD_CONFIG = {
             r"are you (still )?there",
             r"can you hear me",
             r"hello.*are you",
-            r"patient.*on.*line"
+            r"patient.*on.*line",
+            r"how (can|may) i (help|assist)"
         ]
     },
     "patient_verification": {
@@ -157,7 +157,8 @@ SCORECARD_CONFIG = {
             r"may i (place|put) you on hold",
             r"can i (place|put) you on hold",
             r"is it (okay|ok) if i put you on hold",
-            r"mind if i put you on (a )?hold"
+            r"mind if i put you on (a )?hold",
+            r"let me check"
         ]
     },
     "returns_properly_from_hold": {

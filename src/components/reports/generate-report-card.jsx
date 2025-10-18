@@ -11,8 +11,8 @@ import { CalendarIcon } from "lucide-react";
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { toast } from "sonner";
 import { API_ENDPOINTS } from '@/config/api';
-import { jsPDF } from 'jspdf';
-import 'jspdf-autotable';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 export default function GenerateReportCard({ filters }) {
   const [reportType, setReportType] = React.useState("weekly");
@@ -202,7 +202,8 @@ export default function GenerateReportCard({ filters }) {
       new Date(call.created_at).toLocaleDateString()
     ]);
     
-    doc.autoTable({
+    // Use autoTable directly (it's imported and extends jsPDF)
+    autoTable(doc, {
       startY: 55,
       head: [['Call ID', 'Agent', 'Filename', 'Score', 'Duration', 'Status', 'Date']],
       body: tableData,
