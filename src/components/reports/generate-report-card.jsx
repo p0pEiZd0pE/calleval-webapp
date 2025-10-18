@@ -14,7 +14,7 @@ import { API_ENDPOINTS } from '@/config/api';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
-export default function GenerateReportCard({ filters }) {
+export default function GenerateReportCard({ filters, onReportGenerated }) {
   const [reportType, setReportType] = React.useState("weekly");
   const [exportFormat, setExportFormat] = React.useState("pdf");
   const [dateRange, setDateRange] = React.useState({ from: null, to: null });
@@ -95,6 +95,11 @@ export default function GenerateReportCard({ filters }) {
       
       // Save report metadata to backend
       await saveReportMetadata(filteredCalls, startDate, endDate);
+      
+      // Trigger refresh of reports list
+      if (onReportGenerated) {
+        onReportGenerated();
+      }
       
       toast.success(`Report generated successfully in ${exportFormat.toUpperCase()} format`);
       
