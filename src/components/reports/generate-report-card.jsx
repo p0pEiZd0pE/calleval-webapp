@@ -43,29 +43,24 @@ export default function GenerateReportCard({ filters, onReportGenerated }) {
           return;
         }
         startDate = new Date(dateRange.from);
-        startDate.setHours(0, 0, 0, 0); // Start of day
+        startDate.setHours(0, 0, 0, 0);
         
-        // If 'to' is not set, use 'from' as the end date (same day)
         endDate = dateRange.to ? new Date(dateRange.to) : new Date(dateRange.from);
-        endDate.setHours(23, 59, 59, 999); // End of day
+        endDate.setHours(23, 59, 59, 999);
       }
       
-      // Fetch the data based on filters
       const callsResponse = await fetch(API_ENDPOINTS.CALLS);
       const callsData = await callsResponse.json();
       
-      // Filter calls by date range
       let filteredCalls = callsData.filter(call => {
         const callDate = new Date(call.created_at);
         return callDate >= startDate && callDate <= endDate && call.status === 'completed';
       });
       
-      // Apply agent filter if specified
       if (filters?.agentId && filters.agentId !== 'all') {
         filteredCalls = filteredCalls.filter(call => call.agent_id === filters.agentId);
       }
       
-      // Apply classification filter if specified
       if (filters?.classification && filters.classification !== 'all') {
         filteredCalls = filteredCalls.filter(call => {
           const score = call.score || 0;
@@ -88,7 +83,6 @@ export default function GenerateReportCard({ filters, onReportGenerated }) {
         return;
       }
       
-      // Generate report based on format
       if (exportFormat === 'csv') {
         generateCSV(filteredCalls);
       } else if (exportFormat === 'xlsx') {
@@ -97,10 +91,8 @@ export default function GenerateReportCard({ filters, onReportGenerated }) {
         await generatePDF(filteredCalls);
       }
       
-      // Save report metadata to backend
       await saveReportMetadata(filteredCalls, startDate, endDate);
       
-      // Trigger refresh of reports list
       if (onReportGenerated) {
         onReportGenerated();
       }
@@ -214,7 +206,6 @@ export default function GenerateReportCard({ filters, onReportGenerated }) {
       new Date(call.created_at).toLocaleDateString()
     ]);
     
-    // Use autoTable directly (it's imported and extends jsPDF)
     autoTable(doc, {
       startY: 55,
       head: [['Call ID', 'Agent', 'Filename', 'Score', 'Duration', 'Status', 'Date']],
@@ -248,7 +239,6 @@ export default function GenerateReportCard({ filters, onReportGenerated }) {
         ? data.reduce((sum, c) => sum + (c.score || 0), 0) / data.length
         : 0;
       
-      // Ensure dates are valid Date objects
       const validStartDate = startDate instanceof Date ? startDate : new Date(startDate);
       const validEndDate = endDate instanceof Date ? endDate : new Date(endDate);
       
@@ -264,8 +254,6 @@ export default function GenerateReportCard({ filters, onReportGenerated }) {
         avg_score: parseFloat(avgScore.toFixed(1))
       };
       
-      console.log('Saving report metadata:', reportMetadata);
-      
       const response = await fetch(API_ENDPOINTS.REPORTS, {
         method: 'POST',
         headers: {
@@ -275,14 +263,10 @@ export default function GenerateReportCard({ filters, onReportGenerated }) {
       });
       
       if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Failed to save report metadata:', errorText);
-      } else {
-        console.log('Report saved successfully');
+        console.error('Failed to save report metadata');
       }
     } catch (error) {
       console.error('Error saving report metadata:', error);
-      // Don't show error to user, report was already generated successfully
     }
   };
 
@@ -330,7 +314,7 @@ export default function GenerateReportCard({ filters, onReportGenerated }) {
                     variant="outline"
                     className={cn(
                       "w-full justify-start text-left font-normal text-xs md:text-sm",
-                      !dateRange.from && "text-muted-foreground"
+                      !dateRange?.from && "text-muted-foreground"
                     )}
                   >
                     <CalendarIcon className="mr-2 h-3 w-3 md:h-4 md:w-4" />
@@ -352,7 +336,7 @@ export default function GenerateReportCard({ filters, onReportGenerated }) {
                   <CalendarComponent
                     initialFocus
                     mode="range"
-                    defaultMonth={dateRange.from}
+                    defaultMonth={dateRange?.from}
                     selected={dateRange}
                     onSelect={setDateRange}
                     numberOfMonths={2}
