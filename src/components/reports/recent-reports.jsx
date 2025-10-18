@@ -31,59 +31,13 @@ export default function RecentReports() {
 
   const fetchReports = async () => {
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 500));
+      // TODO: Replace with actual API endpoint when reports backend is ready
+      // const response = await fetch(API_ENDPOINTS.REPORTS);
+      // const data = await response.json();
+      // setReports(data);
       
-      // Mock data - replace with actual API call
-      const mockReports = [
-        {
-          id: "REP001",
-          type: "Monthly Summary",
-          dateGenerated: "2024-10-15",
-          format: "PDF",
-          status: "Completed",
-          agentName: "All Agents",
-          downloadUrl: "#"
-        },
-        {
-          id: "REP002",
-          type: "Weekly Performance",
-          dateGenerated: "2024-10-12",
-          format: "CSV",
-          status: "Completed",
-          agentName: "All Agents",
-          downloadUrl: "#"
-        },
-        {
-          id: "REP003",
-          type: "Custom Agent Report",
-          dateGenerated: "2024-10-10",
-          format: "XLSX",
-          status: "Completed",
-          agentName: "Sarah Johnson",
-          downloadUrl: "#"
-        },
-        {
-          id: "REP004",
-          type: "Monthly Summary",
-          dateGenerated: "2024-09-30",
-          format: "PDF",
-          status: "Completed",
-          agentName: "All Agents",
-          downloadUrl: "#"
-        },
-        {
-          id: "REP005",
-          type: "Weekly Performance",
-          dateGenerated: "2024-10-05",
-          format: "CSV",
-          status: "Completed",
-          agentName: "All Agents",
-          downloadUrl: "#"
-        },
-      ];
-      
-      setReports(mockReports);
+      // For now, set empty array - will display "No reports generated yet"
+      setReports([]);
     } catch (error) {
       console.error('Error fetching reports:', error);
       toast.error("Failed to load reports");
