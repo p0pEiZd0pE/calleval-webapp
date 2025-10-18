@@ -107,17 +107,17 @@ export default function AgentPerformanceScores({ filters }) {
             : 'Comparison of average performance scores by agent'}
         </CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="flex items-center justify-center h-full min-h-[300px]">
         {loading ? (
-          <div className="flex items-center justify-center h-[300px] text-muted-foreground">
+          <div className="text-muted-foreground">
             Loading...
           </div>
         ) : chartData.length === 0 ? (
-          <div className="flex items-center justify-center h-[300px] text-muted-foreground">
+          <div className="text-muted-foreground">
             No data available for the selected filters
           </div>
         ) : (
-          <ChartContainer config={chartConfig}>
+          <ChartContainer config={chartConfig} className="w-full h-full">
             <BarChart accessibilityLayer data={chartData}>
               <CartesianGrid vertical={false} />
               <XAxis
