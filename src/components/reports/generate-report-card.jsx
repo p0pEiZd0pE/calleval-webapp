@@ -10,6 +10,7 @@ import { format } from "date-fns";
 import { CalendarIcon } from "lucide-react";
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { toast } from "sonner";
+import { API_ENDPOINTS } from '@/config/api';
 
 export default function GenerateReportCard({ filters }) {
   const [reportType, setReportType] = React.useState("weekly");
@@ -21,21 +22,76 @@ export default function GenerateReportCard({ filters }) {
     setGenerating(true);
     
     try {
-      // Simulate report generation
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // Calculate date range based on report type
+      let startDate, endDate;
+      const today = new Date();
       
-      const reportData = {
-        type: reportType,
-        format: exportFormat,
-        dateRange: reportType === "custom" ? dateRange : null,
-        filters: filters,
-        generatedAt: new Date().toISOString()
-      };
+      if (reportType === 'weekly') {
+        endDate = today;
+        startDate = new Date(today);
+        startDate.setDate(startDate.getDate() - 7);
+      } else if (reportType === 'monthly') {
+        endDate = today;
+        startDate = new Date(today);
+        startDate.setDate(startDate.getDate() - 30);
+      } else if (reportType === 'custom') {
+        if (!dateRange.from || !dateRange.to) {
+          toast.error("Please select a date range");
+          setGenerating(false);
+          return;
+        }
+        startDate = dateRange.from;
+        endDate = dateRange.to;
+      }
+      
+      // Fetch the data based on filters
+      const callsResponse = await fetch(API_ENDPOINTS.CALLS);
+      const callsData = await callsResponse.json();
+      
+      // Filter calls by date range
+      let filteredCalls = callsData.filter(call => {
+        const callDate = new Date(call.created_at);
+        return callDate >= startDate && callDate <= endDate && call.status === 'completed';
+      });
+      
+      // Apply agent filter if specified
+      if (filters?.agentId && filters.agentId !== 'all') {
+        filteredCalls = filteredCalls.filter(call => call.agent_id === filters.agentId);
+      }
+      
+      // Apply classification filter if specified
+      if (filters?.classification && filters.classification !== 'all') {
+        filteredCalls = filteredCalls.filter(call => {
+          const score = call.score || 0;
+          switch(filters.classification) {
+            case 'excellent':
+              return score >= 90;
+            case 'good':
+              return score >= 80 && score < 90;
+            case 'needs_improvement':
+              return score < 80;
+            default:
+              return true;
+          }
+        });
+      }
+      
+      if (filteredCalls.length === 0) {
+        toast.error("No data available for the selected criteria");
+        setGenerating(false);
+        return;
+      }
+      
+      // Generate report based on format
+      if (exportFormat === 'csv') {
+        generateCSV(filteredCalls);
+      } else if (exportFormat === 'xlsx') {
+        await generateXLSX(filteredCalls);
+      } else if (exportFormat === 'pdf') {
+        await generatePDF(filteredCalls);
+      }
       
       toast.success(`Report generated successfully in ${exportFormat.toUpperCase()} format`);
-      
-      // Here you would typically trigger the actual download
-      console.log('Report data:', reportData);
       
     } catch (error) {
       toast.error("Failed to generate report");
@@ -43,6 +99,54 @@ export default function GenerateReportCard({ filters }) {
     } finally {
       setGenerating(false);
     }
+  };
+  
+  const generateCSV = (data) => {
+    // Prepare CSV headers
+    const headers = [
+      'Call ID',
+      'Agent ID',
+      'Agent Name',
+      'Filename',
+      'Score',
+      'Duration',
+      'Status',
+      'Created At'
+    ];
+    
+    // Prepare CSV rows
+    const rows = data.map(call => [
+      call.id,
+      call.agent_id || 'N/A',
+      call.agent_name || 'N/A',
+      call.filename,
+      call.score || 0,
+      call.duration || 'N/A',
+      call.status,
+      new Date(call.created_at).toLocaleString()
+    ]);
+    
+    // Combine headers and rows
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
+    ].join('\n');
+    
+    // Create blob and download
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    
+    const reportTypeName = reportType.charAt(0).toUpperCase() + reportType.slice(1);
+    const timestamp = new Date().toISOString().split('T')[0];
+    const filename = `CallEval_${reportTypeName}_Report_${timestamp}.csv`;
+    
+    link.setAttribute('href', url);
+    link.setAttribute('download', filename);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   return (
@@ -83,7 +187,7 @@ export default function GenerateReportCard({ filters }) {
 
           {/* Custom Date Range Picker */}
           {reportType === "custom" && (
-            <div className="space-y-2">
+            <div className="space-y-2 flex-shrink-0">
               <Label className="text-xs md:text-sm font-medium">Date Range</Label>
               <Popover>
                 <PopoverTrigger asChild>
@@ -124,8 +228,8 @@ export default function GenerateReportCard({ filters }) {
           )}
 
           {/* Export Format */}
-          <div>
-            <Label className="text-xs md:text-sm font-medium mb-2 block">Export Format</Label>
+          <div className="space-y-2 flex-shrink-0">
+            <Label className="text-xs md:text-sm font-medium">Export Format</Label>
             <Select value={exportFormat} onValueChange={setExportFormat}>
               <SelectTrigger className="w-full text-xs md:text-sm">
                 <SelectValue placeholder="Select format" />
@@ -166,7 +270,7 @@ function ReportTypeCard({ icon, title, subtitle, selected, onClick }) {
   return (
     <div 
       className={cn(
-        "border rounded-lg p-2 md:p-4 text-center cursor-pointer transition flex items-center justify-center min-h-[80px] md:min-h-[100px]",
+        "border rounded-lg p-2 md:p-3 text-center cursor-pointer transition flex items-center justify-center h-full",
         selected ? "border-ring bg-ring/10" : "hover:border-ring"
       )}
       onClick={onClick}
