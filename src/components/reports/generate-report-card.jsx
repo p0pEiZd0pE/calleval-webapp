@@ -46,33 +46,33 @@ export default function GenerateReportCard({ filters }) {
   };
 
   return (
-      <Card className="flex flex-col justify-evenly w-full h-full rounded-xl border shadow-sm">
-        <CardHeader>
-          <h2 className="text-lg font-semibold">Generate New Report</h2>
-          <p className="text-sm text-muted-foreground">Configure and download performance reports.</p>
+      <Card className="flex flex-col w-full h-full rounded-xl border shadow-sm">
+        <CardHeader className="flex-shrink-0">
+          <h2 className="text-base md:text-lg font-semibold">Generate New Report</h2>
+          <p className="text-xs md:text-sm text-muted-foreground">Configure and download performance reports.</p>
         </CardHeader>
 
-        <CardContent className="space-y-6">
+        <CardContent className="flex-1 flex flex-col justify-center space-y-4 md:space-y-6">
           {/* Report Type */}
           <div>
-            <Label className="text-sm font-medium mb-2 block">Report Type</Label>
-            <div className="grid grid-cols-3 gap-4">
+            <Label className="text-xs md:text-sm font-medium mb-2 block">Report Type</Label>
+            <div className="grid grid-cols-3 gap-2 md:gap-4">
               <ReportTypeCard
-                icon={<CalendarDays className="h-5 w-5" />}
+                icon={<CalendarDays className="h-4 w-4 md:h-5 md:w-5" />}
                 title="Weekly"
                 subtitle="Last 7 days"
                 selected={reportType === "weekly"}
                 onClick={() => setReportType("weekly")}
               />
               <ReportTypeCard
-                icon={<CalendarDays className="h-5 w-5" />}
+                icon={<CalendarDays className="h-4 w-4 md:h-5 md:w-5" />}
                 title="Monthly"
                 subtitle="Last 30 days"
                 selected={reportType === "monthly"}
                 onClick={() => setReportType("monthly")}
               />
               <ReportTypeCard
-                icon={<Settings className="h-5 w-5" />}
+                icon={<Settings className="h-4 w-4 md:h-5 md:w-5" />}
                 title="Custom"
                 subtitle="Select date range"
                 selected={reportType === "custom"}
@@ -84,17 +84,17 @@ export default function GenerateReportCard({ filters }) {
           {/* Custom Date Range Picker */}
           {reportType === "custom" && (
             <div className="space-y-2">
-              <Label className="text-sm font-medium">Date Range</Label>
+              <Label className="text-xs md:text-sm font-medium">Date Range</Label>
               <Popover>
                 <PopoverTrigger asChild>
                   <Button
                     variant="outline"
                     className={cn(
-                      "w-full justify-start text-left font-normal",
+                      "w-full justify-start text-left font-normal text-xs md:text-sm",
                       !dateRange.from && "text-muted-foreground"
                     )}
                   >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    <CalendarIcon className="mr-2 h-3 w-3 md:h-4 md:w-4" />
                     {dateRange.from ? (
                       dateRange.to ? (
                         <>
@@ -125,9 +125,9 @@ export default function GenerateReportCard({ filters }) {
 
           {/* Export Format */}
           <div>
-            <Label className="text-sm font-medium mb-2 block">Export Format</Label>
+            <Label className="text-xs md:text-sm font-medium mb-2 block">Export Format</Label>
             <Select value={exportFormat} onValueChange={setExportFormat}>
-              <SelectTrigger className="w-full">
+              <SelectTrigger className="w-full text-xs md:text-sm">
                 <SelectValue placeholder="Select format" />
               </SelectTrigger>
               <SelectContent>
@@ -139,20 +139,20 @@ export default function GenerateReportCard({ filters }) {
           </div>
         </CardContent>
 
-        <CardFooter>
+        <CardFooter className="flex-shrink-0">
           <Button 
-            className="w-full bg-ring hover:bg-primary-foreground text-white"
+            className="w-full bg-ring hover:bg-primary-foreground text-white text-xs md:text-sm"
             onClick={handleGenerateReport}
             disabled={generating || (reportType === "custom" && (!dateRange.from || !dateRange.to))}
           >
             {generating ? (
               <>
-                <Download className="mr-2 h-4 w-4 animate-spin" />
+                <Download className="mr-2 h-3 w-3 md:h-4 md:w-4 animate-spin" />
                 Generating...
               </>
             ) : (
               <>
-                <Download className="mr-2 h-4 w-4" />
+                <Download className="mr-2 h-3 w-3 md:h-4 md:w-4" />
                 Download Report
               </>
             )}
@@ -166,15 +166,15 @@ function ReportTypeCard({ icon, title, subtitle, selected, onClick }) {
   return (
     <div 
       className={cn(
-        "border rounded-lg p-4 text-center cursor-pointer transition",
+        "border rounded-lg p-2 md:p-4 text-center cursor-pointer transition",
         selected ? "border-ring bg-ring/10" : "hover:border-ring"
       )}
       onClick={onClick}
     >
-      <div className="flex flex-col items-center justify-center gap-2">
+      <div className="flex flex-col items-center justify-center gap-1 md:gap-2">
         {icon}
-        <div className="text-sm font-medium">{title}</div>
-        <div className="text-xs text-muted-foreground">{subtitle}</div>
+        <div className="text-xs md:text-sm font-medium">{title}</div>
+        <div className="text-[10px] md:text-xs text-muted-foreground">{subtitle}</div>
       </div>
     </div>
   );
