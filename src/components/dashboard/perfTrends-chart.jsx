@@ -111,12 +111,25 @@ export function ChartAreaInteractive({ className = "" }) {
           try {
             const binaryScores = JSON.parse(call.binary_scores)
             
-            // The adherence score is the total_score or percentage from binary_scores
+            // Debug: Log the structure to understand what we're getting
+            console.log('Binary scores structure:', binaryScores)
+            
+            // The adherence score is the total_score from binary_scores
             // This represents how well the agent followed the script/protocol
-            const adherenceScore = binaryScores.total_score || binaryScores.percentage
+            let adherenceScore = null
+            
+            // Try different possible structures
+            if (binaryScores.total_score !== undefined) {
+              adherenceScore = binaryScores.total_score
+            } else if (binaryScores.percentage !== undefined) {
+              adherenceScore = binaryScores.percentage
+            }
             
             if (adherenceScore !== undefined && adherenceScore !== null) {
               callsByDate[dateKey].adherenceScores.push(adherenceScore)
+              console.log('Added adherence score:', adherenceScore)
+            } else {
+              console.log('No adherence score found in binary_scores')
             }
           } catch (e) {
             console.error('Error parsing binary scores:', e)
