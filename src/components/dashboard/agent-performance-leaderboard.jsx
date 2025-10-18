@@ -49,27 +49,42 @@ export function PerformanceLeaderboard({ className = "" }) {
       })
       
       // Calculate performance for each agent within date range
-      const agentPerformance = agentsData.map(agent => {
-        const agentCalls = filteredCalls.filter(call => call.agent_id === agent.agentId)
-        const scores = agentCalls.filter(c => c.score).map(c => c.score)
-        const avgScore = scores.length > 0
-          ? scores.reduce((a, b) => a + b, 0) / scores.length
-          : 0
-        
-        return {
-          ...agent,
-          avgScore: avgScore,
-          callsInPeriod: agentCalls.length
-        }
-      })
+      const agentPerformance = agentsData
+        .map(agent => {
+          const agentCalls = filteredCalls.filter(call => call.agent_id === agent.agentId)
+          const scores = agentCalls.filter(c => c.score).map(c => c.score)
+          const avgScore = scores.length > 0
+            ? scores.reduce((a, b) => a + b, 0) / scores.length
+            : 0
+          
+          return {
+            agentId: agent.agentId,
+            agentName: agent.agentName,
+            avgScore: avgScore,
+            callsInPeriod: agentCalls.length,
+            hasData: agentCalls.length > 0 && scores.length > 0
+          }
+        })
+        // ONLY include agents with actual call data
+        .filter(agent => agent.hasData)
       
       // Sort by score descending
       agentPerformance.sort((a, b) => b.avgScore - a.avgScore)
       
-      // Get top 3 and bottom 2
+      // Get top 3 performers and bottom 2 performers (if available)
       const top3 = agentPerformance.slice(0, 3)
-      const bottom2 = agentPerformance.slice(-2).reverse()
-      const leaderboard = [...top3, ...bottom2]
+      const bottom2 = agentPerformance.length > 3 
+        ? agentPerformance.slice(-2).reverse() 
+        : []
+      
+      // Combine top 3 and bottom 2, ensuring no duplicates
+      const leaderboard = [...top3]
+      bottom2.forEach(agent => {
+        // Only add if not already in top 3
+        if (!top3.find(t => t.agentId === agent.agentId)) {
+          leaderboard.push(agent)
+        }
+      })
       
       setAgents(leaderboard)
     } catch (error) {
@@ -88,7 +103,28 @@ export function PerformanceLeaderboard({ className = "" }) {
       .substring(0, 2)
   }
 
-  const isTopPerformer = (index) => index < 3
+  // Based on getPerformanceTrend from agent-card-section.jsx
+  const getPerformanceClassification = (score) => {
+    if (score >= 90) {
+      return {
+        label: 'Excellent',
+        variant: 'default',
+        className: 'bg-green-500 text-white dark:bg-green-600'
+      }
+    } else if (score >= 80) {
+      return {
+        label: 'Good',
+        variant: 'secondary',
+        className: 'bg-blue-500 text-white dark:bg-blue-600'
+      }
+    } else {
+      return {
+        label: 'Needs Improvement',
+        variant: 'destructive',
+        className: ''
+      }
+    }
+  }
 
   return (
     <Card className={`h-full flex flex-col ${className}`}> 
@@ -106,33 +142,36 @@ export function PerformanceLeaderboard({ className = "" }) {
       ) : agents.length === 0 ? (
         <CardContent>
           <div className="text-center text-muted-foreground py-4">
-            No agent data available
+            No agent performance data available for the selected period
           </div>
         </CardContent>
       ) : (
         <>
-          {agents.map((agent, index) => (
-            <CardContent key={agent.agentId}>
-              <div className='flex flex-row gap-2'>
-                <Avatar className="h-8 w-8 rounded-full grayscale">
-                  <AvatarImage/>
-                  <AvatarFallback className="rounded-full">{getInitials(agent.agentName)}</AvatarFallback>
-                </Avatar>
-                <div className="grid flex-1 text-left text-sm leading-tight">
-                  <span className='truncate font-semibold'>{agent.agentName}</span>
-                  <span className='truncate text-xs'>
-                    Score: {agent.avgScore.toFixed(1)}% ({agent.callsInPeriod} calls)
-                  </span>
+          {agents.map((agent) => {
+            const classification = getPerformanceClassification(agent.avgScore)
+            return (
+              <CardContent key={agent.agentId}>
+                <div className='flex flex-row gap-2'>
+                  <Avatar className="h-8 w-8 rounded-full grayscale">
+                    <AvatarImage/>
+                    <AvatarFallback className="rounded-full">{getInitials(agent.agentName)}</AvatarFallback>
+                  </Avatar>
+                  <div className="grid flex-1 text-left text-sm leading-tight">
+                    <span className='truncate font-semibold'>{agent.agentName}</span>
+                    <span className='truncate text-xs'>
+                      Score: {agent.avgScore.toFixed(1)}% ({agent.callsInPeriod} {agent.callsInPeriod === 1 ? 'call' : 'calls'})
+                    </span>
+                  </div>
+                  <Badge 
+                    variant={classification.variant}
+                    className={`${classification.className} min-w-30 rounded-full`}
+                  >
+                    {classification.label}
+                  </Badge>
                 </div>
-                <Badge 
-                  variant={isTopPerformer(index) ? "secondary" : "destructive"}
-                  className={`${isTopPerformer(index) ? 'bg-blue-500 text-white dark:bg-blue-600' : ''} min-w-30 rounded-full`}
-                >
-                  {isTopPerformer(index) ? 'Top Performer' : 'Needs Coaching'}
-                </Badge>
-              </div>
-            </CardContent>
-          ))}
+              </CardContent>
+            )
+          })}
         </>
       )}
       
