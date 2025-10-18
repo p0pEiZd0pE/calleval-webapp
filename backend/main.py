@@ -1197,10 +1197,17 @@ async def get_agent_stats(db: Session = Depends(get_db)):
 async def create_report(report: ReportCreate, db: Session = Depends(get_db)):
     """Create a new report record"""
     try:
-        from database import Report
         import uuid
         
         report_id = f"REP-{str(uuid.uuid4())[:8].upper()}"
+        
+        # Helper function to parse ISO datetime strings with 'Z' timezone
+        def parse_datetime(date_string):
+            if not date_string:
+                return None
+            # Replace 'Z' with '+00:00' for proper parsing
+            date_string = date_string.replace('Z', '+00:00')
+            return datetime.fromisoformat(date_string)
         
         db_report = Report(
             id=report_id,
@@ -1210,8 +1217,8 @@ async def create_report(report: ReportCreate, db: Session = Depends(get_db)):
             agent_id=report.agent_id,
             agent_name=report.agent_name,
             classification=report.classification,
-            start_date=datetime.fromisoformat(report.start_date) if report.start_date else None,
-            end_date=datetime.fromisoformat(report.end_date) if report.end_date else None,
+            start_date=parse_datetime(report.start_date),
+            end_date=parse_datetime(report.end_date),
             total_calls=report.total_calls,
             avg_score=report.avg_score
         )
