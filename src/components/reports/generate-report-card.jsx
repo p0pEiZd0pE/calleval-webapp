@@ -179,7 +179,11 @@ export default function GenerateReportCard({ filters }) {
   };
   
   const generatePDF = async (data) => {
-    const { jsPDF } = await import('jspdf');
+    // Import jsPDF
+    const jsPDFModule = await import('jspdf');
+    const jsPDF = jsPDFModule.default || jsPDFModule.jsPDF;
+    
+    // Import autotable - it extends jsPDF automatically
     await import('jspdf-autotable');
     
     const doc = new jsPDF();
