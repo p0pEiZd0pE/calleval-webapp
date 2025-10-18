@@ -93,6 +93,9 @@ export default function GenerateReportCard({ filters }) {
         await generatePDF(filteredCalls);
       }
       
+      // Save report metadata to backend
+      await saveReportMetadata(filteredCalls, startDate, endDate);
+      
       toast.success(`Report generated successfully in ${exportFormat.toUpperCase()} format`);
       
     } catch (error) {
@@ -228,6 +231,41 @@ export default function GenerateReportCard({ filters }) {
     const filename = `CallEval_${reportTypeName}_Report_${timestamp}.pdf`;
     
     doc.save(filename);
+  };
+  
+  const saveReportMetadata = async (data, startDate, endDate) => {
+    try {
+      const avgScore = data.length > 0
+        ? data.reduce((sum, c) => sum + (c.score || 0), 0) / data.length
+        : 0;
+      
+      const reportMetadata = {
+        type: reportType,
+        format: exportFormat,
+        agent_id: filters?.agentId !== 'all' ? filters?.agentId : null,
+        agent_name: filters?.agentId !== 'all' ? filters?.agentId : null,
+        classification: filters?.classification !== 'all' ? filters?.classification : null,
+        start_date: startDate.toISOString(),
+        end_date: endDate.toISOString(),
+        total_calls: data.length,
+        avg_score: parseFloat(avgScore.toFixed(1))
+      };
+      
+      const response = await fetch(API_ENDPOINTS.REPORTS, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(reportMetadata)
+      });
+      
+      if (!response.ok) {
+        console.error('Failed to save report metadata');
+      }
+    } catch (error) {
+      console.error('Error saving report metadata:', error);
+      // Don't show error to user, report was already generated successfully
+    }
   };
 
   return (

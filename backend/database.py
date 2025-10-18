@@ -63,6 +63,35 @@ class CallEvaluation(Base):
 Base.metadata.create_all(bind=engine)
 
 
+class Report(Base):
+    """Database model for generated reports"""
+    __tablename__ = "reports"
+    
+    id = Column(String, primary_key=True)
+    type = Column(String, nullable=False)  # weekly, monthly, custom
+    format = Column(String, nullable=False)  # csv, xlsx, pdf
+    status = Column(String, default="completed")  # completed, failed
+    
+    # Filters applied
+    agent_id = Column(String, nullable=True)
+    agent_name = Column(String, nullable=True)
+    classification = Column(String, nullable=True)
+    
+    # Date range
+    start_date = Column(DateTime, nullable=True)
+    end_date = Column(DateTime, nullable=True)
+    
+    # Metadata
+    total_calls = Column(Integer, default=0)
+    avg_score = Column(Float, nullable=True)
+    
+    # File info (if you want to store the files)
+    file_path = Column(String, nullable=True)
+    
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
 # Dependency for FastAPI
 def get_db():
     db = SessionLocal()

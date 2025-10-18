@@ -44,6 +44,17 @@ class AgentResponse(AgentBase):
     class Config:
         from_attributes = True
 
+class ReportCreate(BaseModel):
+    type: str  # weekly, monthly, custom
+    format: str  # csv, xlsx, pdf
+    agent_id: Optional[str] = None
+    agent_name: Optional[str] = None
+    classification: Optional[str] = None
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    total_calls: int = 0
+    avg_score: Optional[float] = None
+
 
 # ==================== MODAL AUTHENTICATION ====================
 modal_token_id = os.getenv("MODAL_TOKEN_ID")
@@ -1179,6 +1190,99 @@ async def get_agent_stats(db: Session = Depends(get_db)):
         }
     except Exception as e:
         print(f"Error fetching stats: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+    
+
+@app.post("/api/reports")
+async def create_report(report: ReportCreate, db: Session = Depends(get_db)):
+    """Create a new report record"""
+    try:
+        from database import Report
+        import uuid
+        
+        report_id = f"REP-{str(uuid.uuid4())[:8].upper()}"
+        
+        db_report = Report(
+            id=report_id,
+            type=report.type,
+            format=report.format,
+            status="completed",
+            agent_id=report.agent_id,
+            agent_name=report.agent_name,
+            classification=report.classification,
+            start_date=datetime.fromisoformat(report.start_date) if report.start_date else None,
+            end_date=datetime.fromisoformat(report.end_date) if report.end_date else None,
+            total_calls=report.total_calls,
+            avg_score=report.avg_score
+        )
+        
+        db.add(db_report)
+        db.commit()
+        db.refresh(db_report)
+        
+        return {
+            "id": db_report.id,
+            "type": db_report.type,
+            "format": db_report.format,
+            "status": db_report.status,
+            "agent_name": db_report.agent_name or "All Agents",
+            "classification": db_report.classification or "All Classifications",
+            "total_calls": db_report.total_calls,
+            "avg_score": db_report.avg_score,
+            "created_at": db_report.created_at.isoformat() if db_report.created_at else None
+        }
+    except Exception as e:
+        db.rollback()
+        print(f"Error creating report: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/reports")
+async def get_reports(db: Session = Depends(get_db)):
+    """Get all generated reports"""
+    try:
+        from database import Report
+        reports = db.query(Report).order_by(Report.created_at.desc()).all()
+        
+        return [{
+            "id": report.id,
+            "type": report.type,
+            "format": report.format,
+            "status": report.status,
+            "agent_name": report.agent_name or "All Agents",
+            "classification": report.classification or "All Classifications",
+            "total_calls": report.total_calls,
+            "avg_score": report.avg_score,
+            "created_at": report.created_at.isoformat() if report.created_at else None
+        } for report in reports]
+    except Exception as e:
+        print(f"Error fetching reports: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/reports/{report_id}")
+async def get_report(report_id: str, db: Session = Depends(get_db)):
+    """Get a specific report"""
+    try:
+        from database import Report
+        report = db.query(Report).filter(Report.id == report_id).first()
+        
+        if not report:
+            raise HTTPException(status_code=404, detail="Report not found")
+        
+        return {
+            "id": report.id,
+            "type": report.type,
+            "format": report.format,
+            "status": report.status,
+            "agent_name": report.agent_name or "All Agents",
+            "classification": report.classification or "All Classifications",
+            "total_calls": report.total_calls,
+            "avg_score": report.avg_score,
+            "created_at": report.created_at.isoformat() if report.created_at else None
+        }
+    except Exception as e:
+        print(f"Error fetching report: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

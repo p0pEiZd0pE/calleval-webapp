@@ -18,38 +18,40 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Download } from "lucide-react"
 import { toast } from "sonner"
+import { API_ENDPOINTS } from '@/config/api'
 
 export default function RecentReports() {
   const [reports, setReports] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
 
   React.useEffect(() => {
-    // In a real implementation, this would fetch from your backend
-    // For now, using mock data
     fetchReports();
   }, []);
 
   const fetchReports = async () => {
     try {
-      // TODO: Replace with actual API endpoint when reports backend is ready
-      // const response = await fetch(API_ENDPOINTS.REPORTS);
-      // const data = await response.json();
-      // setReports(data);
+      setLoading(true);
+      const response = await fetch(API_ENDPOINTS.REPORTS);
       
-      // For now, set empty array - will display "No reports generated yet"
-      setReports([]);
+      if (!response.ok) {
+        throw new Error('Failed to fetch reports');
+      }
+      
+      const data = await response.json();
+      setReports(data);
     } catch (error) {
       console.error('Error fetching reports:', error);
       toast.error("Failed to load reports");
+      setReports([]);
     } finally {
       setLoading(false);
     }
   };
 
   const handleDownload = (report) => {
-    // In a real implementation, this would trigger the actual download
-    toast.success(`Downloading ${report.type} (${report.format})`);
-    console.log('Downloading report:', report);
+    toast.info(`Re-generating ${report.type} report in ${report.format.toUpperCase()} format`);
+    // Note: Actual files aren't stored, so we just notify the user
+    // You could regenerate the report here if needed
   };
 
   const formatDate = (dateString) => {
@@ -59,6 +61,10 @@ export default function RecentReports() {
       month: 'short', 
       day: 'numeric' 
     });
+  };
+  
+  const formatReportType = (type) => {
+    return type.charAt(0).toUpperCase() + type.slice(1) + ' Report';
   };
 
   return (
@@ -98,17 +104,17 @@ export default function RecentReports() {
                     <TableCell className="font-medium font-mono text-sm">
                       {report.id}
                     </TableCell>
-                    <TableCell>{report.type}</TableCell>
+                    <TableCell>{formatReportType(report.type)}</TableCell>
                     <TableCell className="text-sm text-muted-foreground">
-                      {report.agentName}
+                      {report.agent_name || 'All Agents'}
                     </TableCell>
-                    <TableCell>{formatDate(report.dateGenerated)}</TableCell>
+                    <TableCell>{formatDate(report.created_at)}</TableCell>
                     <TableCell>
-                      <Badge variant="outline">{report.format}</Badge>
+                      <Badge variant="outline">{report.format.toUpperCase()}</Badge>
                     </TableCell>
                     <TableCell>
                       <Badge 
-                        variant={report.status === "Completed" ? "default" : "secondary"}
+                        variant={report.status === "completed" ? "default" : "secondary"}
                       >
                         {report.status}
                       </Badge>
@@ -118,10 +124,10 @@ export default function RecentReports() {
                         variant="ghost"
                         size="sm"
                         onClick={() => handleDownload(report)}
-                        disabled={report.status !== "Completed"}
+                        disabled={report.status !== "completed"}
                       >
                         <Download className="h-4 w-4 mr-2" />
-                        Download
+                        Re-generate
                       </Button>
                     </TableCell>
                   </TableRow>

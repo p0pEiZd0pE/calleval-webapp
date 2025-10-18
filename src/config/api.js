@@ -21,6 +21,9 @@ export const API_ENDPOINTS = {
   AGENT_DETAIL: (id) => `${API_URL}/api/agents/${id}`,
   AGENT_CALLS: (id) => `${API_URL}/api/agents/${id}/calls`,  // NEW
   AGENT_STATS: `${API_URL}/api/agents/stats/summary`,
+
+  REPORTS: `${API_URL}/api/reports`,
+  REPORT_DETAIL: (id) => `${API_URL}/api/reports/${id}`,
   
   // Health check
   ROOT: `${API_URL}/`,
