@@ -50,32 +50,42 @@ export default function RecentReports({ refreshTrigger }) {
 
   const handleDownload = async (report) => {
     try {
-      toast.info(`Regenerating ${report.type} report...`);
+      toast.info(`Regenerating ${formatReportType(report.type)}...`);
       
       // Fetch the calls data again
       const callsResponse = await fetch(API_ENDPOINTS.CALLS);
       const callsData = await callsResponse.json();
       
-      // Parse the date range from the report
-      const startDate = new Date(report.start_date);
-      const endDate = new Date(report.end_date);
+      // Get the report details to check date range
+      const reportResponse = await fetch(API_ENDPOINTS.REPORT_DETAIL(report.id));
+      const reportDetails = await reportResponse.json();
       
-      // Filter calls by the original date range
-      let filteredCalls = callsData.filter(call => {
-        const callDate = new Date(call.created_at);
-        return callDate >= startDate && callDate <= endDate && call.status === 'completed';
-      });
+      let filteredCalls = callsData;
+      
+      // Filter by status first
+      filteredCalls = filteredCalls.filter(call => call.status === 'completed');
+      
+      // Apply date range filter if available
+      if (reportDetails.start_date && reportDetails.end_date) {
+        const startDate = new Date(reportDetails.start_date);
+        const endDate = new Date(reportDetails.end_date);
+        
+        filteredCalls = filteredCalls.filter(call => {
+          const callDate = new Date(call.created_at);
+          return callDate >= startDate && callDate <= endDate;
+        });
+      }
       
       // Apply agent filter if it was used
-      if (report.agent_id) {
-        filteredCalls = filteredCalls.filter(call => call.agent_id === report.agent_id);
+      if (reportDetails.agent_id && reportDetails.agent_id !== 'all') {
+        filteredCalls = filteredCalls.filter(call => call.agent_id === reportDetails.agent_id);
       }
       
       // Apply classification filter if it was used
-      if (report.classification && report.classification !== 'all') {
+      if (reportDetails.classification && reportDetails.classification !== 'all') {
         filteredCalls = filteredCalls.filter(call => {
           const score = call.score || 0;
-          switch(report.classification) {
+          switch(reportDetails.classification) {
             case 'excellent':
               return score >= 90;
             case 'good':
@@ -87,6 +97,9 @@ export default function RecentReports({ refreshTrigger }) {
           }
         });
       }
+      
+      console.log('Filtered calls:', filteredCalls.length);
+      console.log('Report details:', reportDetails);
       
       if (filteredCalls.length === 0) {
         toast.error("No data available for this report");
