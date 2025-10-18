@@ -42,8 +42,10 @@ export default function GenerateReportCard({ filters, onReportGenerated }) {
           setGenerating(false);
           return;
         }
-        startDate = dateRange.from;
-        endDate = dateRange.to;
+        startDate = new Date(dateRange.from);
+        startDate.setHours(0, 0, 0, 0); // Start of day
+        endDate = new Date(dateRange.to);
+        endDate.setHours(23, 59, 59, 999); // End of day
       }
       
       // Fetch the data based on filters
@@ -244,17 +246,23 @@ export default function GenerateReportCard({ filters, onReportGenerated }) {
         ? data.reduce((sum, c) => sum + (c.score || 0), 0) / data.length
         : 0;
       
+      // Ensure dates are valid Date objects
+      const validStartDate = startDate instanceof Date ? startDate : new Date(startDate);
+      const validEndDate = endDate instanceof Date ? endDate : new Date(endDate);
+      
       const reportMetadata = {
         type: reportType,
         format: exportFormat,
         agent_id: filters?.agentId !== 'all' ? filters?.agentId : null,
         agent_name: filters?.agentId !== 'all' ? filters?.agentId : null,
         classification: filters?.classification !== 'all' ? filters?.classification : null,
-        start_date: startDate.toISOString(),
-        end_date: endDate.toISOString(),
+        start_date: validStartDate.toISOString(),
+        end_date: validEndDate.toISOString(),
         total_calls: data.length,
         avg_score: parseFloat(avgScore.toFixed(1))
       };
+      
+      console.log('Saving report metadata:', reportMetadata);
       
       const response = await fetch(API_ENDPOINTS.REPORTS, {
         method: 'POST',
@@ -265,7 +273,10 @@ export default function GenerateReportCard({ filters, onReportGenerated }) {
       });
       
       if (!response.ok) {
-        console.error('Failed to save report metadata');
+        const errorText = await response.text();
+        console.error('Failed to save report metadata:', errorText);
+      } else {
+        console.log('Report saved successfully');
       }
     } catch (error) {
       console.error('Error saving report metadata:', error);
