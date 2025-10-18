@@ -32,16 +32,9 @@ import { API_ENDPOINTS } from '@/config/api'
 import { DateRangeContext } from './date-picker'
 
 const chartConfig = {
-  visitors: {
-    label: "Visitors",
-  },
   adherenceScore: {
     label: "Script Adherence Score",
     color: "var(--ring)",
-  },
-  avgCallScore: {
-    label: "Average Call Score",
-    color: "var(--primary-foreground)",
   },
 }
 
