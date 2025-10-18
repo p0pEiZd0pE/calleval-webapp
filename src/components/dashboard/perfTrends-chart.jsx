@@ -68,6 +68,9 @@ export function ChartAreaInteractive({ className = "" }) {
       const response = await fetch(API_ENDPOINTS.CALLS)
       const calls = await response.json()
       
+      console.log('=== CHART DATA DEBUG ===')
+      console.log('Total calls fetched:', calls.length)
+      
       // Filter by date range and time range
       const now = new Date()
       let startDate = new Date()
@@ -86,9 +89,11 @@ export function ChartAreaInteractive({ className = "" }) {
                callDate >= dateRange.from && callDate <= dateRange.to
       })
       
+      console.log('Filtered calls:', filteredCalls.length)
+      
       // Group calls by date
       const callsByDate = {}
-      filteredCalls.forEach(call => {
+      filteredCalls.forEach((call, index) => {
         const dateKey = new Date(call.created_at).toLocaleDateString('en-US', { 
           month: 'short', 
           day: 'numeric' 
@@ -106,36 +111,63 @@ export function ChartAreaInteractive({ className = "" }) {
           callsByDate[dateKey].scores.push(call.score)
         }
         
+        // Debug first call's binary_scores
+        if (index === 0) {
+          console.log('=== FIRST CALL DEBUG ===')
+          console.log('Call ID:', call.id)
+          console.log('Call score:', call.score)
+          console.log('Binary scores (raw):', call.binary_scores)
+          console.log('Binary scores type:', typeof call.binary_scores)
+        }
+        
         // Extract adherence score from binary_scores
         if (call.binary_scores) {
           try {
-            const binaryScores = JSON.parse(call.binary_scores)
+            // Check if it's already an object or needs parsing
+            let binaryScores = call.binary_scores
             
-            // Debug: Log the structure to understand what we're getting
-            console.log('Binary scores structure:', binaryScores)
+            if (typeof binaryScores === 'string') {
+              binaryScores = JSON.parse(binaryScores)
+            }
+            
+            // Debug first call's parsed structure
+            if (index === 0) {
+              console.log('Parsed binary scores:', binaryScores)
+              console.log('Has total_score?', 'total_score' in binaryScores)
+              console.log('Has percentage?', 'percentage' in binaryScores)
+              console.log('Keys:', Object.keys(binaryScores))
+            }
             
             // The adherence score is the total_score from binary_scores
-            // This represents how well the agent followed the script/protocol
             let adherenceScore = null
             
-            // Try different possible structures
-            if (binaryScores.total_score !== undefined) {
+            if (binaryScores.total_score !== undefined && binaryScores.total_score !== null) {
               adherenceScore = binaryScores.total_score
-            } else if (binaryScores.percentage !== undefined) {
+            } else if (binaryScores.percentage !== undefined && binaryScores.percentage !== null) {
               adherenceScore = binaryScores.percentage
             }
             
-            if (adherenceScore !== undefined && adherenceScore !== null) {
+            if (adherenceScore !== null) {
               callsByDate[dateKey].adherenceScores.push(adherenceScore)
-              console.log('Added adherence score:', adherenceScore)
+              if (index === 0) {
+                console.log('✓ Added adherence score:', adherenceScore)
+              }
             } else {
-              console.log('No adherence score found in binary_scores')
+              if (index === 0) {
+                console.log('✗ No adherence score found')
+              }
             }
           } catch (e) {
-            console.error('Error parsing binary scores:', e)
+            console.error('Error parsing binary scores for call', call.id, ':', e)
+          }
+        } else {
+          if (index === 0) {
+            console.log('✗ Call has no binary_scores field')
           }
         }
       })
+      
+      console.log('Calls grouped by date:', Object.keys(callsByDate).length, 'days')
       
       // Calculate averages and format data
       const formattedData = Object.keys(callsByDate).map(date => {
@@ -158,6 +190,10 @@ export function ChartAreaInteractive({ className = "" }) {
       
       // Sort by date
       formattedData.sort((a, b) => new Date(a.date) - new Date(b.date))
+      
+      console.log('Final formatted data:', formattedData)
+      console.log('Sample:', formattedData[0])
+      console.log('=== END DEBUG ===')
       
       setChartData(formattedData)
     } catch (error) {
