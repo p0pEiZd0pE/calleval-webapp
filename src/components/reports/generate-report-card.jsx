@@ -1,5 +1,5 @@
 import React from 'react'
-import { Download, CalendarDays, Settings, Calendar } from "lucide-react";
+import { Download, CalendarDays, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -102,19 +102,7 @@ export default function GenerateReportCard({ filters }) {
   };
   
   const generateCSV = (data) => {
-    // Prepare CSV headers
-    const headers = [
-      'Call ID',
-      'Agent ID',
-      'Agent Name',
-      'Filename',
-      'Score',
-      'Duration',
-      'Status',
-      'Created At'
-    ];
-    
-    // Prepare CSV rows
+    const headers = ['Call ID', 'Agent ID', 'Agent Name', 'Filename', 'Score', 'Duration', 'Status', 'Created At'];
     const rows = data.map(call => [
       call.id,
       call.agent_id || 'N/A',
@@ -126,13 +114,11 @@ export default function GenerateReportCard({ filters }) {
       new Date(call.created_at).toLocaleString()
     ]);
     
-    // Combine headers and rows
     const csvContent = [
       headers.join(','),
       ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
     ].join('\n');
     
-    // Create blob and download
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     const url = URL.createObjectURL(blob);
@@ -148,6 +134,101 @@ export default function GenerateReportCard({ filters }) {
     link.click();
     document.body.removeChild(link);
   };
+  
+  const generateXLSX = async (data) => {
+    const XLSX = await import('xlsx');
+    
+    const worksheetData = [
+      ['CallEval Performance Report'],
+      ['Generated:', new Date().toLocaleString()],
+      ['Report Type:', reportType.charAt(0).toUpperCase() + reportType.slice(1)],
+      ['Agent Filter:', filters?.agentId === 'all' ? 'All Agents' : filters?.agentId || 'All Agents'],
+      ['Classification:', filters?.classification === 'all' ? 'All Classifications' : filters?.classification || 'All Classifications'],
+      [],
+      ['Call ID', 'Agent ID', 'Agent Name', 'Filename', 'Score', 'Duration', 'Status', 'Created At']
+    ];
+    
+    data.forEach(call => {
+      worksheetData.push([
+        call.id,
+        call.agent_id || 'N/A',
+        call.agent_name || 'N/A',
+        call.filename,
+        call.score || 0,
+        call.duration || 'N/A',
+        call.status,
+        new Date(call.created_at).toLocaleString()
+      ]);
+    });
+    
+    const workbook = XLSX.utils.book_new();
+    const worksheet = XLSX.utils.aoa_to_sheet(worksheetData);
+    
+    worksheet['!cols'] = [
+      { wch: 15 }, { wch: 15 }, { wch: 20 }, { wch: 30 },
+      { wch: 10 }, { wch: 12 }, { wch: 12 }, { wch: 20 }
+    ];
+    
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Report');
+    
+    const reportTypeName = reportType.charAt(0).toUpperCase() + reportType.slice(1);
+    const timestamp = new Date().toISOString().split('T')[0];
+    const filename = `CallEval_${reportTypeName}_Report_${timestamp}.xlsx`;
+    
+    XLSX.writeFile(workbook, filename);
+  };
+  
+  const generatePDF = async (data) => {
+    const { jsPDF } = await import('jspdf');
+    await import('jspdf-autotable');
+    
+    const doc = new jsPDF();
+    
+    doc.setFontSize(18);
+    doc.text('CallEval Performance Report', 14, 20);
+    
+    doc.setFontSize(10);
+    doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 30);
+    doc.text(`Report Type: ${reportType.charAt(0).toUpperCase() + reportType.slice(1)}`, 14, 36);
+    doc.text(`Agent Filter: ${filters?.agentId === 'all' ? 'All Agents' : filters?.agentId || 'All Agents'}`, 14, 42);
+    doc.text(`Classification: ${filters?.classification === 'all' ? 'All Classifications' : filters?.classification || 'All'}`, 14, 48);
+    
+    const tableData = data.map(call => [
+      call.id,
+      call.agent_name || 'N/A',
+      call.filename,
+      (call.score || 0).toFixed(1),
+      call.duration || 'N/A',
+      call.status,
+      new Date(call.created_at).toLocaleDateString()
+    ]);
+    
+    doc.autoTable({
+      startY: 55,
+      head: [['Call ID', 'Agent', 'Filename', 'Score', 'Duration', 'Status', 'Date']],
+      body: tableData,
+      theme: 'grid',
+      headStyles: { fillColor: [34, 197, 94] },
+      styles: { fontSize: 8 },
+      columnStyles: {
+        0: { cellWidth: 20 }, 1: { cellWidth: 25 }, 2: { cellWidth: 45 },
+        3: { cellWidth: 15 }, 4: { cellWidth: 20 }, 5: { cellWidth: 20 }, 6: { cellWidth: 25 }
+      }
+    });
+    
+    const finalY = doc.lastAutoTable.finalY + 10;
+    doc.setFontSize(10);
+    doc.text(`Total Calls: ${data.length}`, 14, finalY);
+    
+    const avgScore = data.reduce((sum, c) => sum + (c.score || 0), 0) / data.length;
+    doc.text(`Average Score: ${avgScore.toFixed(1)}`, 14, finalY + 6);
+    
+    const reportTypeName = reportType.charAt(0).toUpperCase() + reportType.slice(1);
+    const timestamp = new Date().toISOString().split('T')[0];
+    const filename = `CallEval_${reportTypeName}_Report_${timestamp}.pdf`;
+    
+    doc.save(filename);
+  };
 
   return (
       <Card className="flex flex-col w-full h-full rounded-xl border shadow-sm">
@@ -157,7 +238,6 @@ export default function GenerateReportCard({ filters }) {
         </CardHeader>
 
         <CardContent className="flex-1 flex flex-col space-y-3 md:space-y-4 py-4">
-          {/* Report Type */}
           <div className="flex-1 flex flex-col min-h-0">
             <Label className="text-xs md:text-sm font-medium mb-2 flex-shrink-0">Report Type</Label>
             <div className="grid grid-cols-3 gap-2 md:gap-3 flex-1 min-h-0">
@@ -185,7 +265,6 @@ export default function GenerateReportCard({ filters }) {
             </div>
           </div>
 
-          {/* Custom Date Range Picker */}
           {reportType === "custom" && (
             <div className="space-y-2 flex-shrink-0">
               <Label className="text-xs md:text-sm font-medium">Date Range</Label>
@@ -227,7 +306,6 @@ export default function GenerateReportCard({ filters }) {
             </div>
           )}
 
-          {/* Export Format */}
           <div className="space-y-2 flex-shrink-0">
             <Label className="text-xs md:text-sm font-medium">Export Format</Label>
             <Select value={exportFormat} onValueChange={setExportFormat}>
