@@ -996,6 +996,7 @@ async def list_calls(db: Session = Depends(get_db)):
         "score": call.score,
         "agent_id": call.agent_id,
         "agent_name": call.agent_name,
+        "binary_scores": call.binary_scores,
         "created_at": call.created_at.isoformat() if call.created_at else None,
         "updated_at": call.updated_at.isoformat() if call.updated_at else None,
     } for call in calls]
