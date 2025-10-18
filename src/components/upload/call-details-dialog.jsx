@@ -106,7 +106,7 @@ export function CallDetailsDialog({ callId, open, onOpenChange, children }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       {children}
-      <DialogContent className="max-w-6xl max-h-[90vh]">
+      <DialogContent className="xl:max-w-4xl max-h-[85vh]">
         <DialogHeader>
           <DialogTitle className="text-2xl">Call Details</DialogTitle>
           <DialogDescription>
