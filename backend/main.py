@@ -10,7 +10,7 @@ import librosa
 from pathlib import Path
 import json
 import re
-from database import get_db, CallEvaluation, SessionLocal, Agent, Report
+from database import get_db, CallEvaluation, SessionLocal, Agent, Report, Settings
 from config import settings
 from pydantic import BaseModel
 from typing import Optional
