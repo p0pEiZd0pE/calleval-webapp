@@ -250,7 +250,7 @@ export default function AgentDirectory({ onAgentSelect, onCallsUpdate }) {
             };
             
             return (
-              <DropdownMenu>
+              <DropdownMenu modal={false}>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" className="h-8 w-8 p-0">
                     <span className="sr-only">Open menu</span>
@@ -266,13 +266,23 @@ export default function AgentDirectory({ onAgentSelect, onCallsUpdate }) {
                   <DropdownMenuItem onClick={handleViewProfile}>
                     View Profile
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setCallsDialogAgent(agent)}>
+                  <DropdownMenuItem 
+                    onSelect={(e) => {
+                      e.preventDefault()
+                      setTimeout(() => setCallsDialogAgent(agent), 0)
+                    }}
+                  >
                     View Calls
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => {
-                    setEditingAgent(agent)
-                    setIsEditDialogOpen(true)
-                  }}>
+                  <DropdownMenuItem 
+                    onSelect={(e) => {
+                      e.preventDefault()
+                      setTimeout(() => {
+                        setEditingAgent(agent)
+                        setIsEditDialogOpen(true)
+                      }, 0)
+                    }}
+                  >
                     Edit Profile
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
