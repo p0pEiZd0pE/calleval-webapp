@@ -113,7 +113,8 @@ export function AgentCallsDialog({ agentId, open, onOpenChange, children }) {
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-3 gap-4">
+                {/* RED CIRCLE FIX: Changed grid-cols-3 gap-4 to justify-between with flex */}
+                <div className="flex items-center justify-between">
                   <div className="space-y-1">
                     <p className="text-sm text-muted-foreground">Average Score</p>
                     <p className={`text-2xl font-bold ${getScoreColor(data.agent.avgScore)}`}>
@@ -160,7 +161,8 @@ export function AgentCallsDialog({ agentId, open, onOpenChange, children }) {
                               </div>
                             </div>
                             
-                            <div className="flex items-center gap-4">
+                            {/* BLUE CIRCLE FIX: Increased gap from gap-4 to gap-8 */}
+                            <div className="flex items-center gap-8">
                               <div className="text-right">
                                 <p className="text-xs text-muted-foreground">Duration</p>
                                 <p className="text-sm font-medium">{call.duration || 'N/A'}</p>
