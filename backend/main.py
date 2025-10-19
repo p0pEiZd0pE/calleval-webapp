@@ -56,16 +56,6 @@ class ReportCreate(BaseModel):
     total_calls: int = 0
     avg_score: Optional[float] = None
 
-class Settings(Base):
-    __tablename__ = "settings"
-    
-    id = Column(Integer, primary_key=True, index=True)
-    email_notifications = Column(Boolean, default=True)
-    language = Column(String, default="English")
-    retention_period = Column(Integer, default=12)
-    theme = Column(String, default="light")
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-
 
 # ==================== MODAL AUTHENTICATION ====================
 modal_token_id = os.getenv("MODAL_TOKEN_ID")
