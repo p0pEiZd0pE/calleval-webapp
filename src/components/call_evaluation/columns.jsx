@@ -1,4 +1,4 @@
-import { MoreHorizontal, FileText, Play, Download } from "lucide-react"
+import { MoreHorizontal, FileText, Play, Download, User, Phone } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -42,6 +42,15 @@ function ScoreDetailsDialog({ callId }) {
       setLoading(false)
     }
   }
+
+  const getAgentStats = () => {
+    if (!callData?.speakers) return null;
+    
+    const agentSpeaker = Object.entries(callData.speakers).find(([_, role]) => role === 'agent')?.[0];
+    const callerSpeaker = Object.entries(callData.speakers).find(([_, role]) => role === 'caller')?.[0];
+    
+    return { agentSpeaker, callerSpeaker };
+  };
 
   const handleOpenChange = (newOpen) => {
     setOpen(newOpen)
@@ -182,6 +191,36 @@ function ScoreDetailsDialog({ callId }) {
                   </audio>
                 </div>
               )}
+
+              {/* Speaker Identification - NEW SECTION */}
+              {callData.speakers && (() => {
+                const stats = getAgentStats();
+                return stats && (
+                  <div className="p-4 bg-gradient-to-r from-blue-50 to-green-50 dark:from-blue-950 dark:to-green-950 rounded-lg border">
+                    <p className="text-sm font-semibold mb-3">Speaker Identification</p>
+                    <div className="flex justify-between">
+                      <div className="flex items-center gap-2 bg-blue-100 dark:bg-blue-900 px-3 py-2 rounded-md">
+                        <User className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                        <div>
+                          <span className="text-sm font-bold text-blue-700 dark:text-blue-300">AGENT</span>
+                          <span className="text-xs text-blue-600 dark:text-blue-400 ml-2">
+                            ({stats.agentSpeaker || 'Unknown'})
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 bg-green-100 dark:bg-green-900 px-3 py-2 rounded-md">
+                        <Phone className="h-5 w-5 text-green-600 dark:text-green-400" />
+                        <div>
+                          <span className="text-sm font-bold text-green-700 dark:text-green-300">CALLER</span>
+                          <span className="text-xs text-green-600 dark:text-green-400 ml-2">
+                            ({stats.callerSpeaker || 'Unknown'})
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* Overall Score */}
               <div className="bg-muted p-4 rounded-lg">
