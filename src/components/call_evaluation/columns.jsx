@@ -83,36 +83,20 @@ function ScoreDetailsDialog({ callId }) {
       document.body.removeChild(audioLink)
       window.URL.revokeObjectURL(audioUrl)
       
-      // Download transcription
-      if (callData?.segments) {
-        let transcriptText = `Call Transcription (Diarized)\n`
-        transcriptText += `Filename: ${callData.filename}\n`
-        transcriptText += `Date: ${new Date(callData.created_at).toLocaleString()}\n`
-        transcriptText += `Duration: ${callData.duration || 'N/A'}\n`
-        transcriptText += `Score: ${callData.score || 'N/A'}/100\n\n`
-        transcriptText += `${'='.repeat(60)}\n\n`
-        
-        // Add diarized transcript
-        callData.segments.forEach(segment => {
-          const speaker = segment.speaker || 'UNKNOWN'
-          const text = segment.text || ''
-          const timestamp = `[${segment.start?.toFixed(2)}s - ${segment.end?.toFixed(2)}s]`
-          transcriptText += `${speaker} ${timestamp}:\n${text}\n\n`
-        })
-        
-        // Create and download transcript file
-        const blob = new Blob([transcriptText], { type: 'text/plain' })
-        const transcriptUrl = window.URL.createObjectURL(blob)
+      // Download transcript if available
+      if (callData.transcript) {
+        const transcriptBlob = new Blob([callData.transcript], { type: 'text/plain' })
+        const transcriptUrl = window.URL.createObjectURL(transcriptBlob)
         const transcriptLink = document.createElement('a')
         transcriptLink.href = transcriptUrl
-        transcriptLink.download = `transcript_${audioFilename.replace(/\.[^/.]+$/, '')}.txt`
+        transcriptLink.download = `${callId}_transcript.txt`
         document.body.appendChild(transcriptLink)
         transcriptLink.click()
         document.body.removeChild(transcriptLink)
         window.URL.revokeObjectURL(transcriptUrl)
       }
       
-      toast.success('Download started!')
+      toast.success('Files downloaded successfully!')
     } catch (error) {
       console.error('Download error:', error)
       toast.error('Failed to download files')
@@ -120,14 +104,13 @@ function ScoreDetailsDialog({ callId }) {
   }
 
   const renderMetricRow = (name, metric) => {
-    const isDetected = metric.detected
-    const score = metric.score || 0
-    const weight = metric.weight || 0
+    const weight = metric.max_score || 0
+    const isDetected = metric.detected || false
     
     return (
-      <div key={name} className="flex items-center justify-between py-2 border-b last:border-b-0">
+      <div key={name} className="flex items-center justify-between py-2 px-3 rounded-lg hover:bg-muted/50">
         <div className="flex items-center gap-2">
-          <span className={isDetected ? "text-green-600" : "text-red-500"}>
+          <span className={`text-lg font-bold ${isDetected ? "text-green-600" : "text-red-500"}`}>
             {isDetected ? "✓" : "✗"}
           </span>
           <span className="text-sm font-medium">
@@ -155,22 +138,25 @@ function ScoreDetailsDialog({ callId }) {
       </DialogTrigger>
       <DialogContent className="xl:max-w-4xl max-h-[85vh]">
         <DialogHeader>
-          <DialogTitle className="flex items-center justify-between">
-            <span>Call Evaluation Details</span>
+          <div className="flex items-start justify-between pr-6">
+            <div className="flex-1">
+              <DialogTitle>Call Evaluation Details</DialogTitle>
+              <DialogDescription className="mt-1.5">
+                Call ID: {callId.substring(0, 20)}...
+              </DialogDescription>
+            </div>
             {callData && (
               <Button
                 variant="outline"
                 size="sm"
                 onClick={handleDownload}
+                className="mt-0"
               >
                 <Download className="mr-2 h-4 w-4" />
                 Download All
               </Button>
             )}
-          </DialogTitle>
-          <DialogDescription>
-            Call ID: {callId.substring(0, 20)}...
-          </DialogDescription>
+          </div>
         </DialogHeader>
         
         {loading ? (
