@@ -48,6 +48,7 @@ export default function AgentDirectory({ onAgentSelect, onCallsUpdate }) {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [editingAgent, setEditingAgent] = useState(null)
+  const [callsDialogAgent, setCallsDialogAgent] = useState(null)
   
   const [filters, setFilters] = useState({
     position: "all",
@@ -230,7 +231,6 @@ export default function AgentDirectory({ onAgentSelect, onCallsUpdate }) {
           ...col,
           cell: ({ row }) => {
             const agent = row.original
-            const [callsDialogOpen, setCallsDialogOpen] = React.useState(false)
             
             const handleViewProfile = async () => {
               onAgentSelect(agent);
@@ -250,49 +250,40 @@ export default function AgentDirectory({ onAgentSelect, onCallsUpdate }) {
             };
             
             return (
-              <>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" className="h-8 w-8 p-0">
-                      <span className="sr-only">Open menu</span>
-                      <MoreHorizontal className="h-4 w-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                    <DropdownMenuItem onClick={() => navigator.clipboard.writeText(agent.agentId)}>
-                      Copy Agent ID
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={handleViewProfile}>
-                      View Profile
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => setCallsDialogOpen(true)}>
-                      View Calls
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => {
-                      setEditingAgent(agent)
-                      setIsEditDialogOpen(true)
-                    }}>
-                      Edit Profile
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem 
-                      className="text-red-600"
-                      onClick={() => handleDeleteAgent(agent.agentId)}
-                    >
-                      Delete Agent
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-                
-                {/* Hidden AgentCallsDialog - triggered by dropdown */}
-                <AgentCallsDialog 
-                  agentId={agent.agentId}
-                  open={callsDialogOpen}
-                  onOpenChange={setCallsDialogOpen}
-                />
-              </>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" className="h-8 w-8 p-0">
+                    <span className="sr-only">Open menu</span>
+                    <MoreHorizontal className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                  <DropdownMenuItem onClick={() => navigator.clipboard.writeText(agent.agentId)}>
+                    Copy Agent ID
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={handleViewProfile}>
+                    View Profile
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setCallsDialogAgent(agent)}>
+                    View Calls
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => {
+                    setEditingAgent(agent)
+                    setIsEditDialogOpen(true)
+                  }}>
+                    Edit Profile
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem 
+                    className="text-red-600"
+                    onClick={() => handleDeleteAgent(agent.agentId)}
+                  >
+                    Delete Agent
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             )
           }
         }
@@ -578,6 +569,17 @@ export default function AgentDirectory({ onAgentSelect, onCallsUpdate }) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Agent Calls Dialog - Managed at parent level */}
+      {callsDialogAgent && (
+        <AgentCallsDialog 
+          agentId={callsDialogAgent.agentId}
+          open={!!callsDialogAgent}
+          onOpenChange={(open) => {
+            if (!open) setCallsDialogAgent(null)
+          }}
+        />
+      )}
     </div>
   )
 }
