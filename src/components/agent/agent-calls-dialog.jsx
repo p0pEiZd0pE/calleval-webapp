@@ -76,8 +76,8 @@ export function AgentCallsDialog({ agentId, open, onOpenChange, children }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       {children}
-      <DialogContent className="xl:max-w-4xl max-h-[85vh] flex flex-col">
-        <DialogHeader>
+      <DialogContent className="xl:max-w-4xl h-[85vh] overflow-hidden">
+        <DialogHeader className="flex-shrink-0">
           <DialogTitle className="text-2xl">Agent Call History</DialogTitle>
           <DialogDescription>
             View all calls and performance metrics for this agent
@@ -98,116 +98,118 @@ export function AgentCallsDialog({ agentId, open, onOpenChange, children }) {
         )}
 
         {data && !loading && !error && (
-          <ScrollArea className="flex-1 pr-4">
-            <div className="space-y-4">
-              {/* Agent Summary Card */}
-              <Card>
-                <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <CardTitle className="text-xl">{data.agent.agentName}</CardTitle>
-                      <CardDescription>{data.agent.position}</CardDescription>
+          <div className="flex-1 overflow-hidden">
+            <ScrollArea className="h-full pr-4">
+              <div className="space-y-4 pb-4">
+                {/* Agent Summary Card */}
+                <Card>
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <CardTitle className="text-xl">{data.agent.agentName}</CardTitle>
+                        <CardDescription>{data.agent.position}</CardDescription>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {getTrend(data.agent.avgScore)}
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      {getTrend(data.agent.avgScore)}
+                  </CardHeader>
+                  <CardContent>
+                    {/* Updated to justify-between as per previous fix */}
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-1">
+                        <p className="text-sm text-muted-foreground">Average Score</p>
+                        <p className={`text-2xl font-bold ${getScoreColor(data.agent.avgScore)}`}>
+                          {data.agent.avgScore || 0}/100
+                        </p>
+                      </div>
+                      <div className="space-y-1">
+                        <p className="text-sm text-muted-foreground">Calls Handled</p>
+                        <p className="text-2xl font-bold">
+                          {data.agent.callsHandled || 0}
+                        </p>
+                      </div>
+                      <div className="space-y-1">
+                        <p className="text-sm text-muted-foreground">Total Uploads</p>
+                        <p className="text-2xl font-bold">
+                          {data.calls?.length || 0}
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  {/* Updated to justify-between as per previous fix */}
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-1">
-                      <p className="text-sm text-muted-foreground">Average Score</p>
-                      <p className={`text-2xl font-bold ${getScoreColor(data.agent.avgScore)}`}>
-                        {data.agent.avgScore || 0}/100
-                      </p>
-                    </div>
-                    <div className="space-y-1">
-                      <p className="text-sm text-muted-foreground">Calls Handled</p>
-                      <p className="text-2xl font-bold">
-                        {data.agent.callsHandled || 0}
-                      </p>
-                    </div>
-                    <div className="space-y-1">
-                      <p className="text-sm text-muted-foreground">Total Uploads</p>
-                      <p className="text-2xl font-bold">
-                        {data.calls?.length || 0}
-                      </p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
+                  </CardContent>
+                </Card>
 
-              {/* Calls List */}
-              <div>
-                <h3 className="font-semibold text-lg mb-3">Call History</h3>
-                <Separator className="mb-3" />
-                
-                {data.calls && data.calls.length > 0 ? (
-                  <div className="space-y-3">
-                    {data.calls.map((call, index) => (
-                      <Card key={call.id} className="hover:shadow-md transition-shadow">
-                        <CardContent className="p-4">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-4 flex-1">
-                              <div className="flex items-center justify-center w-10 h-10 rounded-full bg-primary/10">
-                                <Phone className="h-5 w-5 text-primary" />
-                              </div>
-                              <div className="flex-1">
-                                <p className="font-medium text-sm">{call.filename}</p>
-                                <p className="text-xs text-muted-foreground">
-                                  {call.created_at ? new Date(call.created_at).toLocaleString() : 'N/A'}
-                                </p>
-                              </div>
-                            </div>
-                            
-                            {/* Updated gap to gap-8 as per previous fix */}
-                            <div className="flex items-center gap-8">
-                              <div className="text-right">
-                                <p className="text-xs text-muted-foreground">Duration</p>
-                                <p className="text-sm font-medium">{call.duration || 'N/A'}</p>
-                              </div>
-                              
-                              <div className="text-right">
-                                <p className="text-xs text-muted-foreground">Score</p>
-                                {call.score ? (
-                                  <p className={`text-lg font-bold ${getScoreColor(call.score)}`}>
-                                    {call.score}
+                {/* Calls List */}
+                <div>
+                  <h3 className="font-semibold text-lg mb-3">Call History</h3>
+                  <Separator className="mb-3" />
+                  
+                  {data.calls && data.calls.length > 0 ? (
+                    <div className="space-y-3">
+                      {data.calls.map((call, index) => (
+                        <Card key={call.id} className="hover:shadow-md transition-shadow">
+                          <CardContent className="p-4">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-4 flex-1">
+                                <div className="flex items-center justify-center w-10 h-10 rounded-full bg-primary/10">
+                                  <Phone className="h-5 w-5 text-primary" />
+                                </div>
+                                <div className="flex-1">
+                                  <p className="font-medium text-sm">{call.filename}</p>
+                                  <p className="text-xs text-muted-foreground">
+                                    {call.created_at ? new Date(call.created_at).toLocaleString() : 'N/A'}
                                   </p>
-                                ) : (
-                                  <p className="text-sm text-muted-foreground">Pending</p>
-                                )}
+                                </div>
                               </div>
                               
-                              <div>
-                                <Badge 
-                                  variant={
-                                    call.status === 'completed' ? 'default' : 
-                                    call.status === 'failed' ? 'destructive' : 
-                                    'secondary'
-                                  }
-                                >
-                                  {call.status}
-                                </Badge>
+                              {/* Updated gap to gap-8 as per previous fix */}
+                              <div className="flex items-center gap-8">
+                                <div className="text-right">
+                                  <p className="text-xs text-muted-foreground">Duration</p>
+                                  <p className="text-sm font-medium">{call.duration || 'N/A'}</p>
+                                </div>
+                                
+                                <div className="text-right">
+                                  <p className="text-xs text-muted-foreground">Score</p>
+                                  {call.score ? (
+                                    <p className={`text-lg font-bold ${getScoreColor(call.score)}`}>
+                                      {call.score}
+                                    </p>
+                                  ) : (
+                                    <p className="text-sm text-muted-foreground">Pending</p>
+                                  )}
+                                </div>
+                                
+                                <div>
+                                  <Badge 
+                                    variant={
+                                      call.status === 'completed' ? 'default' : 
+                                      call.status === 'failed' ? 'destructive' : 
+                                      'secondary'
+                                    }
+                                  >
+                                    {call.status}
+                                  </Badge>
+                                </div>
                               </div>
                             </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-center py-12 text-muted-foreground border rounded-lg">
-                    <Phone className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                    <p className="font-medium">No calls found</p>
-                    <p className="text-sm mt-1">
-                      This agent hasn't had any calls uploaded yet.
-                    </p>
-                  </div>
-                )}
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-12 text-muted-foreground border rounded-lg">
+                      <Phone className="h-12 w-12 mx-auto mb-3 opacity-50" />
+                      <p className="font-medium">No calls found</p>
+                      <p className="text-sm mt-1">
+                        This agent hasn't had any calls uploaded yet.
+                      </p>
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
-          </ScrollArea>
+            </ScrollArea>
+          </div>
         )}
       </DialogContent>
     </Dialog>
