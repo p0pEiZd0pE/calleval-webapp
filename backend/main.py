@@ -10,11 +10,16 @@ import librosa
 from pathlib import Path
 import json
 import re
-from database import get_db, CallEvaluation, SessionLocal, Agent, Report, Settings
+from database import get_db, CallEvaluation, SessionLocal, Agent, Report, Settings, AuditLog
 from config import settings
 from pydantic import BaseModel
 from typing import Optional
 from fastapi import Form
+from audit_logger import (
+    log_call_upload, log_call_analysis_complete, log_agent_created, 
+    log_agent_updated, log_agent_deleted, log_settings_updated,
+    log_report_generated, log_call_deleted, log_user_login
+)
 
 
 settings_router = APIRouter()
@@ -1340,39 +1345,48 @@ async def get_settings(db: Session = Depends(get_db)):
 @app.put("/api/settings")
 async def update_settings(settings_data: dict, db: Session = Depends(get_db)):
     try:
-        print(f"Received settings update: {settings_data}")
+        settings = db.query(Settings).first()
         
-        settings_record = db.query(Settings).first()
+        if not settings:
+            settings = Settings()
+            db.add(settings)
         
-        if not settings_record:
-            print("No settings found, creating new record")
-            settings_record = Settings()
-            db.add(settings_record)
+        # Track changes for audit log
+        changes = {}
+        
+        old_email = settings.email_notifications
+        old_lang = settings.language
+        old_retention = settings.retention_period
+        old_theme = settings.theme
         
         # Update fields
-        settings_record.email_notifications = settings_data.get("emailNotifications", True)
-        settings_record.language = settings_data.get("language", "English")
-        settings_record.retention_period = settings_data.get("retentionPeriod", 12)
-        settings_record.theme = settings_data.get("theme", "light")
+        settings.email_notifications = settings_data.get("emailNotifications", True)
+        settings.language = settings_data.get("language", "English")
+        settings.retention_period = settings_data.get("retentionPeriod", 12)
+        settings.theme = settings_data.get("theme", "light")
+        
+        # Track what changed
+        if old_email != settings.email_notifications:
+            changes["emailNotifications"] = settings.email_notifications
+        if old_lang != settings.language:
+            changes["language"] = settings.language
+        if old_retention != settings.retention_period:
+            changes["retentionPeriod"] = settings.retention_period
+        if old_theme != settings.theme:
+            changes["theme"] = settings.theme
         
         db.commit()
-        db.refresh(settings_record)
         
-        print(f"Settings updated successfully: {settings_record.theme}")
+        # Log the changes
+        if changes:
+            log_settings_updated(changes, user="Admin")
         
-        return {
-            "message": "Settings updated successfully",
-            "settings": {
-                "emailNotifications": settings_record.email_notifications,
-                "language": settings_record.language,
-                "retentionPeriod": settings_record.retention_period,
-                "theme": settings_record.theme
-            }
-        }
+        return {"message": "Settings updated successfully"}
+        
     except Exception as e:
         print(f"Error updating settings: {str(e)}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to update settings: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 # GET users
 @app.get("/api/users")
@@ -1397,17 +1411,34 @@ async def create_user(user: dict, db: Session = Depends(get_db)):
 
 # GET audit logs
 @app.get("/api/audit-logs")
-async def get_audit_logs(db: Session = Depends(get_db)):
-    # Return audit logs from database
-    return [
-        {
-            "message": "User logged in",
-            "timestamp": "2024-01-15T10:30:00",
-            "user": "Admin",
-            "role": "Admin"
-        }
-    ]
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+async def get_audit_logs(
+    limit: int = 100,
+    resource_type: Optional[str] = None,
+    action: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
+    """
+    Get audit logs with optional filtering
+    
+    Query params:
+    - limit: Maximum number of logs to return (default: 100)
+    - resource_type: Filter by resource type (call, agent, settings, etc.)
+    - action: Filter by action type (create, update, delete, etc.)
+    """
+    try:
+        query = db.query(AuditLog)
+        
+        # Apply filters if provided
+        if resource_type:
+            query = query.filter(AuditLog.resource_type == resource_type)
+        if action:
+            query = query.filter(AuditLog.action == action)
+        
+        # Order by most recent first and limit results
+        logs = query.order_by(AuditLog.timestamp.desc()).limit(limit).all()
+        
+        return [log.to_dict() for log in logs]
+        
+    except Exception as e:
+        print(f"Error fetching audit logs: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))

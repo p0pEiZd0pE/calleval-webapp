@@ -99,6 +99,42 @@ class Settings(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
+class AuditLog(Base):
+    """Database model for audit logs"""
+    __tablename__ = "audit_logs"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    action = Column(String, nullable=False)  # e.g., "create", "update", "delete", "view"
+    resource_type = Column(String, nullable=False)  # e.g., "call", "agent", "settings", "user"
+    resource_id = Column(String, nullable=True)  # ID of the affected resource
+    message = Column(Text, nullable=False)  # Human-readable message
+    user = Column(String, default="System")  # User who performed the action
+    role = Column(String, default="Admin")  # User's role
+    ip_address = Column(String, nullable=True)  # IP address of the user
+    user_agent = Column(String, nullable=True)  # Browser/client info
+    status = Column(String, default="success")  # success, failed, warning
+    
+    # Additional details (stored as JSON)
+    details = Column(Text, nullable=True)
+    
+    # Timestamp
+    timestamp = Column(DateTime, default=datetime.utcnow, index=True)
+    
+    def to_dict(self):
+        """Convert to dictionary for API response"""
+        return {
+            "id": self.id,
+            "action": self.action,
+            "resource_type": self.resource_type,
+            "resource_id": self.resource_id,
+            "message": self.message,
+            "user": self.user,
+            "role": self.role,
+            "status": self.status,
+            "timestamp": self.timestamp.isoformat() if self.timestamp else None
+        }
+
+
 # Create all tables
 Base.metadata.create_all(bind=engine)
 
