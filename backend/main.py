@@ -116,7 +116,7 @@ SCORECARD_CONFIG = {
         "threshold": 0.5,
         "patterns": [
             r"happy to help", r"glad to assist", r"pleasure", r"absolutely", 
-            r"of course", r"definitely", r"certainly", r"wonderful", r"great"
+            r"of course", r"definitely", r"certainly", r"wonderful", r"great", r"perfect"
         ]
     },
     "sounds_polite_courteous": {
@@ -1269,6 +1269,9 @@ async def create_report(report: ReportCreate, db: Session = Depends(get_db)):
         db.add(db_report)
         db.commit()
         db.refresh(db_report)
+        
+        # ADD AUDIT LOG
+        log_report_generated(report_id, report.type, user="Admin")
         
         return {
             "id": db_report.id,
