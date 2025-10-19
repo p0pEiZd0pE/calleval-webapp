@@ -192,6 +192,29 @@ function ScoreDetailsDialog({ callId }) {
                 </div>
               )}
 
+              {/* Overall Score */}
+              <div className="bg-muted p-4 rounded-lg">
+                <div className="flex justify-between items-center">
+                  <span className="text-lg font-bold">Total Score</span>
+                  <span className="text-2xl font-bold text-primary">
+                    {callData.binary_scores?.total_score?.toFixed(1) || callData.score?.toFixed(1) || 0}/100
+                  </span>
+                </div>
+                <div className="text-sm text-muted-foreground mt-1">
+                  {callData.binary_scores?.percentage?.toFixed(1) || callData.score?.toFixed(1) || 0}% Performance
+                </div>
+              </div>
+
+              {/* Metrics Breakdown */}
+              {callData.binary_scores?.metrics && (
+                <div className="space-y-2">
+                  <h3 className="font-semibold text-lg mb-3">Metrics Breakdown</h3>
+                  {Object.entries(callData.binary_scores.metrics).map(([name, metric]) => 
+                    renderMetricRow(name, metric)
+                  )}
+                </div>
+              )}
+
               {/* Speaker Identification - NEW SECTION */}
               {callData.speakers && (() => {
                 const stats = getAgentStats();
@@ -221,29 +244,6 @@ function ScoreDetailsDialog({ callId }) {
                   </div>
                 );
               })()}
-
-              {/* Overall Score */}
-              <div className="bg-muted p-4 rounded-lg">
-                <div className="flex justify-between items-center">
-                  <span className="text-lg font-bold">Total Score</span>
-                  <span className="text-2xl font-bold text-primary">
-                    {callData.binary_scores?.total_score?.toFixed(1) || callData.score?.toFixed(1) || 0}/100
-                  </span>
-                </div>
-                <div className="text-sm text-muted-foreground mt-1">
-                  {callData.binary_scores?.percentage?.toFixed(1) || callData.score?.toFixed(1) || 0}% Performance
-                </div>
-              </div>
-
-              {/* Metrics Breakdown */}
-              {callData.binary_scores?.metrics && (
-                <div className="space-y-2">
-                  <h3 className="font-semibold text-lg mb-3">Metrics Breakdown</h3>
-                  {Object.entries(callData.binary_scores.metrics).map(([name, metric]) => 
-                    renderMetricRow(name, metric)
-                  )}
-                </div>
-              )}
 
               <Separator className="my-4" />
 
