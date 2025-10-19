@@ -37,32 +37,39 @@ export default function GeneralApplicationSettings() {
   const fetchSettings = async () => {
     setIsLoading(true)
     try {
+      console.log('Fetching settings from:', `${API_URL}/api/settings`)
       const response = await fetch(`${API_URL}/api/settings`)
-      if (response.ok) {
-        const data = await response.json()
-        
-        // Update all settings from backend
-        setEmailNotifications(data.emailNotifications ?? true)
-        setLanguage(data.language ?? 'English')
-        setRetentionPeriod(data.retentionPeriod?.toString() ?? '12')
-        
-        // CRITICAL: Sync theme from backend to both state and localStorage
-        const backendTheme = data.theme || 'light'
-        const isDark = backendTheme === 'dark'
-        
-        setIsDarkMode(isDark)
-        
-        // Apply theme to document
-        if (isDark) {
-          document.documentElement.classList.add('dark')
-          localStorage.setItem('theme', 'dark')
-        } else {
-          document.documentElement.classList.remove('dark')
-          localStorage.setItem('theme', 'light')
-        }
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
+      
+      const data = await response.json()
+      console.log('Settings fetched:', data)
+      
+      // Update all settings from backend
+      setEmailNotifications(data.emailNotifications ?? true)
+      setLanguage(data.language ?? 'English')
+      setRetentionPeriod(data.retentionPeriod?.toString() ?? '12')
+      
+      // CRITICAL: Sync theme from backend to both state and localStorage
+      const backendTheme = data.theme || 'light'
+      const isDark = backendTheme === 'dark'
+      
+      setIsDarkMode(isDark)
+      
+      // Apply theme to document
+      if (isDark) {
+        document.documentElement.classList.add('dark')
+        localStorage.setItem('theme', 'dark')
+      } else {
+        document.documentElement.classList.remove('dark')
+        localStorage.setItem('theme', 'light')
       }
     } catch (error) {
       console.error('Failed to fetch settings:', error)
+      toast.error('Failed to load settings from server')
+      
       // Fallback to localStorage if backend fails
       const storedTheme = localStorage.getItem('theme')
       const isDark = storedTheme === 'dark'
@@ -111,6 +118,9 @@ export default function GeneralApplicationSettings() {
         theme: isDarkMode ? 'dark' : 'light',
       }
 
+      console.log('Saving settings to:', `${API_URL}/api/settings`)
+      console.log('Settings data:', settingsData)
+
       const response = await fetch(`${API_URL}/api/settings`, {
         method: 'PUT',
         headers: { 
@@ -119,18 +129,25 @@ export default function GeneralApplicationSettings() {
         body: JSON.stringify(settingsData),
       })
 
-      if (response.ok) {
-        toast.success('Settings saved successfully')
-        setHasUnsavedChanges(false)
-        
-        // Ensure localStorage is synced after save
-        localStorage.setItem('theme', settingsData.theme)
-      } else {
-        throw new Error('Failed to save settings')
+      console.log('Response status:', response.status)
+      
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error('Error response:', errorText)
+        throw new Error(`Failed to save settings: ${response.status} ${errorText}`)
       }
+
+      const result = await response.json()
+      console.log('Save result:', result)
+
+      toast.success('Settings saved successfully')
+      setHasUnsavedChanges(false)
+      
+      // Ensure localStorage is synced after save
+      localStorage.setItem('theme', settingsData.theme)
     } catch (error) {
       console.error('Save error:', error)
-      toast.error('Failed to save settings. Please try again.')
+      toast.error(`Failed to save settings: ${error.message}`)
     } finally {
       setIsSaving(false)
     }
