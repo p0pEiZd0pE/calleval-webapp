@@ -1421,8 +1421,8 @@ async def get_users(db: Session = Depends(get_db)):
     return [
         {
             "id": "1",
-            "name": "Admin User",
-            "email": "admin@calleval.com",
+            "name": "Admin",
+            "email": "admin@example.com",
             "role": "Admin",
             "status": "Active",
             "lastLogin": "2024-01-15T10:30:00"
