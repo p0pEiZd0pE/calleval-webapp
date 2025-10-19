@@ -61,16 +61,16 @@ export default function AuditLogs() {
   }
 
   return (
-    <Card className="w-full h-full">
-      <CardHeader>
+    <Card className="w-full h-full flex flex-col">
+      <CardHeader className="flex-shrink-0">
         <CardTitle>Audit Logs</CardTitle>
         <CardDescription>
           Review a chronological record of system changes and user actions.
         </CardDescription>
       </CardHeader>
 
-      <CardContent className="space-y-4">
-        <div className="relative">
+      <CardContent className="space-y-4 flex-1 flex flex-col min-h-0">
+        <div className="relative flex-shrink-0">
           <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder="Search logs..."
@@ -80,31 +80,34 @@ export default function AuditLogs() {
           />
         </div>
 
-        {loading ? (
-          <div className="text-center py-4 text-muted-foreground">
-            Loading logs...
-          </div>
-        ) : filteredLogs.length > 0 ? (
-          filteredLogs.map((log, index) => (
-            <div key={index} className="p-3 rounded-md border">
-              <p className="text-sm font-medium">
-                {log.message}
-              </p>
-              {log.timestamp && (
-                <p className="text-xs text-muted-foreground mt-1">
-                  {new Date(log.timestamp).toLocaleString()} by {log.user} ({log.role})
-                </p>
-              )}
+        {/* Scrollable logs section with fixed height */}
+        <div className="flex-1 overflow-y-auto space-y-3 min-h-0 max-h-[400px] pr-2">
+          {loading ? (
+            <div className="text-center py-8 text-muted-foreground">
+              Loading logs...
             </div>
-          ))
-        ) : (
-          <div className="text-center py-4 text-muted-foreground">
-            No logs found
-          </div>
-        )}
+          ) : filteredLogs.length > 0 ? (
+            filteredLogs.map((log, index) => (
+              <div key={index} className="p-3 rounded-md border">
+                <p className="text-sm font-medium">
+                  {log.message}
+                </p>
+                {log.timestamp && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {new Date(log.timestamp).toLocaleString()} by {log.user} ({log.role})
+                  </p>
+                )}
+              </div>
+            ))
+          ) : (
+            <div className="text-center py-8 text-muted-foreground">
+              No logs found
+            </div>
+          )}
+        </div>
       </CardContent>
 
-      <CardFooter>
+      <CardFooter className="flex-shrink-0">
         <Sheet>
           <SheetTrigger asChild>
             <Button variant="outline" className="w-full">
