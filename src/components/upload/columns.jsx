@@ -96,7 +96,7 @@ export const columns = [
             throw new Error('Failed to download audio');
           }
           
-          // Extract filename from Content-Disposition header (like Call Evaluations page)
+          // Extract filename from Content-Disposition header
           let audioFilename = call.fileName || 'recording.mp3';
           const contentDisposition = audioResponse.headers.get('Content-Disposition');
           if (contentDisposition) {
@@ -111,49 +111,166 @@ export const columns = [
           const audioUrl = window.URL.createObjectURL(audioBlob);
           const audioLink = document.createElement('a');
           audioLink.href = audioUrl;
-          audioLink.download = audioFilename; // Now has proper extension
+          audioLink.download = audioFilename;
           document.body.appendChild(audioLink);
           audioLink.click();
           document.body.removeChild(audioLink);
           window.URL.revokeObjectURL(audioUrl);
           
-          // Download transcription
+          // Download diarized transcription with CallEval metrics
           const response = await fetch(`${backendUrl}/api/calls/${call.id}`);
           if (response.ok) {
             const data = await response.json();
-            if (data.transcript) {
-              // Create formatted transcription with speakers
-              let transcriptText = `Call Transcription\n`;
-              transcriptText += `Filename: ${call.fileName}\n`;
-              transcriptText += `Date: ${call.uploadDate}\n`;
-              transcriptText += `Duration: ${data.duration || 'N/A'}\n`;
-              transcriptText += `Score: ${data.score || 'N/A'}/100\n\n`;
-              transcriptText += `${'='.repeat(60)}\n\n`;
+            
+            // Parse segments for diarized transcript
+            let segments = [];
+            if (data.segments && Array.isArray(data.segments)) {
+              segments = data.segments;
+            } else if (data.scores && typeof data.scores === 'string') {
+              try {
+                const scoresData = JSON.parse(data.scores);
+                segments = scoresData.segments || [];
+              } catch (e) {
+                console.error('Error parsing segments:', e);
+              }
+            }
+            
+            // Parse speaker roles
+            let speakers = {};
+            if (data.speakers) {
+              if (typeof data.speakers === 'string') {
+                try {
+                  speakers = JSON.parse(data.speakers);
+                } catch (e) {
+                  console.error('Error parsing speakers:', e);
+                }
+              } else {
+                speakers = data.speakers;
+              }
+            }
+            
+            // Parse evaluation metrics
+            let evaluationMetrics = {};
+            if (data.evaluation_results) {
+              if (typeof data.evaluation_results === 'string') {
+                try {
+                  evaluationMetrics = JSON.parse(data.evaluation_results);
+                } catch (e) {
+                  console.error('Error parsing evaluation_results:', e);
+                }
+              } else {
+                evaluationMetrics = data.evaluation_results;
+              }
+            }
+            
+            // Build formatted transcription
+            let transcriptText = '';
+            
+            // Header Section
+            transcriptText += `${'='.repeat(80)}\n`;
+            transcriptText += `               CALL TRANSCRIPTION WITH SPEAKER IDENTIFICATION\n`;
+            transcriptText += `${'='.repeat(80)}\n\n`;
+            
+            // Call Information
+            transcriptText += `CALL INFORMATION:\n`;
+            transcriptText += `${'-'.repeat(80)}\n`;
+            transcriptText += `Call ID       : ${call.id}\n`;
+            transcriptText += `Filename      : ${audioFilename}\n`;
+            transcriptText += `Upload Date   : ${call.uploadDate}\n`;
+            transcriptText += `Duration      : ${data.duration || 'N/A'}\n`;
+            transcriptText += `Overall Score : ${data.score || 'N/A'}/100\n`;
+            transcriptText += `Status        : ${data.status || 'N/A'}\n\n`;
+            
+            // Speaker Identification
+            if (Object.keys(speakers).length > 0) {
+              transcriptText += `SPEAKER IDENTIFICATION:\n`;
+              transcriptText += `${'-'.repeat(80)}\n`;
+              Object.entries(speakers).forEach(([speakerId, role]) => {
+                const icon = role === 'agent' ? '👤 AGENT' : role === 'caller' ? '📞 CALLER' : '❓ UNKNOWN';
+                transcriptText += `${speakerId.padEnd(15)} : ${icon}\n`;
+              });
+              transcriptText += `\n`;
+            }
+            
+            // CallEval Metrics (if available)
+            if (evaluationMetrics && Object.keys(evaluationMetrics).length > 0) {
+              transcriptText += `CALLEVAL METRICS:\n`;
+              transcriptText += `${'-'.repeat(80)}\n`;
               
-              // Parse transcript and add speaker labels
-              if (data.speakers) {
-                const lines = data.transcript.split('\n');
-                lines.forEach(line => {
-                  if (line.trim()) {
-                    transcriptText += line + '\n';
+              // Function to format metrics by phase
+              const formatPhaseMetrics = (metrics, phaseName) => {
+                if (!metrics) return '';
+                
+                let phaseText = `\n${phaseName.toUpperCase()}:\n`;
+                Object.entries(metrics).forEach(([key, metric]) => {
+                  if (typeof metric === 'object' && metric !== null) {
+                    const detected = metric.detected ? '✓' : '✗';
+                    const score = metric.weighted_score || 0;
+                    const weight = metric.weight || 0;
+                    phaseText += `  ${detected} ${key.replace(/_/g, ' ').padEnd(35)} : ${score.toFixed(1)}/${weight}\n`;
                   }
                 });
-              } else {
-                transcriptText += data.transcript;
+                return phaseText;
+              };
+              
+              // Display metrics by phase
+              if (evaluationMetrics.all_phases) {
+                transcriptText += formatPhaseMetrics(evaluationMetrics.all_phases, 'All Phases');
+              }
+              if (evaluationMetrics.opening) {
+                transcriptText += formatPhaseMetrics(evaluationMetrics.opening, 'I. Opening Spiel');
+              }
+              if (evaluationMetrics.middle) {
+                transcriptText += formatPhaseMetrics(evaluationMetrics.middle, 'II. Middle / Climax');
+              }
+              if (evaluationMetrics.closing) {
+                transcriptText += formatPhaseMetrics(evaluationMetrics.closing, 'III. Closing / Wrap Up');
               }
               
-              // Create and download transcript file
-              const blob = new Blob([transcriptText], { type: 'text/plain' });
-              const transcriptUrl = window.URL.createObjectURL(blob);
-              const transcriptLink = document.createElement('a');
-              transcriptLink.href = transcriptUrl;
-              // Use the extracted audio filename for the transcript name
-              transcriptLink.download = `transcript_${audioFilename.replace(/\.[^/.]+$/, '')}.txt`;
-              document.body.appendChild(transcriptLink);
-              transcriptLink.click();
-              document.body.removeChild(transcriptLink);
-              window.URL.revokeObjectURL(transcriptUrl);
+              transcriptText += `\n`;
             }
+            
+            // Diarized Transcript
+            transcriptText += `${'='.repeat(80)}\n`;
+            transcriptText += `                            DIARIZED TRANSCRIPT\n`;
+            transcriptText += `${'='.repeat(80)}\n\n`;
+            
+            if (segments.length > 0) {
+              segments.forEach((segment, index) => {
+                const speakerId = segment.speaker || 'UNKNOWN';
+                const role = speakers[speakerId] || 'unknown';
+                const roleLabel = role === 'agent' ? '👤 AGENT' : 
+                                role === 'caller' ? '📞 CALLER' : 
+                                '❓ UNKNOWN';
+                
+                const timestamp = segment.start !== undefined && segment.end !== undefined 
+                  ? `[${segment.start.toFixed(2)}s - ${segment.end.toFixed(2)}s]`
+                  : '';
+                
+                transcriptText += `${roleLabel} (${speakerId}) ${timestamp}:\n`;
+                transcriptText += `${segment.text}\n\n`;
+              });
+            } else if (data.transcript) {
+              // Fallback to plain transcript if no segments
+              transcriptText += `${data.transcript}\n`;
+            } else {
+              transcriptText += `No transcript available.\n`;
+            }
+            
+            transcriptText += `${'='.repeat(80)}\n`;
+            transcriptText += `                              END OF TRANSCRIPT\n`;
+            transcriptText += `${'='.repeat(80)}\n`;
+            
+            // Create and download transcript file
+            const blob = new Blob([transcriptText], { type: 'text/plain' });
+            const transcriptUrl = window.URL.createObjectURL(blob);
+            const transcriptLink = document.createElement('a');
+            transcriptLink.href = transcriptUrl;
+            transcriptLink.download = `transcript_${audioFilename.replace(/\.[^/.]+$/, '')}.txt`;
+            document.body.appendChild(transcriptLink);
+            transcriptLink.click();
+            document.body.removeChild(transcriptLink);
+            window.URL.revokeObjectURL(transcriptUrl);
           }
         } catch (error) {
           console.error('Download error:', error);
