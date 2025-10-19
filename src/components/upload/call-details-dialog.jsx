@@ -106,7 +106,7 @@ export function CallDetailsDialog({ callId, open, onOpenChange, children }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       {children}
-      <DialogContent className="xl:max-w-4xl max-h-[85vh]">
+      <DialogContent className="xl:max-w-4xl max-h-[85vh] flex flex-col">
         <DialogHeader>
           <DialogTitle className="text-2xl">Call Details</DialogTitle>
           <DialogDescription>
@@ -128,78 +128,78 @@ export function CallDetailsDialog({ callId, open, onOpenChange, children }) {
         )}
 
         {callData && !loading && !error && (
-          <div className="space-y-4">
-            {/* Call Information */}
-            <div className="grid grid-cols-2 gap-4 p-4 bg-muted rounded-lg">
-              <div>
-                <p className="text-sm text-muted-foreground">Filename</p>
-                <p className="font-medium">{callData.filename}</p>
+          <ScrollArea className="flex-1 pr-4">
+            <div className="space-y-4">
+              {/* Call Information */}
+              <div className="grid grid-cols-2 gap-4 p-4 bg-muted rounded-lg">
+                <div>
+                  <p className="text-sm text-muted-foreground">Filename</p>
+                  <p className="font-medium">{callData.filename}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Duration</p>
+                  <p className="font-medium">{callData.duration || 'N/A'}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Score</p>
+                  <p className="font-medium text-lg">{callData.score ? `${callData.score}/100` : 'N/A'}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Status</p>
+                  <Badge variant={callData.status === 'completed' ? 'default' : 'secondary'}>
+                    {callData.status}
+                  </Badge>
+                </div>
               </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Duration</p>
-                <p className="font-medium">{callData.duration || 'N/A'}</p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Score</p>
-                <p className="font-medium text-lg">{callData.score ? `${callData.score}/100` : 'N/A'}</p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Status</p>
-                <Badge variant={callData.status === 'completed' ? 'default' : 'secondary'}>
-                  {callData.status}
-                </Badge>
-              </div>
-            </div>
 
-            {/* Audio Player */}
-            {audioUrl && (
-              <div className="p-4 bg-muted rounded-lg">
-                <p className="text-sm font-medium mb-2">🎵 Audio Recording</p>
-                <audio 
-                  controls 
-                  className="w-full"
-                  src={audioUrl}
-                >
-                  Your browser does not support the audio element.
-                </audio>
-              </div>
-            )}
+              {/* Audio Player */}
+              {audioUrl && (
+                <div className="p-4 bg-muted rounded-lg">
+                  <p className="text-sm font-medium mb-2">🎵 Audio Recording</p>
+                  <audio 
+                    controls 
+                    className="w-full"
+                    src={audioUrl}
+                  >
+                    Your browser does not support the audio element.
+                  </audio>
+                </div>
+              )}
 
-            {/* Speaker Legend */}
-            {callData.speakers && stats && (
-              <div className="p-4 bg-gradient-to-r from-blue-50 to-green-50 dark:from-blue-950 dark:to-green-950 rounded-lg border">
-                <p className="text-sm font-semibold mb-3">Speaker Identification</p>
-                <div className="flex gap-6">
-                  <div className="flex items-center gap-2 bg-blue-100 dark:bg-blue-900 px-3 py-2 rounded-md">
-                    <User className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-                    <div>
-                      <span className="text-sm font-bold text-blue-700 dark:text-blue-300">AGENT</span>
-                      <span className="text-xs text-blue-600 dark:text-blue-400 ml-2">
-                        ({stats.agentSpeaker || 'Unknown'})
-                      </span>
+              {/* Speaker Legend */}
+              {callData.speakers && stats && (
+                <div className="p-4 bg-gradient-to-r from-blue-50 to-green-50 dark:from-blue-950 dark:to-green-950 rounded-lg border">
+                  <p className="text-sm font-semibold mb-3">Speaker Identification</p>
+                  <div className="flex gap-6">
+                    <div className="flex items-center gap-2 bg-blue-100 dark:bg-blue-900 px-3 py-2 rounded-md">
+                      <User className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                      <div>
+                        <span className="text-sm font-bold text-blue-700 dark:text-blue-300">AGENT</span>
+                        <span className="text-xs text-blue-600 dark:text-blue-400 ml-2">
+                          ({stats.agentSpeaker || 'Unknown'})
+                        </span>
+                      </div>
                     </div>
-                  </div>
-                  <div className="flex items-center gap-2 bg-green-100 dark:bg-green-900 px-3 py-2 rounded-md">
-                    <Phone className="h-5 w-5 text-green-600 dark:text-green-400" />
-                    <div>
-                      <span className="text-sm font-bold text-green-700 dark:text-green-300">CALLER</span>
-                      <span className="text-xs text-green-600 dark:text-green-400 ml-2">
-                        ({stats.callerSpeaker || 'Unknown'})
-                      </span>
+                    <div className="flex items-center gap-2 bg-green-100 dark:bg-green-900 px-3 py-2 rounded-md">
+                      <Phone className="h-5 w-5 text-green-600 dark:text-green-400" />
+                      <div>
+                        <span className="text-sm font-bold text-green-700 dark:text-green-300">CALLER</span>
+                        <span className="text-xs text-green-600 dark:text-green-400 ml-2">
+                          ({stats.callerSpeaker || 'Unknown'})
+                        </span>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            )}
+              )}
 
-            {/* Transcription */}
-            <div>
-              <h3 className="font-semibold text-lg mb-2">📝 Diarized Transcription</h3>
-              <Separator className="mb-3" />
-              <ScrollArea className="max-h-[40vh] w-full rounded-md border p-4 bg-white dark:bg-gray-950 overflow-auto">
-                {transcriptLines.length > 0 ? (
-                  <div className="space-y-4">
-                    {transcriptLines.map((line, index) => {
+              {/* Transcription */}
+              <div>
+                <h3 className="font-semibold text-lg mb-2">📝 Diarized Transcription</h3>
+                <Separator className="mb-3" />
+                <div className="space-y-4 p-4 bg-white dark:bg-gray-950 rounded-md border">
+                  {transcriptLines.length > 0 ? (
+                    transcriptLines.map((line, index) => {
                       const isAgent = line.role === 'agent';
                       const isCaller = line.role === 'caller';
                       const isUnknown = line.role === 'unknown';
@@ -253,30 +253,30 @@ export function CallDetailsDialog({ callId, open, onOpenChange, children }) {
                           </div>
                         </div>
                       );
-                    })}
-                  </div>
-                ) : (
-                  <div className="text-center text-muted-foreground py-8">
-                    <UserCircle className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                    <p className="font-medium">No transcription available yet.</p>
-                    <p className="text-sm mt-2">
-                      The diarized transcription will appear here once processing is complete.
-                    </p>
-                  </div>
-                )}
-              </ScrollArea>
-            </div>
-
-            {/* Debug Info (optional - remove in production) */}
-            {callData.segments && callData.segments.length === 0 && (
-              <div className="p-3 bg-yellow-50 dark:bg-yellow-950/30 border border-yellow-200 dark:border-yellow-800 rounded text-xs">
-                <p className="font-semibold text-yellow-800 dark:text-yellow-200">Debug: No segments found</p>
-                <p className="text-yellow-700 dark:text-yellow-300 mt-1">
-                  The backend may not be storing segments properly. Check the console for details.
-                </p>
+                    })
+                  ) : (
+                    <div className="text-center text-muted-foreground py-8">
+                      <UserCircle className="h-12 w-12 mx-auto mb-3 opacity-50" />
+                      <p className="font-medium">No transcription available yet.</p>
+                      <p className="text-sm mt-2">
+                        The diarized transcription will appear here once processing is complete.
+                      </p>
+                    </div>
+                  )}
+                </div>
               </div>
-            )}
-          </div>
+
+              {/* Debug Info (optional - remove in production) */}
+              {callData.segments && callData.segments.length === 0 && (
+                <div className="p-3 bg-yellow-50 dark:bg-yellow-950/30 border border-yellow-200 dark:border-yellow-800 rounded text-xs">
+                  <p className="font-semibold text-yellow-800 dark:text-yellow-200">Debug: No segments found</p>
+                  <p className="text-yellow-700 dark:text-yellow-300 mt-1">
+                    The backend may not be storing segments properly. Check the console for details.
+                  </p>
+                </div>
+              )}
+            </div>
+          </ScrollArea>
         )}
       </DialogContent>
     </Dialog>

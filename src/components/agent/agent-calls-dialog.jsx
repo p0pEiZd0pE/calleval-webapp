@@ -76,7 +76,7 @@ export function AgentCallsDialog({ agentId, open, onOpenChange, children }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       {children}
-      <DialogContent className="xl:max-w-4xl max-h-[85vh]">
+      <DialogContent className="xl:max-w-4xl max-h-[85vh] flex flex-col">
         <DialogHeader>
           <DialogTitle className="text-2xl">Agent Call History</DialogTitle>
           <DialogDescription>
@@ -98,53 +98,53 @@ export function AgentCallsDialog({ agentId, open, onOpenChange, children }) {
         )}
 
         {data && !loading && !error && (
-          <div className="space-y-4">
-            {/* Agent Summary Card */}
-            <Card>
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <CardTitle className="text-xl">{data.agent.agentName}</CardTitle>
-                    <CardDescription>{data.agent.position}</CardDescription>
+          <ScrollArea className="flex-1 pr-4">
+            <div className="space-y-4">
+              {/* Agent Summary Card */}
+              <Card>
+                <CardHeader className="pb-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle className="text-xl">{data.agent.agentName}</CardTitle>
+                      <CardDescription>{data.agent.position}</CardDescription>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {getTrend(data.agent.avgScore)}
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    {getTrend(data.agent.avgScore)}
+                </CardHeader>
+                <CardContent>
+                  {/* Updated to justify-between as per previous fix */}
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-1">
+                      <p className="text-sm text-muted-foreground">Average Score</p>
+                      <p className={`text-2xl font-bold ${getScoreColor(data.agent.avgScore)}`}>
+                        {data.agent.avgScore || 0}/100
+                      </p>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-sm text-muted-foreground">Calls Handled</p>
+                      <p className="text-2xl font-bold">
+                        {data.agent.callsHandled || 0}
+                      </p>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-sm text-muted-foreground">Total Uploads</p>
+                      <p className="text-2xl font-bold">
+                        {data.calls?.length || 0}
+                      </p>
+                    </div>
                   </div>
-                </div>
-              </CardHeader>
-              <CardContent>
-                {/* RED CIRCLE FIX: Changed grid-cols-3 gap-4 to justify-between with flex */}
-                <div className="flex items-center justify-between">
-                  <div className="space-y-1">
-                    <p className="text-sm text-muted-foreground">Average Score</p>
-                    <p className={`text-2xl font-bold ${getScoreColor(data.agent.avgScore)}`}>
-                      {data.agent.avgScore || 0}/100
-                    </p>
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-sm text-muted-foreground">Calls Handled</p>
-                    <p className="text-2xl font-bold">
-                      {data.agent.callsHandled || 0}
-                    </p>
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-sm text-muted-foreground">Total Uploads</p>
-                    <p className="text-2xl font-bold">
-                      {data.calls?.length || 0}
-                    </p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
 
-            {/* Calls List */}
-            <div>
-              <h3 className="font-semibold text-lg mb-3">Call History</h3>
-              <Separator className="mb-3" />
-              
-              {data.calls && data.calls.length > 0 ? (
-                <ScrollArea className="max-h-[45vh] w-full rounded-md border overflow-auto">
-                  <div className="p-4 space-y-3">
+              {/* Calls List */}
+              <div>
+                <h3 className="font-semibold text-lg mb-3">Call History</h3>
+                <Separator className="mb-3" />
+                
+                {data.calls && data.calls.length > 0 ? (
+                  <div className="space-y-3">
                     {data.calls.map((call, index) => (
                       <Card key={call.id} className="hover:shadow-md transition-shadow">
                         <CardContent className="p-4">
@@ -196,18 +196,18 @@ export function AgentCallsDialog({ agentId, open, onOpenChange, children }) {
                       </Card>
                     ))}
                   </div>
-                </ScrollArea>
-              ) : (
-                <div className="text-center py-12 text-muted-foreground border rounded-lg">
-                  <Phone className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                  <p className="font-medium">No calls found</p>
-                  <p className="text-sm mt-1">
-                    This agent hasn't had any calls uploaded yet.
-                  </p>
-                </div>
-              )}
+                ) : (
+                  <div className="text-center py-12 text-muted-foreground border rounded-lg">
+                    <Phone className="h-12 w-12 mx-auto mb-3 opacity-50" />
+                    <p className="font-medium">No calls found</p>
+                    <p className="text-sm mt-1">
+                      This agent hasn't had any calls uploaded yet.
+                    </p>
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
+          </ScrollArea>
         )}
       </DialogContent>
     </Dialog>
