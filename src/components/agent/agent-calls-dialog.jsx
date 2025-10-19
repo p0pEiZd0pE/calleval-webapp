@@ -143,7 +143,7 @@ export function AgentCallsDialog({ agentId, open, onOpenChange, children }) {
               <Separator className="mb-3" />
               
               {data.calls && data.calls.length > 0 ? (
-                <ScrollArea className="h-[400px] w-full rounded-md border">
+                <ScrollArea className="max-h-[45vh] w-full rounded-md border overflow-auto">
                   <div className="p-4 space-y-3">
                     {data.calls.map((call, index) => (
                       <Card key={call.id} className="hover:shadow-md transition-shadow">
@@ -161,7 +161,7 @@ export function AgentCallsDialog({ agentId, open, onOpenChange, children }) {
                               </div>
                             </div>
                             
-                            {/* BLUE CIRCLE FIX: Increased gap from gap-4 to gap-8 */}
+                            {/* Updated gap to gap-8 as per previous fix */}
                             <div className="flex items-center gap-8">
                               <div className="text-right">
                                 <p className="text-xs text-muted-foreground">Duration</p>

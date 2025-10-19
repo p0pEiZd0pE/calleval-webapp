@@ -196,7 +196,7 @@ export function CallDetailsDialog({ callId, open, onOpenChange, children }) {
             <div>
               <h3 className="font-semibold text-lg mb-2">📝 Diarized Transcription</h3>
               <Separator className="mb-3" />
-              <ScrollArea className="h-[500px] w-full rounded-md border p-4 bg-white dark:bg-gray-950">
+              <ScrollArea className="max-h-[40vh] w-full rounded-md border p-4 bg-white dark:bg-gray-950 overflow-auto">
                 {transcriptLines.length > 0 ? (
                   <div className="space-y-4">
                     {transcriptLines.map((line, index) => {
