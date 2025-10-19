@@ -80,6 +80,20 @@ app = FastAPI(title="CallEval API - Full Modal Stack")
 allowed_origins = [origin.strip() for origin in settings.FRONTEND_URL.split(",")]
 if "http://localhost:5173" not in allowed_origins:
     allowed_origins.append("http://localhost:5173")
+if "http://localhost:5174" not in allowed_origins:
+    allowed_origins.append("http://localhost:5174")
+
+
+production_urls = [
+    "https://calleval-webapp.vercel.app",
+]
+
+
+for url in production_urls:
+    if url not in allowed_origins:
+        allowed_origins.append(url)
+
+print(f"✓ CORS allowed origins: {allowed_origins}")
 
 app.add_middleware(
     CORSMiddleware,
@@ -1297,45 +1311,68 @@ async def get_report(report_id: str, db: Session = Depends(get_db)):
 # GET settings
 @app.get("/api/settings")
 async def get_settings(db: Session = Depends(get_db)):
-    settings = db.query(Settings).first()
-    
-    if not settings:
-        # Create default settings if none exist
-        settings = Settings(
-            email_notifications=True,
-            language="English",
-            retention_period=12,
-            theme="light"
-        )
-        db.add(settings)
-        db.commit()
-        db.refresh(settings)
-    
-    return {
-        "emailNotifications": settings.email_notifications,
-        "language": settings.language,
-        "retentionPeriod": settings.retention_period,
-        "theme": settings.theme
-    }
+    try:
+        settings_record = db.query(Settings).first()
+        
+        if not settings_record:
+            # Create default settings if none exist
+            settings_record = Settings(
+                email_notifications=True,
+                language="English",
+                retention_period=12,
+                theme="light"
+            )
+            db.add(settings_record)
+            db.commit()
+            db.refresh(settings_record)
+        
+        return {
+            "emailNotifications": settings_record.email_notifications,
+            "language": settings_record.language,
+            "retentionPeriod": settings_record.retention_period,
+            "theme": settings_record.theme
+        }
+    except Exception as e:
+        print(f"Error fetching settings: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch settings: {str(e)}")
 
 # UPDATE settings
 @app.put("/api/settings")
 async def update_settings(settings_data: dict, db: Session = Depends(get_db)):
-    settings = db.query(Settings).first()
-    
-    if not settings:
-        settings = Settings()
-        db.add(settings)
-    
-    # Update fields
-    settings.email_notifications = settings_data.get("emailNotifications", True)
-    settings.language = settings_data.get("language", "English")
-    settings.retention_period = settings_data.get("retentionPeriod", 12)
-    settings.theme = settings_data.get("theme", "light")
-    
-    db.commit()
-    
-    return {"message": "Settings updated successfully"}
+    try:
+        print(f"Received settings update: {settings_data}")
+        
+        settings_record = db.query(Settings).first()
+        
+        if not settings_record:
+            print("No settings found, creating new record")
+            settings_record = Settings()
+            db.add(settings_record)
+        
+        # Update fields
+        settings_record.email_notifications = settings_data.get("emailNotifications", True)
+        settings_record.language = settings_data.get("language", "English")
+        settings_record.retention_period = settings_data.get("retentionPeriod", 12)
+        settings_record.theme = settings_data.get("theme", "light")
+        
+        db.commit()
+        db.refresh(settings_record)
+        
+        print(f"Settings updated successfully: {settings_record.theme}")
+        
+        return {
+            "message": "Settings updated successfully",
+            "settings": {
+                "emailNotifications": settings_record.email_notifications,
+                "language": settings_record.language,
+                "retentionPeriod": settings_record.retention_period,
+                "theme": settings_record.theme
+            }
+        }
+    except Exception as e:
+        print(f"Error updating settings: {str(e)}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to update settings: {str(e)}")
 
 # GET users
 @app.get("/api/users")
