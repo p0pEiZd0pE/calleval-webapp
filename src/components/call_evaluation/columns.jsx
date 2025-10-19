@@ -153,7 +153,7 @@ function ScoreDetailsDialog({ callId }) {
           View Score Details
         </DropdownMenuItem>
       </DialogTrigger>
-      <DialogContent className="max-w-4xl max-h-[90vh]">
+      <DialogContent className="xl:max-w-4xl max-h-[85vh]">
         <DialogHeader>
           <DialogTitle className="flex items-center justify-between">
             <span>Call Evaluation Details</span>
