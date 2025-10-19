@@ -169,7 +169,7 @@ export function CallDetailsDialog({ callId, open, onOpenChange, children }) {
             {callData.speakers && stats && (
               <div className="p-4 bg-gradient-to-r from-blue-50 to-green-50 dark:from-blue-950 dark:to-green-950 rounded-lg border flex-shrink-0">
                 <p className="text-sm font-semibold mb-3">Speaker Identification</p>
-                <div className="flex justify-between">
+                <div className="flex justify-around">
                   <div className="flex items-center gap-2 bg-blue-100 dark:bg-blue-900 px-3 py-2 rounded-md">
                     <User className="h-5 w-5 text-blue-600 dark:text-blue-400" />
                     <div>
