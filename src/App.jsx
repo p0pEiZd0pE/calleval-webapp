@@ -13,12 +13,12 @@ import Upload from "./pages/Upload"
 import Agent from "./pages/Agent"
 import Reports from "./pages/Reports"
 import Settings from "./pages/Settings"
-import Login from "./pages/Login";
+import Login from "./pages/Login"
 import ProtectedRoute from "./components/protected-route"
 
 const App = () => {
   return (
-    <ThemeProvider defaultTheme="dark" storageKey="vite-ui-theme">
+    <ThemeProvider defaultTheme="system" storageKey="theme">
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route 
@@ -44,8 +44,7 @@ const App = () => {
       </Routes>
       <Toaster />
     </ThemeProvider>
-  );
-};
+  )
+}
 
 export default App
-
