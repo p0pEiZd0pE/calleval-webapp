@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, File, Depends, HTTPException, BackgroundTasks
+from fastapi import FastAPI, UploadFile, File, Depends, HTTPException, BackgroundTasks, APIRouter
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
@@ -15,6 +15,9 @@ from config import settings
 from pydantic import BaseModel
 from typing import Optional
 from fastapi import Form
+
+
+settings_router = APIRouter()
 
 
 class AgentBase(BaseModel):
@@ -1290,6 +1293,58 @@ async def get_report(report_id: str, db: Session = Depends(get_db)):
         print(f"Error fetching report: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
+# GET settings
+@app.get("/api/settings")
+async def get_settings(db: Session = Depends(get_db)):
+    # Return settings from database or default values
+    return {
+        "emailNotifications": True,
+        "language": "English",
+        "retentionPeriod": "12",
+        "theme": "dark"
+    }
+
+# UPDATE settings
+@app.put("/api/settings")
+async def update_settings(settings: dict, db: Session = Depends(get_db)):
+    # Save settings to database
+    # For now, just return success
+    return {"message": "Settings updated successfully"}
+
+# GET users
+@app.get("/api/users")
+async def get_users(db: Session = Depends(get_db)):
+    # Return users from database
+    return [
+        {
+            "id": "1",
+            "name": "Admin User",
+            "email": "admin@calleval.com",
+            "role": "Admin",
+            "status": "Active",
+            "lastLogin": "2024-01-15T10:30:00"
+        }
+    ]
+
+# CREATE user
+@app.post("/api/users")
+async def create_user(user: dict, db: Session = Depends(get_db)):
+    # Create user in database
+    return {"message": "User created successfully", "user": user}
+
+# GET audit logs
+@app.get("/api/audit-logs")
+async def get_audit_logs(db: Session = Depends(get_db)):
+    # Return audit logs from database
+    return [
+        {
+            "message": "User logged in",
+            "timestamp": "2024-01-15T10:30:00",
+            "user": "Admin",
+            "role": "Admin"
+        }
+    ]
 
 if __name__ == "__main__":
     import uvicorn

@@ -17,14 +17,23 @@ import {
 } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
-
+import { toast } from 'sonner'
+import { API_URL } from '@/config/api'
 
 export default function GeneralApplicationSettings() {
   const [emailNotifications, setEmailNotifications] = React.useState(true)
   const [language, setLanguage] = React.useState('English')
   const [retentionPeriod, setRetentionPeriod] = React.useState('12')
   const [isDarkMode, setIsDarkMode] = React.useState(false)
+  const [isSaving, setIsSaving] = React.useState(false)
+  const [hasUnsavedChanges, setHasUnsavedChanges] = React.useState(false)
 
+  // Load settings from backend
+  React.useEffect(() => {
+    fetchSettings()
+  }, [])
+
+  // Check for theme in localStorage on mount
   React.useEffect(() => {
     const storedTheme = localStorage.getItem('theme')
     if (storedTheme === 'dark') {
@@ -33,8 +42,36 @@ export default function GeneralApplicationSettings() {
     }
   }, [])
 
+  // Warn before leaving with unsaved changes
+  React.useEffect(() => {
+    const handleBeforeUnload = (e) => {
+      if (hasUnsavedChanges) {
+        e.preventDefault()
+        e.returnValue = ''
+      }
+    }
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [hasUnsavedChanges])
+
+  const fetchSettings = async () => {
+    try {
+      const response = await fetch(`${API_URL}/api/settings`)
+      if (response.ok) {
+        const data = await response.json()
+        setEmailNotifications(data.emailNotifications ?? true)
+        setLanguage(data.language ?? 'English')
+        setRetentionPeriod(data.retentionPeriod ?? '12')
+        // Theme is handled by localStorage
+      }
+    } catch (error) {
+      console.error('Failed to fetch settings:', error)
+    }
+  }
+
   const handleThemeToggle = (checked) => {
     setIsDarkMode(checked)
+    setHasUnsavedChanges(true)
     if (checked) {
       document.documentElement.classList.add('dark')
       localStorage.setItem('theme', 'dark')
@@ -44,16 +81,36 @@ export default function GeneralApplicationSettings() {
     }
   }
 
-  const handleSave = () => {
-    console.log('Saved settings:', {
-      emailNotifications,
-      language,
-      retentionPeriod,
-      theme: isDarkMode ? 'dark' : 'light',
-    })
+  const handleSave = async () => {
+    setIsSaving(true)
+    try {
+      const response = await fetch(`${API_URL}/api/settings`, {
+        method: 'PUT',
+        headers: { 
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          emailNotifications,
+          language,
+          retentionPeriod: parseInt(retentionPeriod),
+          theme: isDarkMode ? 'dark' : 'light',
+        }),
+      })
 
-
+      if (response.ok) {
+        toast.success('Settings saved successfully')
+        setHasUnsavedChanges(false)
+      } else {
+        throw new Error('Failed to save settings')
+      }
+    } catch (error) {
+      console.error('Save error:', error)
+      toast.error('Failed to save settings. Please try again.')
+    } finally {
+      setIsSaving(false)
+    }
   }
+
   return (
     <Card className="flex flex-col justify-between w-full h-full">
       <CardHeader>
@@ -68,13 +125,22 @@ export default function GeneralApplicationSettings() {
           <Label className="font-medium">Enable Email Notifications</Label>
           <Switch
             checked={emailNotifications}
-            onCheckedChange={setEmailNotifications}
+            onCheckedChange={(val) => {
+              setEmailNotifications(val)
+              setHasUnsavedChanges(true)
+            }}
           />
         </div>
 
         <div className="flex items-center justify-between">
           <Label className="font-medium">Default Language</Label>
-          <Select value={language} onValueChange={setLanguage}>
+          <Select 
+            value={language} 
+            onValueChange={(val) => {
+              setLanguage(val)
+              setHasUnsavedChanges(true)
+            }}
+          >
             <SelectTrigger className="w-[180px]">
               <SelectValue placeholder="Select language" />
             </SelectTrigger>
@@ -82,41 +148,59 @@ export default function GeneralApplicationSettings() {
               <SelectItem value="English">English</SelectItem>
               <SelectItem value="Spanish">Spanish</SelectItem>
               <SelectItem value="French">French</SelectItem>
+              <SelectItem value="Tagalog">Tagalog</SelectItem>
             </SelectContent>
           </Select>
         </div>
 
         <div className="flex flex-row justify-between space-y-2">
-            <div className='flex flex-col gap-2'>
-                <Label className="font-medium">Data Retention Period</Label>
-                <p className="text-sm text-muted-foreground">
-                    Automatically delete call data older than the specified period.
-                </p>
-            </div>
-            <Select value={retentionPeriod} onValueChange={setRetentionPeriod}>
-                <SelectTrigger className="w-[120px]">
-                <SelectValue placeholder="Select months" />
-                </SelectTrigger>
-                <SelectContent>
-                {[...Array(12)].map((_, i) => {
-                    const month = (i + 1).toString()
-                    return (
-                    <SelectItem key={month} value={month}>
-                        {month} {i === 0 ? 'month' : 'months'}
-                    </SelectItem>
-                    )
-                })}
-                </SelectContent>
-            </Select>
+          <div className='flex flex-col gap-2'>
+            <Label className="font-medium">Data Retention Period</Label>
+            <p className="text-sm text-muted-foreground">
+              Automatically delete call data older than the specified period.
+            </p>
+          </div>
+          <Select 
+            value={retentionPeriod} 
+            onValueChange={(val) => {
+              setRetentionPeriod(val)
+              setHasUnsavedChanges(true)
+            }}
+          >
+            <SelectTrigger className="w-[120px]">
+              <SelectValue placeholder="Select months" />
+            </SelectTrigger>
+            <SelectContent>
+              {[...Array(12)].map((_, i) => {
+                const month = (i + 1).toString()
+                return (
+                  <SelectItem key={month} value={month}>
+                    {month} {i === 0 ? 'month' : 'months'}
+                  </SelectItem>
+                )
+              })}
+            </SelectContent>
+          </Select>
         </div>
+
         <div className="flex items-center justify-between">
           <Label className="font-medium">Dark Mode</Label>
           <Switch checked={isDarkMode} onCheckedChange={handleThemeToggle} />
         </div>
       </CardContent>
 
-      <CardFooter className="justify-end">
-        <Button onClick={handleSave}>Save General Settings</Button>
+      <CardFooter className="justify-end gap-2">
+        {hasUnsavedChanges && (
+          <span className="text-sm text-amber-600 dark:text-amber-400 mr-auto">
+            You have unsaved changes
+          </span>
+        )}
+        <Button 
+          onClick={handleSave} 
+          disabled={isSaving || !hasUnsavedChanges}
+        >
+          {isSaving ? 'Saving...' : 'Save Settings'}
+        </Button>
       </CardFooter>
     </Card>
   )

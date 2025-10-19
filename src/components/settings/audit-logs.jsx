@@ -8,9 +8,58 @@ import {
   CardFooter,
 } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import auditLogs from './audit_logs'
+import { Input } from '@/components/ui/input'
+import { Search } from 'lucide-react'
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet"
+import { API_URL } from '@/config/api'
+import { toast } from 'sonner'
 
 export default function AuditLogs() {
+  const [logs, setLogs] = React.useState([])
+  const [filteredLogs, setFilteredLogs] = React.useState([])
+  const [searchTerm, setSearchTerm] = React.useState('')
+  const [loading, setLoading] = React.useState(true)
+
+  React.useEffect(() => {
+    fetchAuditLogs()
+  }, [])
+
+  React.useEffect(() => {
+    if (searchTerm) {
+      const filtered = logs.filter(log => 
+        log.message.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        log.user?.toLowerCase().includes(searchTerm.toLowerCase())
+      )
+      setFilteredLogs(filtered)
+    } else {
+      setFilteredLogs(logs.slice(0, 5)) // Show only 5 in preview
+    }
+  }, [searchTerm, logs])
+
+  const fetchAuditLogs = async () => {
+    setLoading(true)
+    try {
+      const response = await fetch(`${API_URL}/api/audit-logs`)
+      if (response.ok) {
+        const data = await response.json()
+        setLogs(data)
+        setFilteredLogs(data.slice(0, 5))
+      }
+    } catch (error) {
+      console.error('Failed to fetch audit logs:', error)
+      toast.error('Failed to load audit logs')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   return (
     <Card className="w-full h-full">
       <CardHeader>
@@ -21,27 +70,70 @@ export default function AuditLogs() {
       </CardHeader>
 
       <CardContent className="space-y-4">
-        {auditLogs.map((log, index) => (
-          <div
-            key={index}
-            className={`p-3 rounded-md`}
-          >
-            <p className="text-sm font-medium text-gray-800 dark:text-gray-100">
-              {log.message}
-            </p>
-            {log.timestamp && (
-              <p className="text-xs text-muted-foreground mt-1">
-                {log.timestamp} by {log.user} ({log.role})
-              </p>
-            )}
+        <div className="relative">
+          <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search logs..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="pl-8"
+          />
+        </div>
+
+        {loading ? (
+          <div className="text-center py-4 text-muted-foreground">
+            Loading logs...
           </div>
-        ))}
+        ) : filteredLogs.length > 0 ? (
+          filteredLogs.map((log, index) => (
+            <div key={index} className="p-3 rounded-md border">
+              <p className="text-sm font-medium">
+                {log.message}
+              </p>
+              {log.timestamp && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  {new Date(log.timestamp).toLocaleString()} by {log.user} ({log.role})
+                </p>
+              )}
+            </div>
+          ))
+        ) : (
+          <div className="text-center py-4 text-muted-foreground">
+            No logs found
+          </div>
+        )}
       </CardContent>
 
       <CardFooter>
-        <Button variant="outline" className="w-full">
-          View Full Logs
-        </Button>
+        <Sheet>
+          <SheetTrigger asChild>
+            <Button variant="outline" className="w-full">
+              View Full Logs
+            </Button>
+          </SheetTrigger>
+          <SheetContent side="right" className="w-full sm:max-w-2xl overflow-y-auto">
+            <SheetHeader>
+              <SheetTitle>Complete Audit Logs</SheetTitle>
+              <SheetDescription>
+                Detailed view of all system activities
+              </SheetDescription>
+            </SheetHeader>
+            <div className="mt-6 space-y-3">
+              {logs.map((log, index) => (
+                <div key={index} className="p-4 rounded-md border">
+                  <p className="text-sm font-medium">
+                    {log.message}
+                  </p>
+                  {log.timestamp && (
+                    <p className="text-xs text-muted-foreground mt-2">
+                      {new Date(log.timestamp).toLocaleString()} • {log.user} • {log.role}
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+          </SheetContent>
+        </Sheet>
       </CardFooter>
     </Card>
   )
