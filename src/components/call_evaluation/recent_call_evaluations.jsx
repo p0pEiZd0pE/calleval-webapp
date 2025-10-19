@@ -74,6 +74,7 @@ export default function RecentCallEvaluations() {
       const calls = await response.json()
       
       // Transform backend data to match table structure
+      // UPDATED CLASSIFICATION THRESHOLDS: Excellent 90-100, Good 80-89, Needs Improvement <80
       const transformedData = calls.map(call => ({
         id: call.id,
         callId: call.id,
@@ -86,9 +87,9 @@ export default function RecentCallEvaluations() {
           minute: '2-digit'
         }),
         duration: call.duration || 'N/A',
-        classification: call.score >= 85 ? 'Excellent' : 
-                       call.score >= 70 ? 'Satisfactory' : 
-                       call.score >= 50 ? 'Needs Improvement' : 'Unsatisfactory',
+        classification: call.score >= 90 ? 'Excellent' : 
+                       call.score >= 80 ? 'Good' : 
+                       'Needs Improvement',
         overallScore: call.score ? call.score.toFixed(1) : 'N/A',
         status: call.status,
         binary_scores: call.binary_scores

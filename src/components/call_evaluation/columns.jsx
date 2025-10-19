@@ -312,11 +312,11 @@ export const columns = [
     header: "Classification",
     cell: ({ getValue }) => {
       const classification = getValue()
+      // UPDATED: Now only 3 variants instead of 4
       const variants = {
         'Excellent': 'default',
-        'Satisfactory': 'secondary',
-        'Needs Improvement': 'outline',
-        'Unsatisfactory': 'destructive'
+        'Good': 'secondary',
+        'Needs Improvement': 'destructive'
       }
       return (
         <Badge variant={variants[classification] || 'secondary'}>
@@ -330,12 +330,13 @@ export const columns = [
     header: "Overall Score",
     cell: ({ getValue }) => {
       const score = parseFloat(getValue())
-      const color = score >= 85 ? 'text-green-600' : 
-                    score >= 70 ? 'text-yellow-600' : 
-                    score >= 50 ? 'text-orange-600' : 'text-red-600'
+      // UPDATED: Changed thresholds to 90 and 80
+      const color = score >= 90 ? 'text-green-600' : 
+                    score >= 80 ? 'text-blue-600' : 
+                    'text-red-600'
       return (
-        <span className={`font-bold ${color}`}>
-          {score}%
+        <span className={`font-semibold ${color}`}>
+          {getValue()}
         </span>
       )
     }

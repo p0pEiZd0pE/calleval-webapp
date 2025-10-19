@@ -56,22 +56,21 @@ export function RecentHighImpactCalls() {
     }
   }
 
+  // UPDATED CLASSIFICATION THRESHOLDS
   const getClassification = (score) => {
-    if (score >= 85) return 'Excellent'
-    if (score >= 70) return 'Satisfactory'
-    if (score >= 50) return 'Needs Improvement'
-    return 'Unsatisfactory'
+    if (score >= 90) return 'Excellent'
+    if (score >= 80) return 'Good'
+    return 'Needs Improvement'
   }
 
+  // UPDATED: Removed Satisfactory and Unsatisfactory variants
   const getClassificationVariant = (classification) => {
     switch (classification) {
       case 'Excellent':
         return 'default'
-      case 'Satisfactory':
+      case 'Good':
         return 'secondary'
       case 'Needs Improvement':
-        return 'outline'
-      case 'Unsatisfactory':
         return 'destructive'
       default:
         return 'secondary'
