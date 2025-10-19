@@ -1,3 +1,4 @@
+// File: src/components/agent/columns.jsx
 import { ArrowUpDown, MoreHorizontal } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
@@ -129,8 +130,8 @@ export const columns = [
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem>View Profile</DropdownMenuItem>
+            <DropdownMenuItem>View Calls</DropdownMenuItem>
             <DropdownMenuItem>Edit Profile</DropdownMenuItem>
-            <DropdownMenuItem>View Call History</DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem className="text-red-600">
               Delete Agent

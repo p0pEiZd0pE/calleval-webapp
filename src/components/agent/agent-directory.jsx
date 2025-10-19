@@ -27,11 +27,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { Label } from "@/components/ui/label"
-import { Plus, Filter, X, RefreshCw } from 'lucide-react'
+import { Plus, Filter, X, RefreshCw, MoreHorizontal } from 'lucide-react'
 import { Badge } from "@/components/ui/badge"
 import { API_ENDPOINTS } from '@/config/api'
-import { toast } from "sonner"  // UPDATED: Using sonner instead of useToast
+import { toast } from "sonner"
 
 export default function AgentDirectory({ onAgentSelect, onCallsUpdate }) {
   const [data, setData] = useState([])
@@ -61,11 +69,11 @@ export default function AgentDirectory({ onAgentSelect, onCallsUpdate }) {
       setLoading(true)
       const response = await fetch(API_ENDPOINTS.AGENTS)
       if (!response.ok) throw new Error('Failed to fetch agents')
-      const agents = await response.json()
-      setData(agents)
+      const agentsData = await response.json()
+      setData(agentsData)
     } catch (error) {
       console.error('Error fetching agents:', error)
-      toast.error("Failed to load agents")
+      toast.error('Failed to load agents')
     } finally {
       setLoading(false)
     }
@@ -75,40 +83,22 @@ export default function AgentDirectory({ onAgentSelect, onCallsUpdate }) {
     fetchAgents()
   }, [])
 
-  const uniquePositions = useMemo(() => {
-    return [...new Set(data.map(agent => agent.position))]
-  }, [data])
-
-  const uniqueStatuses = useMemo(() => {
-    return [...new Set(data.map(agent => agent.status))]
-  }, [data])
-
   const filteredData = useMemo(() => {
     return data.filter(agent => {
-      const matchesSearch = searchTerm === "" || 
+      const matchesSearch = !searchTerm || 
         agent.agentName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        agent.position.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        agent.agentId.toLowerCase().includes(searchTerm.toLowerCase())
+        agent.agentId.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        agent.position.toLowerCase().includes(searchTerm.toLowerCase())
 
-      const matchesPosition = filters.position === "all" || 
-        agent.position === filters.position
-
-      const matchesStatus = filters.status === "all" || 
-        agent.status === filters.status
-
-      const matchesMinScore = filters.minScore === "" || 
-        agent.avgScore >= parseFloat(filters.minScore)
-      const matchesMaxScore = filters.maxScore === "" || 
-        agent.avgScore <= parseFloat(filters.maxScore)
-
-      const matchesMinCalls = filters.minCalls === "" || 
-        agent.callsHandled >= parseInt(filters.minCalls)
-      const matchesMaxCalls = filters.maxCalls === "" || 
-        agent.callsHandled <= parseInt(filters.maxCalls)
+      const matchesPosition = filters.position === "all" || agent.position === filters.position
+      const matchesStatus = filters.status === "all" || agent.status === filters.status
+      const matchesMinScore = !filters.minScore || agent.avgScore >= parseFloat(filters.minScore)
+      const matchesMaxScore = !filters.maxScore || agent.avgScore <= parseFloat(filters.maxScore)
+      const matchesMinCalls = !filters.minCalls || agent.callsHandled >= parseInt(filters.minCalls)
+      const matchesMaxCalls = !filters.maxCalls || agent.callsHandled <= parseInt(filters.maxCalls)
 
       return matchesSearch && matchesPosition && matchesStatus && 
-             matchesMinScore && matchesMaxScore && 
-             matchesMinCalls && matchesMaxCalls
+             matchesMinScore && matchesMaxScore && matchesMinCalls && matchesMaxCalls
     })
   }, [data, searchTerm, filters])
 
@@ -225,10 +215,8 @@ export default function AgentDirectory({ onAgentSelect, onCallsUpdate }) {
             const [callsDialogOpen, setCallsDialogOpen] = React.useState(false)
             
             const handleViewProfile = async () => {
-              // Set the selected agent
               onAgentSelect(agent);
               
-              // Fetch agent's calls
               try {
                 const response = await fetch(API_ENDPOINTS.AGENT_CALLS(agent.agentId));
                 if (response.ok) {
@@ -240,57 +228,49 @@ export default function AgentDirectory({ onAgentSelect, onCallsUpdate }) {
                 onCallsUpdate([]);
               }
               
-              // Scroll to the card section
               document.getElementById('agent-card-section')?.scrollIntoView({ behavior: 'smooth' });
             };
             
             return (
-              <div className="flex gap-2">
-                {/* View Profile Button - NEW */}
-                <Button 
-                  variant="default" 
-                  size="sm"
-                  onClick={handleViewProfile}
-                >
-                  View Profile
-                </Button>
-                
-                {/* View Calls Button */}
-                <AgentCallsDialog 
-                  agentId={agent.agentId}
-                  open={callsDialogOpen}
-                  onOpenChange={setCallsDialogOpen}
-                >
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => setCallsDialogOpen(true)}
-                  >
-                    View Calls
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" className="h-8 w-8 p-0">
+                    <span className="sr-only">Open menu</span>
+                    <MoreHorizontal className="h-4 w-4" />
                   </Button>
-                </AgentCallsDialog>
-                
-                {/* Edit Button */}
-                <Button 
-                  variant="outline" 
-                  size="sm"
-                  onClick={() => {
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                  <DropdownMenuItem onClick={() => navigator.clipboard.writeText(agent.agentId)}>
+                    Copy Agent ID
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={handleViewProfile}>
+                    View Profile
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setCallsDialogOpen(true)}>
+                    View Calls
+                  </DropdownMenuItem>
+                  <AgentCallsDialog 
+                    agentId={agent.agentId}
+                    open={callsDialogOpen}
+                    onOpenChange={setCallsDialogOpen}
+                  />
+                  <DropdownMenuItem onClick={() => {
                     setEditingAgent(agent)
                     setIsEditDialogOpen(true)
-                  }}
-                >
-                  Edit
-                </Button>
-                
-                {/* Delete Button */}
-                <Button 
-                  variant="destructive" 
-                  size="sm"
-                  onClick={() => handleDeleteAgent(agent.agentId)}
-                >
-                  Delete
-                </Button>
-              </div>
+                  }}>
+                    Edit Profile
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem 
+                    className="text-red-600"
+                    onClick={() => handleDeleteAgent(agent.agentId)}
+                  >
+                    Delete Agent
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             )
           }
         }
@@ -338,7 +318,6 @@ export default function AgentDirectory({ onAgentSelect, onCallsUpdate }) {
                         id="agentName"
                         value={newAgent.agentName}
                         onChange={(e) => setNewAgent({...newAgent, agentName: e.target.value})}
-                        placeholder="Enter agent name"
                       />
                     </div>
                     <div className="grid gap-2">
@@ -377,139 +356,118 @@ export default function AgentDirectory({ onAgentSelect, onCallsUpdate }) {
                     <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
                       Cancel
                     </Button>
-                    <Button onClick={handleAddAgent}>Save Agent</Button>
+                    <Button onClick={handleAddAgent}>Add Agent</Button>
                   </DialogFooter>
                 </DialogContent>
               </Dialog>
             </div>
           </div>
-        </CardHeader>
 
-        <CardContent>
-          <div className='space-y-4'>
-            <div className='flex justify-between items-center gap-4 flex-wrap'>
-              <h4 className="scroll-m-20 text-xl font-semibold tracking-tight">
-                Agent List
-              </h4>
-              <div className="flex gap-2 items-center flex-1 max-w-sm">
-                <Input 
-                  placeholder="🔍 Search agents by name, ID, or position..."
-                  className='flex-1'
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                />
-                {searchTerm && (
-                  <Button 
-                    variant="ghost" 
-                    size="sm"
-                    onClick={() => setSearchTerm("")}
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
-                )}
-              </div>
-            </div>
-
-            <div className="border rounded-lg p-4 space-y-4 bg-muted/50">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
+          <div className="flex gap-2 flex-wrap mt-4">
+            <Input
+              placeholder="Search agents..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="max-w-sm"
+            />
+            
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="gap-2">
                   <Filter className="h-4 w-4" />
-                  <h5 className="font-semibold">Filters</h5>
+                  Filters
                   {hasActiveFilters && (
-                    <Badge variant="secondary">{filteredData.length} results</Badge>
+                    <Badge variant="secondary" className="ml-1 rounded-sm px-1">
+                      Active
+                    </Badge>
                   )}
-                </div>
-                {hasActiveFilters && (
-                  <Button variant="ghost" size="sm" onClick={resetFilters}>
-                    Clear All
-                  </Button>
-                )}
-              </div>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-80 p-4">
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label>Position</Label>
+                    <Select value={filters.position} onValueChange={(value) => setFilters({...filters, position: value})}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Positions</SelectItem>
+                        <SelectItem value="Customer Support">Customer Support</SelectItem>
+                        <SelectItem value="Technical Support">Technical Support</SelectItem>
+                        <SelectItem value="Sales Representative">Sales Representative</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <div className="space-y-2">
-                  <Label>Position</Label>
-                  <Select 
-                    value={filters.position} 
-                    onValueChange={(value) => setFilters({...filters, position: value})}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Positions</SelectItem>
-                      {uniquePositions.map(position => (
-                        <SelectItem key={position} value={position}>
-                          {position}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+                  <div className="space-y-2">
+                    <Label>Status</Label>
+                    <Select value={filters.status} onValueChange={(value) => setFilters({...filters, status: value})}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Statuses</SelectItem>
+                        {["Active", "Inactive"].map(status => (
+                          <SelectItem key={status} value={status}>
+                            {status}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
 
-                <div className="space-y-2">
-                  <Label>Status</Label>
-                  <Select 
-                    value={filters.status} 
-                    onValueChange={(value) => setFilters({...filters, status: value})}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Status</SelectItem>
-                      {uniqueStatuses.map(status => (
-                        <SelectItem key={status} value={status}>
-                          {status}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+                  <div className="space-y-2">
+                    <Label>Score Range</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        type="number"
+                        placeholder="Min"
+                        value={filters.minScore}
+                        onChange={(e) => setFilters({...filters, minScore: e.target.value})}
+                        className="w-full"
+                      />
+                      <Input
+                        type="number"
+                        placeholder="Max"
+                        value={filters.maxScore}
+                        onChange={(e) => setFilters({...filters, maxScore: e.target.value})}
+                        className="w-full"
+                      />
+                    </div>
+                  </div>
 
-                <div className="space-y-2">
-                  <Label>Score Range</Label>
-                  <div className="flex gap-2">
-                    <Input
-                      type="number"
-                      placeholder="Min"
-                      value={filters.minScore}
-                      onChange={(e) => setFilters({...filters, minScore: e.target.value})}
-                      className="w-full"
-                    />
-                    <Input
-                      type="number"
-                      placeholder="Max"
-                      value={filters.maxScore}
-                      onChange={(e) => setFilters({...filters, maxScore: e.target.value})}
-                      className="w-full"
-                    />
+                  <div className="space-y-2">
+                    <Label>Calls Handled</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        type="number"
+                        placeholder="Min"
+                        value={filters.minCalls}
+                        onChange={(e) => setFilters({...filters, minCalls: e.target.value})}
+                        className="w-full"
+                      />
+                      <Input
+                        type="number"
+                        placeholder="Max"
+                        value={filters.maxCalls}
+                        onChange={(e) => setFilters({...filters, maxCalls: e.target.value})}
+                        className="w-full"
+                      />
+                    </div>
                   </div>
                 </div>
+              </DropdownMenuContent>
+            </DropdownMenu>
 
-                <div className="space-y-2">
-                  <Label>Calls Handled</Label>
-                  <div className="flex gap-2">
-                    <Input
-                      type="number"
-                      placeholder="Min"
-                      value={filters.minCalls}
-                      onChange={(e) => setFilters({...filters, minCalls: e.target.value})}
-                      className="w-full"
-                    />
-                    <Input
-                      type="number"
-                      placeholder="Max"
-                      value={filters.maxCalls}
-                      onChange={(e) => setFilters({...filters, maxCalls: e.target.value})}
-                      className="w-full"
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
+            {hasActiveFilters && (
+              <Button variant="ghost" size="sm" onClick={resetFilters} className="gap-2">
+                <X className="h-4 w-4" />
+                Reset
+              </Button>
+            )}
           </div>
-        </CardContent>
+        </CardHeader>
 
         <CardContent>
           {loading ? (
