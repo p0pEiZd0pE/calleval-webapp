@@ -887,6 +887,10 @@ def process_call(call_id: str, file_path: str):
         call.binary_scores = json.dumps(binary_scores)
         
         db.commit()
+        db.refresh(call)
+
+        # ADD THIS AUDIT LOG AFTER SUCCESSFUL ANALYSIS
+        log_call_analysis_complete(call_id, call.filename, call.score)
         
         print(f"\n{'='*60}")
         print(f"✅ PROCESSING COMPLETE!")
@@ -927,7 +931,7 @@ async def root():
 @app.post("/api/upload")
 async def upload_audio(
     file: UploadFile = File(...),
-    agent_id: str = Form(...),  # NEW: Agent ID required
+    agent_id: str = Form(...),
     background_tasks: BackgroundTasks = None,
     db: Session = Depends(get_db)
 ):
@@ -956,11 +960,14 @@ async def upload_audio(
         file_path=file_path,
         status="processing",
         analysis_status="queued",
-        agent_id=agent_id,  # NEW: Store agent ID
-        agent_name=agent.agentName  # NEW: Store agent name
+        agent_id=agent_id,
+        agent_name=agent.agentName
     )
     db.add(call)
     db.commit()
+    
+    # ADD AUDIT LOG
+    log_call_upload(call_id, file.filename, agent.agentName, user="Admin")
     
     background_tasks.add_task(process_call, call_id, file_path)
     
@@ -1096,6 +1103,9 @@ async def create_agent(agent: AgentCreate, db: Session = Depends(get_db)):
         db.commit()
         db.refresh(db_agent)
         
+        # ADD AUDIT LOG
+        log_agent_created(db_agent.agentId, db_agent.agentName, user="Admin")
+        
         return db_agent
     except Exception as e:
         db.rollback()
@@ -1116,14 +1126,20 @@ async def update_agent(
         raise HTTPException(status_code=404, detail="Agent not found")
     
     try:
-        # Update only provided fields
+        # Track changes for audit log
         update_data = agent_update.dict(exclude_unset=True)
+        
+        # Update only provided fields
         for field, value in update_data.items():
             setattr(db_agent, field, value)
         
         db_agent.updated_at = datetime.utcnow()
         db.commit()
         db.refresh(db_agent)
+        
+        # ADD AUDIT LOG
+        if update_data:
+            log_agent_updated(agent_id, db_agent.agentName, update_data, user="Admin")
         
         return db_agent
     except Exception as e:
@@ -1141,8 +1157,15 @@ async def delete_agent(agent_id: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Agent not found")
     
     try:
+        # Store name before deleting for audit log
+        agent_name = db_agent.agentName
+        
         db.delete(db_agent)
         db.commit()
+        
+        # ADD AUDIT LOG
+        log_agent_deleted(agent_id, agent_name, user="Admin")
+        
         return {"message": "Agent deleted successfully", "agentId": agent_id}
     except Exception as e:
         db.rollback()
