@@ -89,14 +89,33 @@ export const columns = [
         try {
           const backendUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
           
-          // Download audio
-          const audioUrl = `${backendUrl}/api/temp-audio/${call.id}`;
+          // Download audio with proper filename extraction
+          const audioResponse = await fetch(`${backendUrl}/api/temp-audio/${call.id}`);
+          
+          if (!audioResponse.ok) {
+            throw new Error('Failed to download audio');
+          }
+          
+          // Extract filename from Content-Disposition header (like Call Evaluations page)
+          let audioFilename = call.fileName || 'recording.mp3';
+          const contentDisposition = audioResponse.headers.get('Content-Disposition');
+          if (contentDisposition) {
+            const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+            if (filenameMatch && filenameMatch[1]) {
+              audioFilename = filenameMatch[1].replace(/['"]/g, '');
+            }
+          }
+          
+          // Download audio blob
+          const audioBlob = await audioResponse.blob();
+          const audioUrl = window.URL.createObjectURL(audioBlob);
           const audioLink = document.createElement('a');
           audioLink.href = audioUrl;
-          audioLink.download = call.fileName || 'recording.mp3';
+          audioLink.download = audioFilename; // Now has proper extension
           document.body.appendChild(audioLink);
           audioLink.click();
           document.body.removeChild(audioLink);
+          window.URL.revokeObjectURL(audioUrl);
           
           // Download transcription
           const response = await fetch(`${backendUrl}/api/calls/${call.id}`);
@@ -128,7 +147,8 @@ export const columns = [
               const transcriptUrl = window.URL.createObjectURL(blob);
               const transcriptLink = document.createElement('a');
               transcriptLink.href = transcriptUrl;
-              transcriptLink.download = `transcript_${call.fileName?.replace(/\.[^/.]+$/, '')}.txt`;
+              // Use the extracted audio filename for the transcript name
+              transcriptLink.download = `transcript_${audioFilename.replace(/\.[^/.]+$/, '')}.txt`;
               document.body.appendChild(transcriptLink);
               transcriptLink.click();
               document.body.removeChild(transcriptLink);
