@@ -56,6 +56,16 @@ class ReportCreate(BaseModel):
     total_calls: int = 0
     avg_score: Optional[float] = None
 
+class Settings(Base):
+    __tablename__ = "settings"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    email_notifications = Column(Boolean, default=True)
+    language = Column(String, default="English")
+    retention_period = Column(Integer, default=12)
+    theme = Column(String, default="light")
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
 
 # ==================== MODAL AUTHENTICATION ====================
 modal_token_id = os.getenv("MODAL_TOKEN_ID")
@@ -1297,19 +1307,44 @@ async def get_report(report_id: str, db: Session = Depends(get_db)):
 # GET settings
 @app.get("/api/settings")
 async def get_settings(db: Session = Depends(get_db)):
-    # Return settings from database or default values
+    settings = db.query(Settings).first()
+    
+    if not settings:
+        # Create default settings if none exist
+        settings = Settings(
+            email_notifications=True,
+            language="English",
+            retention_period=12,
+            theme="light"
+        )
+        db.add(settings)
+        db.commit()
+        db.refresh(settings)
+    
     return {
-        "emailNotifications": True,
-        "language": "English",
-        "retentionPeriod": "12",
-        "theme": "dark"
+        "emailNotifications": settings.email_notifications,
+        "language": settings.language,
+        "retentionPeriod": settings.retention_period,
+        "theme": settings.theme
     }
 
 # UPDATE settings
 @app.put("/api/settings")
-async def update_settings(settings: dict, db: Session = Depends(get_db)):
-    # Save settings to database
-    # For now, just return success
+async def update_settings(settings_data: dict, db: Session = Depends(get_db)):
+    settings = db.query(Settings).first()
+    
+    if not settings:
+        settings = Settings()
+        db.add(settings)
+    
+    # Update fields
+    settings.email_notifications = settings_data.get("emailNotifications", True)
+    settings.language = settings_data.get("language", "English")
+    settings.retention_period = settings_data.get("retentionPeriod", 12)
+    settings.theme = settings_data.get("theme", "light")
+    
+    db.commit()
+    
     return {"message": "Settings updated successfully"}
 
 # GET users

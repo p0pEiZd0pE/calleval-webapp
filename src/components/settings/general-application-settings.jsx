@@ -27,20 +27,53 @@ export default function GeneralApplicationSettings() {
   const [isDarkMode, setIsDarkMode] = React.useState(false)
   const [isSaving, setIsSaving] = React.useState(false)
   const [hasUnsavedChanges, setHasUnsavedChanges] = React.useState(false)
+  const [isLoading, setIsLoading] = React.useState(true)
 
-  // Load settings from backend
+  // Load settings from backend on mount
   React.useEffect(() => {
     fetchSettings()
   }, [])
 
-  // Check for theme in localStorage on mount
-  React.useEffect(() => {
-    const storedTheme = localStorage.getItem('theme')
-    if (storedTheme === 'dark') {
-      document.documentElement.classList.add('dark')
-      setIsDarkMode(true)
+  const fetchSettings = async () => {
+    setIsLoading(true)
+    try {
+      const response = await fetch(`${API_URL}/api/settings`)
+      if (response.ok) {
+        const data = await response.json()
+        
+        // Update all settings from backend
+        setEmailNotifications(data.emailNotifications ?? true)
+        setLanguage(data.language ?? 'English')
+        setRetentionPeriod(data.retentionPeriod?.toString() ?? '12')
+        
+        // CRITICAL: Sync theme from backend to both state and localStorage
+        const backendTheme = data.theme || 'light'
+        const isDark = backendTheme === 'dark'
+        
+        setIsDarkMode(isDark)
+        
+        // Apply theme to document
+        if (isDark) {
+          document.documentElement.classList.add('dark')
+          localStorage.setItem('theme', 'dark')
+        } else {
+          document.documentElement.classList.remove('dark')
+          localStorage.setItem('theme', 'light')
+        }
+      }
+    } catch (error) {
+      console.error('Failed to fetch settings:', error)
+      // Fallback to localStorage if backend fails
+      const storedTheme = localStorage.getItem('theme')
+      const isDark = storedTheme === 'dark'
+      setIsDarkMode(isDark)
+      if (isDark) {
+        document.documentElement.classList.add('dark')
+      }
+    } finally {
+      setIsLoading(false)
     }
-  }, [])
+  }
 
   // Warn before leaving with unsaved changes
   React.useEffect(() => {
@@ -54,24 +87,11 @@ export default function GeneralApplicationSettings() {
     return () => window.removeEventListener('beforeunload', handleBeforeUnload)
   }, [hasUnsavedChanges])
 
-  const fetchSettings = async () => {
-    try {
-      const response = await fetch(`${API_URL}/api/settings`)
-      if (response.ok) {
-        const data = await response.json()
-        setEmailNotifications(data.emailNotifications ?? true)
-        setLanguage(data.language ?? 'English')
-        setRetentionPeriod(data.retentionPeriod ?? '12')
-        // Theme is handled by localStorage
-      }
-    } catch (error) {
-      console.error('Failed to fetch settings:', error)
-    }
-  }
-
   const handleThemeToggle = (checked) => {
     setIsDarkMode(checked)
     setHasUnsavedChanges(true)
+    
+    // Immediately apply theme to DOM and localStorage
     if (checked) {
       document.documentElement.classList.add('dark')
       localStorage.setItem('theme', 'dark')
@@ -84,22 +104,27 @@ export default function GeneralApplicationSettings() {
   const handleSave = async () => {
     setIsSaving(true)
     try {
+      const settingsData = {
+        emailNotifications,
+        language,
+        retentionPeriod: parseInt(retentionPeriod),
+        theme: isDarkMode ? 'dark' : 'light',
+      }
+
       const response = await fetch(`${API_URL}/api/settings`, {
         method: 'PUT',
         headers: { 
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          emailNotifications,
-          language,
-          retentionPeriod: parseInt(retentionPeriod),
-          theme: isDarkMode ? 'dark' : 'light',
-        }),
+        body: JSON.stringify(settingsData),
       })
 
       if (response.ok) {
         toast.success('Settings saved successfully')
         setHasUnsavedChanges(false)
+        
+        // Ensure localStorage is synced after save
+        localStorage.setItem('theme', settingsData.theme)
       } else {
         throw new Error('Failed to save settings')
       }
@@ -109,6 +134,16 @@ export default function GeneralApplicationSettings() {
     } finally {
       setIsSaving(false)
     }
+  }
+
+  if (isLoading) {
+    return (
+      <Card className="flex flex-col justify-between w-full h-full">
+        <CardContent className="flex items-center justify-center p-8">
+          <p className="text-muted-foreground">Loading settings...</p>
+        </CardContent>
+      </Card>
+    )
   }
 
   return (
