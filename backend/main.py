@@ -673,10 +673,9 @@ def update_agent_stats(agent_id: str, db: Session):
         print(f"   Average Score: {agent.avgScore}")
 
 def process_call(call_id: str, file_path: str):
-    """Background task: Process call with phase-aware evaluation and cancellation support"""
+    """Background task: Process call with phase-aware evaluation"""
     
     db = SessionLocal()
-    call = None
     
     try:
         call = db.query(CallEvaluation).filter(CallEvaluation.id == call_id).first()
@@ -685,184 +684,264 @@ def process_call(call_id: str, file_path: str):
             print(f"Call {call_id} not found")
             return
         
-        # ==================== CANCELLATION CHECK 1: START ====================
+        # ========== CANCELLATION CHECK 1: AT START ==========
         if call.status == "cancelled":
             print(f"⚠️ Call {call_id} was cancelled before processing started")
             return
-        # ====================================================================
+        # ====================================================
         
+        # STEP 1: TRANSCRIBE
         print(f"\n{'='*60}")
-        print(f"🎙️ STARTING CALL PROCESSING: {call_id}")
-        print(f"{'='*60}\n")
+        print(f"STEP 1: TRANSCRIBING WITH MODAL WHISPERX")
+        print(f"{'='*60}")
         
-        # Get audio duration
-        try:
-            from pydub import AudioSegment
-            audio = AudioSegment.from_file(file_path)
-            duration = len(audio) / 1000.0  # Convert to seconds
-            call.duration = f"{int(duration // 60)}:{int(duration % 60):02d}"
-        except Exception as e:
-            print(f"Could not get duration: {e}")
-            call.duration = "Unknown"
-        
-        db.commit()
-        
-        # ==================== CANCELLATION CHECK 2: BEFORE TRANSCRIPTION ====================
-        db.refresh(call)
-        if call.status == "cancelled":
-            print(f"⚠️ Call {call_id} was cancelled before transcription")
-            return
-        # ===================================================================================
-        
-        # Step 1: Transcription with WhisperX via Modal
-        print(f"\n📝 Step 1: Transcribing audio with WhisperX...")
         call.status = "transcribing"
         call.analysis_status = "transcribing"
         db.commit()
         
-        transcription_result = transcribe_with_modal_whisperx(file_path, call_id)
+        # ========== CANCELLATION CHECK 2: BEFORE TRANSCRIPTION ==========
+        db.refresh(call)
+        if call.status == "cancelled":
+            print(f"⚠️ Call {call_id} was cancelled before transcription")
+            return
+        # ================================================================
         
-        if not transcription_result:
-            raise Exception("Transcription failed")
+        whisperx_result = transcribe_with_modal_whisperx(file_path, call_id)
         
-        # Store transcription results
-        call.transcript = transcription_result.get('text', '')
+        if not whisperx_result or "segments" not in whisperx_result:
+            raise Exception("WhisperX transcription failed")
         
-        # Store segments and speakers
-        segments = transcription_result.get('segments', [])
-        speakers = transcription_result.get('speakers', {})
+        # Store full text transcript
+        full_text = " ".join([seg["text"] for seg in whisperx_result["segments"]])
+        call.transcript = full_text
         
-        call.speakers = json.dumps(speakers)
+        # UPDATED: Assign speaker roles
+        print("\n🎭 Assigning speaker roles (agent/caller)...")
+        speaker_roles = assign_speaker_roles(whisperx_result["segments"])
+        print(f"✅ Speaker roles assigned: {speaker_roles}")
+        
+        # Store speaker roles
+        call.speakers = json.dumps(speaker_roles)
+        
+        # Store segments with speaker information
+        segments_data = []
+        for seg in whisperx_result["segments"]:
+            segments_data.append({
+                "speaker": seg.get("speaker", "unknown"),
+                "text": seg.get("text", "").strip(),
+                "start": seg.get("start", 0),
+                "end": seg.get("end", 0)
+            })
+        
+        # Store segments in the scores field
+        call.scores = json.dumps({"segments": segments_data})
+        print(f"✅ Stored {len(segments_data)} segments")
+        
+        # Calculate duration
+        if whisperx_result["segments"]:
+            last_segment = whisperx_result["segments"][-1]
+            duration_seconds = int(last_segment.get("end", 0))
+            minutes = duration_seconds // 60
+            seconds = duration_seconds % 60
+            call.duration = f"{minutes}:{seconds:02d}"
+        else:
+            duration_seconds = 0
+        
+        print(f"✅ Transcription complete!")
+        print(f"   Transcript length: {len(full_text)} characters")
+        print(f"   Duration: {call.duration}")
+        print(f"   Segments: {len(segments_data)}")
+        print(f"   Speakers: {speaker_roles}")
+        
         db.commit()
         
-        print(f"✓ Transcription completed")
-        print(f"  - Total segments: {len(segments)}")
-        print(f"  - Speakers identified: {list(speakers.keys())}")
-        
-        # ==================== CANCELLATION CHECK 3: AFTER TRANSCRIPTION ====================
+        # ========== CANCELLATION CHECK 3: AFTER TRANSCRIPTION ==========
         db.refresh(call)
         if call.status == "cancelled":
             print(f"⚠️ Call {call_id} was cancelled after transcription")
             return
-        # ===================================================================================
+        # ===============================================================
         
-        # Extract agent segments
-        agent_segments = [s for s in segments if speakers.get(s.get('speaker')) == 'agent']
+        # STEP 2: IDENTIFY AGENT SEGMENTS
+        print(f"\n{'='*60}")
+        print(f"STEP 2: IDENTIFYING AGENT SEGMENTS")
+        print(f"{'='*60}")
+
+        speaker_roles = assign_speaker_roles(whisperx_result["segments"])
+        print(f"✅ Speaker roles assigned: {speaker_roles}")
+
+        # FIX: Find which SPEAKER_ID has the role "agent"
+        agent_speaker = next(
+            (speaker_id for speaker_id, role in speaker_roles.items() if role == 'agent'),
+            'SPEAKER_01'  # fallback to SPEAKER_01 if not found
+        )
+
+        print(f"🎯 Identified agent speaker: {agent_speaker}")
+        print(f"   Role mapping: {speaker_roles}")
+
+        agent_segments = [
+            seg for seg in whisperx_result["segments"]
+            if seg.get("speaker") == agent_speaker
+        ]
+
+        print(f"✅ Found {len(agent_segments)} agent segments")
+
+        # Debug: Show caller segments count too
+        caller_speaker = next(
+            (speaker_id for speaker_id, role in speaker_roles.items() if role == 'caller'),
+            None
+        )
+        if caller_speaker:
+            caller_segments = [
+                seg for seg in whisperx_result["segments"]
+                if seg.get("speaker") == caller_speaker
+            ]
+            print(f"📞 Found {len(caller_segments)} caller segments (not evaluated)")
         
-        if not agent_segments:
-            print("⚠️ No agent segments found, skipping analysis")
-            call.status = "completed"
-            call.analysis_status = "completed"
-            call.score = 0
-            db.commit()
-            return
-        
-        # Determine call structure for phase detection
-        total_duration = segments[-1]['end'] if segments else 0
-        call_structure = {
-            'total_duration': total_duration,
-            'opening_threshold': min(30, total_duration * 0.15),
-            'closing_threshold': max(total_duration - 30, total_duration * 0.85)
-        }
-        
-        # ==================== CANCELLATION CHECK 4: BEFORE BERT ====================
+        # ========== CANCELLATION CHECK 4: BEFORE BERT ==========
         db.refresh(call)
         if call.status == "cancelled":
             print(f"⚠️ Call {call_id} was cancelled before BERT analysis")
             return
-        # ==============================================================================
+        # =======================================================
         
-        # Step 2: BERT Analysis via Modal
-        print(f"\n🤖 Step 2: Running BERT analysis...")
+        # STEP 3: ANALYZE WITH BERT
+        print(f"\n{'='*60}")
+        print(f"STEP 3: ANALYZING SEGMENTS WITH BERT")
+        print(f"{'='*60}")
+        
         call.status = "analyzing"
-        call.analysis_status = "analyzing_bert"
+        call.analysis_status = "analyzing with BERT"
         db.commit()
         
-        bert_result = analyze_with_modal_bert(agent_segments, call_structure)
+        all_bert_predictions = {}
         
-        if not bert_result:
-            raise Exception("BERT analysis failed")
+        for i, segment in enumerate(agent_segments):
+            segment_text = segment["text"]
+            print(f"\n📝 Segment {i+1}/{len(agent_segments)}: '{segment_text[:50]}...'")
+            
+            bert_output = analyze_with_modal_bert(segment_text)
+            
+            if bert_output and bert_output.get("success"):
+                predictions = bert_output.get("predictions", {})
+                
+                for metric, value in predictions.items():
+                    if isinstance(value, dict) and "score" in value:
+                        score = value["score"]
+                        print(f"   {metric}: {score:.3f} ({value.get('prediction', 'N/A')})")
+                    else:
+                        score = value
+                        print(f"   {metric}: {score:.3f} (flat)")
+                    
+                    if metric not in all_bert_predictions:
+                        all_bert_predictions[metric] = score
+                    else:
+                        all_bert_predictions[metric] = max(all_bert_predictions[metric], score)
         
-        call.bert_analysis = json.dumps(bert_result)
-        db.commit()
-        
-        print(f"✓ BERT analysis completed")
-        
-        # ==================== CANCELLATION CHECK 5: AFTER BERT ====================
+        # ========== CANCELLATION CHECK 5: AFTER BERT, BEFORE WAV2VEC2 ==========
         db.refresh(call)
         if call.status == "cancelled":
             print(f"⚠️ Call {call_id} was cancelled after BERT analysis")
             return
-        # ============================================================================
+        # =======================================================================
         
-        # ==================== CANCELLATION CHECK 6: BEFORE WAV2VEC2 ====================
-        db.refresh(call)
-        if call.status == "cancelled":
-            print(f"⚠️ Call {call_id} was cancelled before Wav2Vec2 analysis")
-            return
-        # ===============================================================================
+        # Wav2Vec2
+        print(f"\n🎵 Calling Wav2Vec2 with full agent audio...")
+        agent_text_combined = " ".join([seg["text"] for seg in agent_segments])
+        wav2vec2_output = analyze_with_modal_wav2vec2(file_path, call_id, agent_text_combined)
         
-        # Step 3: Wav2Vec2 Analysis via Modal
-        print(f"\n🎵 Step 3: Running Wav2Vec2 analysis...")
-        call.analysis_status = "analyzing_wav2vec2"
-        db.commit()
+        bert_output_combined = {
+            "success": True,
+            "predictions": all_bert_predictions,
+            "method": "segment-by-segment evaluation"
+        }
         
-        wav2vec2_result = analyze_with_modal_wav2vec2(file_path, agent_segments, call_structure)
+        print(f"\n📊 Aggregated BERT Predictions:")
+        for metric, score in all_bert_predictions.items():
+            status = "✓" if score >= 0.5 else "✗"
+            print(f"   {status} {metric}: {score:.3f}")
         
-        if not wav2vec2_result:
-            raise Exception("Wav2Vec2 analysis failed")
-        
-        call.wav2vec2_analysis = json.dumps(wav2vec2_result)
-        db.commit()
-        
-        print(f"✓ Wav2Vec2 analysis completed")
-        
-        # ==================== CANCELLATION CHECK 7: BEFORE SCORING ====================
+        # ========== CANCELLATION CHECK 6: BEFORE SCORING ==========
         db.refresh(call)
         if call.status == "cancelled":
             print(f"⚠️ Call {call_id} was cancelled before scoring")
             return
-        # ==============================================================================
+        # ==========================================================
         
-        # Step 4: Calculate Binary Scores
-        print(f"\n📊 Step 4: Calculating binary scores...")
+        # STEP 4: CREATE CALL STRUCTURE
+        print(f"\n{'='*60}")
+        print(f"STEP 4: ANALYZING CALL STRUCTURE")
+        print(f"{'='*60}")
         
-        binary_scores = calculate_binary_scores_from_analyses(
-            bert_result, 
-            wav2vec2_result,
-            agent_segments
+        call_structure = {
+            'total_duration': duration_seconds,
+            'opening_threshold': min(30, duration_seconds * 0.15),
+            'closing_threshold': max(duration_seconds - 30, duration_seconds * 0.85)
+        }
+        
+        print(f"✅ Call Structure:")
+        print(f"   Total Duration: {duration_seconds:.1f}s ({call.duration})")
+        print(f"   Opening: 0 - {call_structure['opening_threshold']:.1f}s")
+        print(f"   Middle: {call_structure['opening_threshold']:.1f}s - {call_structure['closing_threshold']:.1f}s")
+        print(f"   Closing: {call_structure['closing_threshold']:.1f}s - {duration_seconds:.1f}s")
+        
+        # STEP 5: PHASE-AWARE BINARY SCORING
+        print(f"\n{'='*60}")
+        print(f"STEP 5: PHASE-AWARE BINARY SCORECARD EVALUATION")
+        print(f"{'='*60}")
+        
+        binary_scores = calculate_binary_scores(
+            agent_segments,
+            call_structure,
+            bert_output_combined, 
+            wav2vec2_output
         )
         
-        call.binary_scores = json.dumps(binary_scores)
+        total_score = binary_scores["total_score"]
         
-        # Calculate total score
-        total_score = binary_scores.get('total_score', 0)
-        call.score = round(total_score, 1)
+        print(f"\n📊 FINAL SCORING RESULTS:")
+        print(f"   Total Score: {total_score:.1f}/100")
+        print(f"   Percentage: {binary_scores['percentage']:.1f}%")
         
-        # Store detailed scores with segments
-        scores_with_segments = {
-            'segments': segments,
-            'binary_scores': binary_scores,
-            'evaluation_results': binary_scores.get('metrics', {})
-        }
-        call.scores = json.dumps(scores_with_segments)
+        print(f"\n✓ PASSED METRICS:")
+        passed_count = 0
+        for metric_name, metric_data in binary_scores["metrics"].items():
+            if metric_data["detected"]:
+                passed_count += 1
+                print(f"   ✓ {metric_name}: {metric_data['weighted_score']:.1f}/{metric_data['weight']}")
         
-        # ==================== CANCELLATION CHECK 8: BEFORE COMPLETION ====================
+        print(f"\n✗ FAILED METRICS:")
+        failed_count = 0
+        for metric_name, metric_data in binary_scores["metrics"].items():
+            if not metric_data["detected"]:
+                failed_count += 1
+                print(f"   ✗ {metric_name}: 0/{metric_data['weight']}")
+        
+        print(f"\nSUMMARY: {passed_count} passed, {failed_count} failed")
+        
+        # ========== CANCELLATION CHECK 7: BEFORE COMPLETION ==========
         db.refresh(call)
         if call.status == "cancelled":
             print(f"⚠️ Call {call_id} was cancelled before marking complete")
             return
-        # ================================================================================
+        # =============================================================
         
-        # Mark as completed
+        # SAVE RESULTS
         call.status = "completed"
         call.analysis_status = "completed"
-        call.updated_at = datetime.utcnow()
+        call.score = total_score
+        call.bert_analysis = json.dumps(bert_output_combined)
+        call.wav2vec2_analysis = json.dumps(wav2vec2_output) if wav2vec2_output else None
+        call.binary_scores = json.dumps(binary_scores)
+        
         db.commit()
+        db.refresh(call)
+
+        # ADD THIS AUDIT LOG AFTER SUCCESSFUL ANALYSIS
+        log_call_analysis_complete(call_id, call.filename, call.score)
         
         print(f"\n{'='*60}")
-        print(f"✅ CALL PROCESSING COMPLETED")
-        print(f"{'='*60}")
+        print(f"✅ PROCESSING COMPLETE!")
         print(f"   Call ID: {call_id}")
         print(f"   Final Score: {total_score:.1f}/100")
         print(f"{'='*60}\n")
@@ -876,11 +955,12 @@ def process_call(call_id: str, file_path: str):
         traceback.print_exc()
         
         if call:
-            # Don't overwrite cancelled status with failed status
+            # ========== DON'T OVERWRITE CANCELLED STATUS ==========
             db.refresh(call)
             if call.status != "cancelled":
                 call.status = "failed"
                 call.analysis_status = f"error: {str(e)}"
+            # =====================================================
             db.commit()
     
     finally:
