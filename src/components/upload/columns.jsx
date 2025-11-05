@@ -330,6 +330,14 @@ export const columns = [
           <Button
             variant="ghost"
             size="icon"
+            onClick={() => setDialogOpen(true)}
+            title="View call details"
+          >
+            <Eye className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
             onClick={handleDownload}
             disabled={call.status !== 'completed'}
             title="Download recording and transcript"
