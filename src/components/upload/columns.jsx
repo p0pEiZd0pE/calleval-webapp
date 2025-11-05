@@ -1,8 +1,10 @@
-import { Download, Eye, Loader2 } from "lucide-react"
+import { Download, Eye, Loader2, XCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { CallDetailsDialog } from "./call-details-dialog"
 import { useState } from "react"
+import { API_ENDPOINTS } from '@/config/api'
+import { toast } from "sonner"
 
 export const columns = [
   {
@@ -21,6 +23,7 @@ export const columns = [
       
       const variants = {
         completed: "default",
+        cancelled: "secondary",
         pending: "secondary",
         processing: "secondary",
         transcribing: "secondary",
@@ -52,6 +55,7 @@ export const columns = [
         completed: "default",
         transcribed: "default",
         classified: "default",
+        cancelled: "secondary",
         pending: "secondary",
         processing: "secondary",
         transcribing: "secondary",
@@ -62,7 +66,7 @@ export const columns = [
         failed: "destructive"
       };
       
-      const displayStatus = status ?
+      const displayStatus = status ? 
         status.charAt(0).toUpperCase() + status.slice(1).replace(/_/g, ' ') : 
         "Pending";
       
@@ -84,6 +88,45 @@ export const columns = [
     cell: ({ row }) => {
       const call = row.original;
       const [dialogOpen, setDialogOpen] = useState(false);
+      const [cancelling, setCancelling] = useState(false);
+      
+      // Check if call is currently processing
+      const isProcessing = [
+        'processing', 'transcribing', 'analyzing', 
+        'analyzing_bert', 'analyzing_wav2vec2', 'queued'
+      ].includes(call.status) || [
+        'processing', 'transcribing', 'analyzing',
+        'analyzing_bert', 'analyzing_wav2vec2', 'queued'
+      ].includes(call.analysisStatus);
+
+      const handleCancel = async () => {
+        if (!window.confirm('Are you sure you want to cancel this processing? This action cannot be undone.')) {
+          return;
+        }
+
+        setCancelling(true);
+        try {
+          const backendUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+          const response = await fetch(`${backendUrl}/api/calls/${call.id}/cancel`, {
+            method: 'POST',
+          });
+
+          if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'Failed to cancel processing');
+          }
+
+          toast.success('Processing cancelled successfully');
+          
+          // Refresh the page or trigger a refetch
+          window.location.reload();
+        } catch (error) {
+          console.error('Cancel error:', error);
+          toast.error(error.message || 'Failed to cancel processing');
+        } finally {
+          setCancelling(false);
+        }
+      };
       
       const handleDownload = async () => {
         try {
@@ -247,66 +290,70 @@ export const columns = [
                   ? `[${segment.start.toFixed(2)}s - ${segment.end.toFixed(2)}s]`
                   : '';
                 
-                transcriptText += `${roleLabel} (${speakerId}) ${timestamp}:\n`;
-                transcriptText += `${segment.text}\n\n`;
+                transcriptText += `${roleLabel} ${speakerId} ${timestamp}:\n`;
+                transcriptText += `${segment.text || ''}\n\n`;
               });
-            } else if (data.transcript) {
-              // Fallback to plain transcript if no segments
-              transcriptText += `${data.transcript}\n`;
             } else {
-              transcriptText += `No transcript available.\n`;
+              transcriptText += 'No transcript segments available.\n';
             }
             
             transcriptText += `${'='.repeat(80)}\n`;
-            transcriptText += `                              END OF TRANSCRIPT\n`;
+            transcriptText += `END OF TRANSCRIPT\n`;
             transcriptText += `${'='.repeat(80)}\n`;
             
-            // Create and download transcript file
-            const blob = new Blob([transcriptText], { type: 'text/plain' });
-            const transcriptUrl = window.URL.createObjectURL(blob);
+            // Download transcript
+            const transcriptBlob = new Blob([transcriptText], { type: 'text/plain' });
+            const transcriptUrl = window.URL.createObjectURL(transcriptBlob);
             const transcriptLink = document.createElement('a');
             transcriptLink.href = transcriptUrl;
-            transcriptLink.download = `transcript_${audioFilename.replace(/\.[^/.]+$/, '')}.txt`;
+            transcriptLink.download = `${call.id}_transcript.txt`;
             document.body.appendChild(transcriptLink);
             transcriptLink.click();
             document.body.removeChild(transcriptLink);
             window.URL.revokeObjectURL(transcriptUrl);
           }
+          
+          toast.success('Files downloaded successfully!');
         } catch (error) {
           console.error('Download error:', error);
-          alert('Failed to download files. Please try again.');
+          toast.error('Failed to download files');
         }
       };
- 
+      
       return (
-        <div className="flex gap-1">
+        <div className="flex items-center gap-1">
           <CallDetailsDialog 
-            callId={call.id} 
+            call={call}
             open={dialogOpen}
             onOpenChange={setDialogOpen}
-          >
-            <Button
-              variant="ghost"
-              className="h-8 w-8 p-0"
-              onClick={() => setDialogOpen(true)}
-              title="View Details"
-              disabled={call.status === "pending" || call.status === "processing"}
-            >
-              <Eye className="h-4 w-4" />
-            </Button>
-          </CallDetailsDialog>
-          
+          />
           <Button
             variant="ghost"
-            className="h-8 w-8 p-0"
+            size="icon"
             onClick={handleDownload}
-            title="Download Audio & Transcription"
-            disabled={call.status === "pending" || call.status === "processing"}
+            disabled={call.status !== 'completed'}
+            title="Download recording and transcript"
           >
             <Download className="h-4 w-4" />
           </Button>
+          {isProcessing && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleCancel}
+              disabled={cancelling}
+              title="Cancel processing"
+              className="text-destructive hover:text-destructive hover:bg-destructive/10"
+            >
+              {cancelling ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <XCircle className="h-4 w-4" />
+              )}
+            </Button>
+          )}
         </div>
       );
     },
-  }
+  },
 ];

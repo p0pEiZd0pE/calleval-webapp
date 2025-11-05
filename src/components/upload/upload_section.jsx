@@ -1,4 +1,4 @@
-import React, { useCallback, useState, useEffect, useRef } from 'react'
+import React, { useCallback, useState, useEffect } from 'react'
 import { useDropzone } from 'react-dropzone'
 import {
   Card,
@@ -8,7 +8,7 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { CloudUpload, X, Loader2, StopCircle } from "lucide-react";
+import { CloudUpload, X, Loader2 } from "lucide-react";
 import { API_ENDPOINTS } from '@/config/api';
 import {
   Select,
@@ -26,10 +26,6 @@ export default function UploadSection({ onUploadComplete }) {
   const [agents, setAgents] = useState([]);
   const [selectedAgent, setSelectedAgent] = useState("");
   const [loadingAgents, setLoadingAgents] = useState(true);
-  const [uploadProgress, setUploadProgress] = useState({ current: 0, total: 0 });
-  
-  // Reference to store abort controllers for each upload
-  const abortControllersRef = useRef([]);
 
   // Fetch agents on component mount
   useEffect(() => {
@@ -73,24 +69,6 @@ export default function UploadSection({ onUploadComplete }) {
     setFiles([]);
   };
 
-  const cancelUpload = () => {
-    // Abort all ongoing uploads
-    abortControllersRef.current.forEach(controller => {
-      if (controller) {
-        controller.abort();
-      }
-    });
-    
-    // Clear the abort controllers
-    abortControllersRef.current = [];
-    
-    // Reset state
-    setUploading(false);
-    setUploadProgress({ current: 0, total: 0 });
-    
-    toast.info("Upload process cancelled");
-  };
-
   const uploadAll = async () => {
     if (files.length === 0) {
       toast.error("Please select files to upload");
@@ -103,33 +81,18 @@ export default function UploadSection({ onUploadComplete }) {
     }
     
     setUploading(true);
-    setUploadProgress({ current: 0, total: files.length });
-    
-    // Clear any existing abort controllers
-    abortControllersRef.current = [];
-    
     let successCount = 0;
     let errorCount = 0;
-    let cancelledCount = 0;
     
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      
-      // Create new AbortController for this upload
-      const controller = new AbortController();
-      abortControllersRef.current.push(controller);
-      
+    for (const file of files) {
       const formData = new FormData();
       formData.append('file', file);
       formData.append('agent_id', selectedAgent);
       
       try {
-        setUploadProgress({ current: i + 1, total: files.length });
-        
         const response = await fetch(API_ENDPOINTS.UPLOAD, {
           method: 'POST',
           body: formData,
-          signal: controller.signal,
         });
         
         if (!response.ok) {
@@ -140,22 +103,13 @@ export default function UploadSection({ onUploadComplete }) {
         console.log('Uploaded:', result);
         successCount++;
       } catch (error) {
-        if (error.name === 'AbortError') {
-          console.log('Upload cancelled for:', file.name);
-          cancelledCount++;
-        } else {
-          console.error('Upload error:', error);
-          errorCount++;
-        }
+        console.error('Upload error:', error);
+        errorCount++;
       }
     }
     
     setUploading(false);
     setFiles([]);
-    setUploadProgress({ current: 0, total: 0 });
-    
-    // Clear abort controllers
-    abortControllersRef.current = [];
     
     // Show results
     if (successCount > 0) {
@@ -164,12 +118,9 @@ export default function UploadSection({ onUploadComplete }) {
     if (errorCount > 0) {
       toast.error(`Failed to upload ${errorCount} file(s)`);
     }
-    if (cancelledCount > 0) {
-      toast.info(`Cancelled ${cancelledCount} file(s)`);
-    }
     
     // Notify parent component to refresh the list
-    if (onUploadComplete && successCount > 0) {
+    if (onUploadComplete) {
       onUploadComplete();
     }
   };
@@ -228,9 +179,7 @@ export default function UploadSection({ onUploadComplete }) {
             {uploading ? (
               <>
                 <Loader2 className="h-12 w-12 animate-spin text-primary" />
-                <p className="text-sm text-muted-foreground">
-                  Uploading files... ({uploadProgress.current}/{uploadProgress.total})
-                </p>
+                <p className="text-sm text-muted-foreground">Uploading files...</p>
               </>
             ) : (
               <>
@@ -275,33 +224,30 @@ export default function UploadSection({ onUploadComplete }) {
         )}
       </CardContent>
       <div className="flex justify-end space-x-2 p-6">
-        {uploading ? (
-          <Button
-            variant="destructive"
-            onClick={cancelUpload}
-          >
-            <StopCircle className="w-4 h-4 mr-2" />
-            Stop Upload
-          </Button>
-        ) : (
-          <>
-            <Button
-              variant="outline"
-              onClick={clearAll}
-              disabled={uploading || files.length === 0}
-            >
-              Clear All
-            </Button>
-            <Button
-              className='bg-ring hover:bg-primary-foreground text-white'
-              onClick={uploadAll}
-              disabled={uploading || files.length === 0 || !selectedAgent}
-            >
+        <Button
+          variant="outline"
+          onClick={clearAll}
+          disabled={uploading || files.length === 0}
+        >
+          Clear All
+        </Button>
+        <Button
+          className='bg-ring hover:bg-primary-foreground text-white'
+          onClick={uploadAll}
+          disabled={uploading || files.length === 0 || !selectedAgent}
+        >
+          {uploading ? (
+            <>
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              Uploading...
+            </>
+          ) : (
+            <>
               <CloudUpload className="w-4 h-4 mr-2" />
               Upload All
-            </Button>
-          </>
-        )}
+            </>
+          )}
+        </Button>
       </div>
     </Card>
   );
