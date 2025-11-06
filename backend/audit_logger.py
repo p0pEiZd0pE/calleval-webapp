@@ -160,3 +160,26 @@ def log_call_deleted(call_id: str, filename: str, user: str = "Admin"):
         user=user,
         role="Admin"
     )
+
+def log_call_cancel(call_id: str, filename: str, user: str = "Admin"):
+    """Log when call processing is cancelled"""
+    log_action(
+        action="cancel",
+        resource_type="call",
+        resource_id=call_id,
+        message=f"Cancelled processing for call '{filename}'",
+        user=user,
+        role="Admin",
+        status="warning"
+    )
+
+def log_call_retry(call_id: str, filename: str, user: str = "System"):
+    """Log when call processing is retried"""
+    log_action(
+        action="retry",
+        resource_type="call",
+        resource_id=call_id,
+        message=f"Retrying processing for call '{filename}'",
+        user=user,
+        role="System"
+    )

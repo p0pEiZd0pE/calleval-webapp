@@ -18,7 +18,8 @@ from fastapi import Form
 from audit_logger import (
     log_call_upload, log_call_analysis_complete, log_agent_created, 
     log_agent_updated, log_agent_deleted, log_settings_updated,
-    log_report_generated, log_call_deleted, log_user_login
+    log_report_generated, log_call_deleted, log_user_login,
+    log_call_cancel, log_call_retry
 )
 
 
@@ -1087,6 +1088,9 @@ async def cancel_call_processing(call_id: str, db: Session = Depends(get_db)):
         call.analysis_status = "cancelled"
         call.updated_at = datetime.utcnow()
         db.commit()
+        
+        # ADD AUDIT LOG
+        log_call_cancel(call_id, call.filename, user="Admin")
         
         print(f"✓ Call {call_id} cancelled successfully")
         
