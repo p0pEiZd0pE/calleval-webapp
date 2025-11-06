@@ -1,4 +1,4 @@
-import { Download, Eye, Loader2, XCircle } from "lucide-react"
+import { Download, Eye, Loader2, XCircle, RotateCcw } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { CallDetailsDialog } from "./call-details-dialog"
@@ -122,6 +122,33 @@ export const columns = [
         } catch (error) {
           console.error('Cancel error:', error);
           toast.error(error.message || 'Failed to cancel processing');
+        } finally {
+          setCancelling(false);
+        }
+      };
+
+      const handleRetry = async () => {
+        if (!window.confirm('Are you sure you want to retry processing this call?')) {
+          return;
+        }
+
+        setCancelling(true); // Reusing the same loading state
+        try {
+          const backendUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+          const response = await fetch(`${backendUrl}/api/calls/${call.id}/retry`, {
+            method: 'POST',
+          });
+
+          if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'Failed to retry processing');
+          }
+
+          toast.success('Processing restarted successfully');
+          window.location.reload();
+        } catch (error) {
+          console.error('Retry error:', error);
+          toast.error(error.message || 'Failed to retry processing');
         } finally {
           setCancelling(false);
         }
@@ -360,6 +387,22 @@ export const columns = [
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
                 <XCircle className="h-4 w-4" />
+              )}
+            </Button>
+          )}
+
+          {(call.status === "cancelled" || call.status === "failed") && (
+            <Button
+              variant="ghost"
+              className="h-8 w-8 p-0 text-blue-600 hover:text-blue-600 hover:bg-blue-50"
+              onClick={handleRetry}
+              disabled={cancelling}
+              title="Retry processing"
+            >
+              {cancelling ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <RotateCcw className="h-4 w-4" />
               )}
             </Button>
           )}

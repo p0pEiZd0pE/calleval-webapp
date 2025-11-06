@@ -1101,6 +1101,66 @@ async def cancel_call_processing(call_id: str, db: Session = Depends(get_db)):
     except Exception as e:
         print(f"Error cancelling call {call_id}: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+    
+
+@app.post("/api/calls/{call_id}/retry")
+async def retry_call_processing(
+    call_id: str, 
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db)
+):
+    """Retry a cancelled or failed call processing"""
+    try:
+        call = db.query(CallEvaluation).filter(CallEvaluation.id == call_id).first()
+        
+        if not call:
+            raise HTTPException(status_code=404, detail="Call not found")
+        
+        # Check if call can be retried
+        if call.status not in ["cancelled", "failed"]:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Cannot retry call with status: {call.status}"
+            )
+        
+        # Check if audio file still exists
+        file_path = call.file_path
+        if not file_path or not os.path.exists(file_path):
+            raise HTTPException(
+                status_code=404, 
+                detail="Audio file not found. Cannot retry processing."
+            )
+        
+        # Reset call status to processing
+        call.status = "processing"
+        call.analysis_status = "queued"
+        call.score = None
+        call.transcript = None
+        call.bert_analysis = None
+        call.wav2vec2_analysis = None
+        call.binary_scores = None
+        call.updated_at = datetime.utcnow()
+        db.commit()
+        
+        # Add audit log
+        log_call_retry(call_id, call.filename)
+        
+        # Restart background processing
+        background_tasks.add_task(process_call, call_id, file_path)
+        
+        print(f"✓ Call {call_id} queued for retry")
+        
+        return {
+            "id": call.id,
+            "filename": call.filename,
+            "status": "processing",
+            "message": "Call processing restarted successfully"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error retrying call {call_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/api/calls")
