@@ -684,6 +684,12 @@ def process_call(call_id: str, file_path: str):
             print(f"Call {call_id} not found")
             return
         
+        # ==================== ADDED: CANCELLATION CHECK 1 ====================
+        if call.status == "cancelled":
+            print(f"⚠️ Call {call_id} was cancelled before processing started")
+            return
+        # =====================================================================
+        
         # STEP 1: TRANSCRIBE
         print(f"\n{'='*60}")
         print(f"STEP 1: TRANSCRIBING WITH MODAL WHISPERX")
@@ -692,6 +698,13 @@ def process_call(call_id: str, file_path: str):
         call.status = "transcribing"
         call.analysis_status = "transcribing"
         db.commit()
+        
+        # ==================== ADDED: CANCELLATION CHECK 2 ====================
+        db.refresh(call)
+        if call.status == "cancelled":
+            print(f"⚠️ Call {call_id} was cancelled before transcription")
+            return
+        # =====================================================================
         
         whisperx_result = transcribe_with_modal_whisperx(file_path, call_id)
         
@@ -742,6 +755,13 @@ def process_call(call_id: str, file_path: str):
         
         db.commit()
         
+        # ==================== ADDED: CANCELLATION CHECK 3 ====================
+        db.refresh(call)
+        if call.status == "cancelled":
+            print(f"⚠️ Call {call_id} was cancelled after transcription")
+            return
+        # =====================================================================
+        
         # STEP 2: IDENTIFY AGENT SEGMENTS
         print(f"\n{'='*60}")
         print(f"STEP 2: IDENTIFYING AGENT SEGMENTS")
@@ -778,6 +798,13 @@ def process_call(call_id: str, file_path: str):
             ]
             print(f"📞 Found {len(caller_segments)} caller segments (not evaluated)")
         
+        # ==================== ADDED: CANCELLATION CHECK 4 ====================
+        db.refresh(call)
+        if call.status == "cancelled":
+            print(f"⚠️ Call {call_id} was cancelled before BERT analysis")
+            return
+        # =====================================================================
+        
         # STEP 3: ANALYZE WITH BERT
         print(f"\n{'='*60}")
         print(f"STEP 3: ANALYZING SEGMENTS WITH BERT")
@@ -811,6 +838,13 @@ def process_call(call_id: str, file_path: str):
                     else:
                         all_bert_predictions[metric] = max(all_bert_predictions[metric], score)
         
+        # ==================== ADDED: CANCELLATION CHECK 5 ====================
+        db.refresh(call)
+        if call.status == "cancelled":
+            print(f"⚠️ Call {call_id} was cancelled after BERT analysis")
+            return
+        # =====================================================================
+        
         # Wav2Vec2
         print(f"\n🎵 Calling Wav2Vec2 with full agent audio...")
         agent_text_combined = " ".join([seg["text"] for seg in agent_segments])
@@ -826,6 +860,13 @@ def process_call(call_id: str, file_path: str):
         for metric, score in all_bert_predictions.items():
             status = "✓" if score >= 0.5 else "✗"
             print(f"   {status} {metric}: {score:.3f}")
+        
+        # ==================== ADDED: CANCELLATION CHECK 6 ====================
+        db.refresh(call)
+        if call.status == "cancelled":
+            print(f"⚠️ Call {call_id} was cancelled before scoring")
+            return
+        # =====================================================================
         
         # STEP 4: CREATE CALL STRUCTURE
         print(f"\n{'='*60}")
@@ -878,6 +919,13 @@ def process_call(call_id: str, file_path: str):
         
         print(f"\nSUMMARY: {passed_count} passed, {failed_count} failed")
         
+        # ==================== ADDED: CANCELLATION CHECK 7 ====================
+        db.refresh(call)
+        if call.status == "cancelled":
+            print(f"⚠️ Call {call_id} was cancelled before marking complete")
+            return
+        # =====================================================================
+        
         # SAVE RESULTS
         call.status = "completed"
         call.analysis_status = "completed"
@@ -907,8 +955,12 @@ def process_call(call_id: str, file_path: str):
         traceback.print_exc()
         
         if call:
-            call.status = "failed"
-            call.analysis_status = f"error: {str(e)}"
+            # ==================== ADDED: DON'T OVERWRITE CANCELLED STATUS ====================
+            db.refresh(call)
+            if call.status != "cancelled":
+                call.status = "failed"
+                call.analysis_status = f"error: {str(e)}"
+            # =================================================================================
             db.commit()
     
     finally:
@@ -1019,6 +1071,36 @@ async def get_call(call_id: str, db: Session = Depends(get_db)):
         "created_at": call.created_at.isoformat() if call.created_at else None,
         "updated_at": call.updated_at.isoformat() if call.updated_at else None,
     }
+
+
+@app.post("/api/calls/{call_id}/cancel")
+async def cancel_call_processing(call_id: str, db: Session = Depends(get_db)):
+    """Cancel an ongoing call processing/analysis"""
+    try:
+        call = db.query(CallEvaluation).filter(CallEvaluation.id == call_id).first()
+        
+        if not call:
+            raise HTTPException(status_code=404, detail="Call not found")
+        
+        # Update call status to cancelled
+        call.status = "cancelled"
+        call.analysis_status = "cancelled"
+        call.updated_at = datetime.utcnow()
+        db.commit()
+        
+        print(f"✓ Call {call_id} cancelled successfully")
+        
+        return {
+            "id": call.id,
+            "filename": call.filename,
+            "status": "cancelled",
+            "message": "Call processing cancelled successfully"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error cancelling call {call_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/api/calls")

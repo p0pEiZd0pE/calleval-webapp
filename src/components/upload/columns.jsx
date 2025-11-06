@@ -1,8 +1,10 @@
-import { Download, Eye, Loader2 } from "lucide-react"
+import { Download, Eye, Loader2, XCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { CallDetailsDialog } from "./call-details-dialog"
 import { useState } from "react"
+import { API_ENDPOINTS } from '@/config/api'
+import { toast } from "sonner"
 
 export const columns = [
   {
@@ -21,6 +23,7 @@ export const columns = [
       
       const variants = {
         completed: "default",
+        cancelled: "secondary",  // <-- ADD THIS LINE
         pending: "secondary",
         processing: "secondary",
         transcribing: "secondary",
@@ -52,6 +55,7 @@ export const columns = [
         completed: "default",
         transcribed: "default",
         classified: "default",
+        cancelled: "secondary",  // <-- ADD THIS LINE
         pending: "secondary",
         processing: "secondary",
         transcribing: "secondary",
@@ -84,6 +88,44 @@ export const columns = [
     cell: ({ row }) => {
       const call = row.original;
       const [dialogOpen, setDialogOpen] = useState(false);
+
+      const [cancelling, setCancelling] = useState(false);
+
+      // Check if call is currently processing
+      const isProcessing = [
+        'processing', 'transcribing', 'analyzing', 
+        'analyzing_bert', 'analyzing_wav2vec2', 'queued'
+      ].includes(call.status) || [
+        'processing', 'transcribing', 'analyzing',
+        'analyzing_bert', 'analyzing_wav2vec2', 'queued'
+      ].includes(call.analysisStatus);
+
+      const handleCancel = async () => {
+        if (!window.confirm('Are you sure you want to cancel this processing? This action cannot be undone.')) {
+          return;
+        }
+
+        setCancelling(true);
+        try {
+          const backendUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+          const response = await fetch(`${backendUrl}/api/calls/${call.id}/cancel`, {
+            method: 'POST',
+          });
+
+          if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'Failed to cancel processing');
+          }
+
+          toast.success('Processing cancelled successfully');
+          window.location.reload();
+        } catch (error) {
+          console.error('Cancel error:', error);
+          toast.error(error.message || 'Failed to cancel processing');
+        } finally {
+          setCancelling(false);
+        }
+      };
       
       const handleDownload = async () => {
         try {
@@ -305,6 +347,22 @@ export const columns = [
           >
             <Download className="h-4 w-4" />
           </Button>
+
+          {isProcessing && (
+            <Button
+              variant="ghost"
+              className="h-8 w-8 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
+              onClick={handleCancel}
+              disabled={cancelling}
+              title="Cancel processing"
+            >
+              {cancelling ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <XCircle className="h-4 w-4" />
+              )}
+            </Button>
+          )}
         </div>
       );
     },
