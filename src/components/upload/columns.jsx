@@ -82,7 +82,9 @@ export const columns = [
       
       return (
         <Badge variant={variants[status] || "secondary"}>
-          {(status === "analyzing" || status === "analyzing_bert" || status === "analyzing_wav2vec2") && (
+          {(status === "processing" || status === "analyzing" || 
+            status === "transcribing" || status === "analyzing_bert" || 
+            status === "analyzing_wav2vec2" || status === "queued") && (
             <Loader2 className="mr-1 h-3 w-3 animate-spin" />
           )}
           {displayStatus}
@@ -94,65 +96,74 @@ export const columns = [
     id: "actions",
     header: "Actions",
     cell: ({ row }) => {
-      const call = row.original
-      const [dialogOpen, setDialogOpen] = useState(false)
-      const [cancelling, setCancelling] = useState(false)
-      const [showDeleteDialog, setShowDeleteDialog] = useState(false)
-      const [isDeleting, setIsDeleting] = useState(false)
+      const call = row.original;
+      const [dialogOpen, setDialogOpen] = useState(false);
+      const [cancelling, setCancelling] = useState(false);
+      const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+      const [isDeleting, setIsDeleting] = useState(false);
 
-      const isProcessing = call.status === "processing" || 
-                          call.status === "transcribing" || 
-                          call.status === "analyzing" ||
-                          call.analysisStatus === "analyzing_bert" ||
-                          call.analysisStatus === "analyzing_wav2vec2"
+      // Check if call is currently processing
+      const isProcessing = [
+        'processing', 'transcribing', 'analyzing', 
+        'analyzing_bert', 'analyzing_wav2vec2', 'queued'
+      ].includes(call.status) || [
+        'processing', 'transcribing', 'analyzing',
+        'analyzing_bert', 'analyzing_wav2vec2', 'queued'
+      ].includes(call.analysisStatus);
 
       const handleCancel = async () => {
-        setCancelling(true)
+        if (!window.confirm('Are you sure you want to cancel this processing? This action cannot be undone.')) {
+          return;
+        }
+
+        setCancelling(true);
         try {
-          const response = await fetch(API_ENDPOINTS.CALL_DETAIL(call.id) + '/cancel', {
+          const backendUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+          const response = await fetch(`${backendUrl}/api/calls/${call.id}/cancel`, {
             method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-          })
+          });
 
           if (!response.ok) {
-            throw new Error('Failed to cancel processing')
+            const error = await response.json();
+            throw new Error(error.detail || 'Failed to cancel processing');
           }
 
-          toast.success('Processing cancelled successfully')
-          window.location.reload()
+          toast.success('Processing cancelled successfully');
+          window.location.reload();
         } catch (error) {
-          console.error('Cancel error:', error)
-          toast.error('Failed to cancel processing')
+          console.error('Cancel error:', error);
+          toast.error(error.message || 'Failed to cancel processing');
         } finally {
-          setCancelling(false)
+          setCancelling(false);
         }
-      }
+      };
 
       const handleRetry = async () => {
-        setCancelling(true)
+        if (!window.confirm('Are you sure you want to retry processing this call?')) {
+          return;
+        }
+
+        setCancelling(true);
         try {
-          const response = await fetch(API_ENDPOINTS.CALL_DETAIL(call.id) + '/retry', {
+          const backendUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+          const response = await fetch(`${backendUrl}/api/calls/${call.id}/retry`, {
             method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-          })
+          });
 
           if (!response.ok) {
-            throw new Error('Failed to retry processing')
+            const error = await response.json();
+            throw new Error(error.detail || 'Failed to retry processing');
           }
 
-          toast.success('Reprocessing started')
-          window.location.reload()
+          toast.success('Reprocessing started successfully');
+          window.location.reload();
         } catch (error) {
-          console.error('Retry error:', error)
-          toast.error('Failed to retry processing')
+          console.error('Retry error:', error);
+          toast.error(error.message || 'Failed to retry processing');
         } finally {
-          setCancelling(false)
+          setCancelling(false);
         }
-      }
+      };
 
       const handleDownload = async () => {
         try {
@@ -351,35 +362,35 @@ export const columns = [
       };
 
       const handleDelete = async () => {
-        setIsDeleting(true)
+        setIsDeleting(true);
         try {
           const response = await fetch(API_ENDPOINTS.DELETE_CALL(call.id), {
             method: 'DELETE',
             headers: {
               'Content-Type': 'application/json',
             },
-          })
+          });
 
           if (!response.ok) {
-            throw new Error('Failed to delete recording')
+            throw new Error('Failed to delete recording');
           }
 
-          toast.success('Recording deleted successfully')
-          setShowDeleteDialog(false)
-          window.location.reload()
+          toast.success('Recording deleted successfully');
+          setShowDeleteDialog(false);
+          window.location.reload();
         } catch (error) {
-          console.error('Delete error:', error)
-          toast.error('Failed to delete recording')
+          console.error('Delete error:', error);
+          toast.error('Failed to delete recording');
         } finally {
-          setIsDeleting(false)
+          setIsDeleting(false);
         }
-      }
+      };
 
       const handleCancelDelete = () => {
         if (!isDeleting) {
-          setShowDeleteDialog(false)
+          setShowDeleteDialog(false);
         }
-      }
+      };
  
       return (
         <>
@@ -471,8 +482,8 @@ export const columns = [
                 </AlertDialogCancel>
                 <AlertDialogAction
                   onClick={(e) => {
-                    e.preventDefault()
-                    handleDelete()
+                    e.preventDefault();
+                    handleDelete();
                   }}
                   disabled={isDeleting}
                   className="bg-destructive text-destructive-foreground hover:bg-destructive/90"

@@ -393,7 +393,7 @@ export const columns = [
     cell: ({ getValue }) => {
       const score = parseFloat(getValue())
       const color = score >= 90 ? 'text-green-600' : 
-                    score >= 80 ? 'text-yellow-600' : 
+                    score >= 80 ? 'text-blue-600' : 
                     'text-red-600'
       return (
         <span className={`font-semibold ${color}`}>
@@ -407,14 +407,15 @@ export const columns = [
     header: "Status",
     cell: ({ getValue }) => {
       const status = getValue()
-      const variants = {
-        'completed': 'default',
-        'processing': 'secondary',
-        'failed': 'destructive'
+      const statusColors = {
+        'completed': 'bg-green-100 text-green-800',
+        'processing': 'bg-blue-100 text-blue-800',
+        'failed': 'bg-red-100 text-red-800',
+        'queued': 'bg-yellow-100 text-yellow-800'
       }
       return (
-        <Badge variant={variants[status] || 'secondary'}>
-          {status.charAt(0).toUpperCase() + status.slice(1)}
+        <Badge variant="outline" className={statusColors[status] || ''}>
+          {status}
         </Badge>
       )
     }
@@ -426,41 +427,41 @@ export const columns = [
       const recording = row.original
       const [showDeleteDialog, setShowDeleteDialog] = useState(false)
       const [isDeleting, setIsDeleting] = useState(false)
-
+      
       const handleDownload = async () => {
         try {
           const backendUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
           
-          // Fetch audio file
-          const audioResponse = await fetch(`${backendUrl}/api/temp-audio/${recording.callId}`)
+          // Fetch the audio file
+          const response = await fetch(`${backendUrl}/api/temp-audio/${recording.id}`)
           
-          if (!audioResponse.ok) {
+          if (!response.ok) {
             throw new Error('Failed to fetch audio file')
           }
           
-          // Get filename from Content-Disposition header
-          const contentDisposition = audioResponse.headers.get('Content-Disposition')
-          let audioFilename = 'recording.mp3'
+          // Get filename from Content-Disposition header or use default
+          const contentDisposition = response.headers.get('Content-Disposition')
+          let filename = 'recording.mp3'
           
           if (contentDisposition) {
             const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/)
             if (filenameMatch && filenameMatch[1]) {
-              audioFilename = filenameMatch[1].replace(/['"]/g, '')
+              filename = filenameMatch[1].replace(/['"]/g, '')
             }
           }
           
-          // Download audio
-          const audioBlob = await audioResponse.blob()
-          const audioUrl = window.URL.createObjectURL(audioBlob)
-          const audioLink = document.createElement('a')
-          audioLink.href = audioUrl
-          audioLink.download = audioFilename
-          document.body.appendChild(audioLink)
-          audioLink.click()
-          document.body.removeChild(audioLink)
-          window.URL.revokeObjectURL(audioUrl)
+          // Get the blob and create download link
+          const blob = await response.blob()
+          const url = window.URL.createObjectURL(blob)
+          const link = document.createElement('a')
+          link.href = url
+          link.download = filename
+          document.body.appendChild(link)
+          link.click()
+          document.body.removeChild(link)
+          window.URL.revokeObjectURL(url)
           
-          toast.success('Recording downloaded successfully!')
+          toast.success('Download started!')
         } catch (error) {
           console.error('Download error:', error)
           toast.error('Failed to download recording')
@@ -468,35 +469,35 @@ export const columns = [
       }
 
       const handleDelete = async () => {
-        setIsDeleting(true)
+        setIsDeleting(true);
         try {
-          const response = await fetch(API_ENDPOINTS.DELETE_CALL(recording.callId), {
+          const response = await fetch(API_ENDPOINTS.DELETE_CALL(recording.id), {
             method: 'DELETE',
             headers: {
               'Content-Type': 'application/json',
             },
-          })
+          });
 
           if (!response.ok) {
-            throw new Error('Failed to delete recording')
+            throw new Error('Failed to delete recording');
           }
 
-          toast.success('Recording deleted successfully')
-          setShowDeleteDialog(false)
-          window.location.reload()
+          toast.success('Recording deleted successfully');
+          setShowDeleteDialog(false);
+          window.location.reload();
         } catch (error) {
-          console.error('Delete error:', error)
-          toast.error('Failed to delete recording')
+          console.error('Delete error:', error);
+          toast.error('Failed to delete recording');
         } finally {
-          setIsDeleting(false)
+          setIsDeleting(false);
         }
-      }
+      };
 
       const handleCancelDelete = () => {
         if (!isDeleting) {
-          setShowDeleteDialog(false)
+          setShowDeleteDialog(false);
         }
-      }
+      };
  
       return (
         <>
@@ -510,7 +511,7 @@ export const columns = [
             <DropdownMenuContent align="end">
               <DropdownMenuLabel>Actions</DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <ScoreDetailsDialog callId={recording.callId} />
+              <ScoreDetailsDialog callId={recording.id} />
               <DropdownMenuItem onClick={handleDownload}>
                 <Download className="mr-2 h-4 w-4" />
                 Download Recording
@@ -545,8 +546,8 @@ export const columns = [
                 </AlertDialogCancel>
                 <AlertDialogAction
                   onClick={(e) => {
-                    e.preventDefault()
-                    handleDelete()
+                    e.preventDefault();
+                    handleDelete();
                   }}
                   disabled={isDeleting}
                   className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
