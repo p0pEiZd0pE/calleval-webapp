@@ -1,4 +1,4 @@
-import { MoreHorizontal, FileText, Play, Download, User, Phone } from "lucide-react"
+import { MoreHorizontal, FileText, Play, Download, User, Phone, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -17,6 +17,16 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
 import { useState } from "react"
@@ -145,83 +155,111 @@ function ScoreDetailsDialog({ callId }) {
           View Score Details
         </DropdownMenuItem>
       </DialogTrigger>
-      <DialogContent className="xl:max-w-4xl max-h-[85vh]">
+      <DialogContent className="max-w-4xl max-h-[80vh]">
         <DialogHeader>
-          <div className="flex items-start justify-between pr-6">
-            <div className="flex-1">
-              <DialogTitle>Call Evaluation Details</DialogTitle>
-              <DialogDescription className="mt-1.5">
-                Call ID: {callId.substring(0, 20)}...
-              </DialogDescription>
-            </div>
-            {callData && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleDownload}
-                className="mt-0"
-              >
-                <Download className="mr-2 h-4 w-4" />
-                Download All
-              </Button>
-            )}
-          </div>
+          <DialogTitle>Call Evaluation Details</DialogTitle>
+          <DialogDescription>
+            Detailed scores and transcription for Call ID: {callId}
+          </DialogDescription>
         </DialogHeader>
-        
         {loading ? (
           <div className="flex justify-center items-center h-40">
             Loading...
           </div>
         ) : callData ? (
-          <ScrollArea className="h-[70vh] pr-4">
+          <ScrollArea className="h-[60vh] pr-4">
             <div className="space-y-4">
               {/* Audio Player */}
               {audioUrl && (
-                <div className="p-4 bg-muted rounded-lg">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Play className="h-4 w-4" />
-                    <span className="text-sm font-medium">Audio Recording</span>
-                  </div>
-                  <audio 
-                    controls 
-                    className="w-full"
-                    src={audioUrl}
-                  >
+                <div className="bg-muted p-4 rounded-lg">
+                  <h3 className="font-semibold text-lg mb-2">Audio Recording</h3>
+                  <audio controls className="w-full">
+                    <source src={audioUrl} type="audio/mpeg" />
                     Your browser does not support the audio element.
                   </audio>
+                  <div className="mt-2 flex gap-2">
+                    <Button size="sm" variant="outline" onClick={handleDownload}>
+                      <Download className="mr-2 h-4 w-4" />
+                      Download Audio & Transcript
+                    </Button>
+                  </div>
                 </div>
               )}
 
+              <Separator />
+
               {/* Overall Score */}
-              <div className="bg-muted p-4 rounded-lg">
-                <div className="flex justify-between items-center">
-                  <span className="text-lg font-bold">Total Score</span>
-                  <span className="text-2xl font-bold text-primary">
-                    {callData.binary_scores?.total_score?.toFixed(1) || callData.score?.toFixed(1) || 0}/100
-                  </span>
-                </div>
-                <div className="text-sm text-muted-foreground mt-1">
-                  {callData.binary_scores?.percentage?.toFixed(1) || callData.score?.toFixed(1) || 0}% Performance
-                </div>
+              <div className="bg-primary/10 p-4 rounded-lg">
+                <h3 className="font-semibold text-lg">Overall Score</h3>
+                <p className="text-3xl font-bold text-primary">
+                  {callData.score ? callData.score.toFixed(1) : 'N/A'}/100
+                </p>
               </div>
 
-              {/* Metrics Breakdown */}
-              {callData.binary_scores?.metrics && (
-                <div className="space-y-2">
-                  <h3 className="font-semibold text-lg mb-3">Metrics Breakdown</h3>
-                  {Object.entries(callData.binary_scores.metrics).map(([name, metric]) => 
-                    renderMetricRow(name, metric)
+              <Separator />
+
+              {/* Binary Scores by Phase */}
+              {callData.binary_scores && (
+                <div className="space-y-4">
+                  <h3 className="font-semibold text-lg">CallEval Metrics</h3>
+                  
+                  {/* All Phases */}
+                  {callData.binary_scores.all_phases && Object.keys(callData.binary_scores.all_phases).length > 0 && (
+                    <div className="space-y-2">
+                      <h4 className="font-medium text-md bg-muted px-3 py-2 rounded-md">All Phases</h4>
+                      <div className="space-y-1">
+                        {Object.entries(callData.binary_scores.all_phases).map(([name, metric]) => 
+                          renderMetricRow(name, metric)
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Opening Phase */}
+                  {callData.binary_scores.opening && Object.keys(callData.binary_scores.opening).length > 0 && (
+                    <div className="space-y-2">
+                      <h4 className="font-medium text-md bg-muted px-3 py-2 rounded-md">I. Opening Spiel</h4>
+                      <div className="space-y-1">
+                        {Object.entries(callData.binary_scores.opening).map(([name, metric]) => 
+                          renderMetricRow(name, metric)
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Middle Phase */}
+                  {callData.binary_scores.middle && Object.keys(callData.binary_scores.middle).length > 0 && (
+                    <div className="space-y-2">
+                      <h4 className="font-medium text-md bg-muted px-3 py-2 rounded-md">II. Middle / Climax</h4>
+                      <div className="space-y-1">
+                        {Object.entries(callData.binary_scores.middle).map(([name, metric]) => 
+                          renderMetricRow(name, metric)
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Closing Phase */}
+                  {callData.binary_scores.closing && Object.keys(callData.binary_scores.closing).length > 0 && (
+                    <div className="space-y-2">
+                      <h4 className="font-medium text-md bg-muted px-3 py-2 rounded-md">III. Closing / Wrap Up</h4>
+                      <div className="space-y-1">
+                        {Object.entries(callData.binary_scores.closing).map(([name, metric]) => 
+                          renderMetricRow(name, metric)
+                        )}
+                      </div>
+                    </div>
                   )}
                 </div>
               )}
 
-              {/* Speaker Identification - NEW SECTION */}
-              {callData.speakers && (() => {
+              {/* Speaker Information */}
+              {(() => {
                 const stats = getAgentStats();
                 return stats && (
-                  <div className="p-4 bg-gradient-to-r from-blue-50 to-green-50 dark:from-blue-950 dark:to-green-950 rounded-lg border">
-                    <p className="text-sm font-semibold mb-3">Speaker Identification</p>
-                    <div className="flex justify-between">
+                  <div>
+                    <h3 className="font-semibold text-lg mb-3">Speaker Identification</h3>
+                    <div className="grid grid-cols-2 gap-3">
                       <div className="flex items-center gap-2 bg-blue-100 dark:bg-blue-900 px-3 py-2 rounded-md">
                         <User className="h-5 w-5 text-blue-600 dark:text-blue-400" />
                         <div>
@@ -337,7 +375,6 @@ export const columns = [
     header: "Classification",
     cell: ({ getValue }) => {
       const classification = getValue()
-      // UPDATED: Now only 3 variants instead of 4
       const variants = {
         'Excellent': 'default',
         'Good': 'secondary',
@@ -355,9 +392,8 @@ export const columns = [
     header: "Overall Score",
     cell: ({ getValue }) => {
       const score = parseFloat(getValue())
-      // UPDATED: Changed thresholds to 90 and 80
       const color = score >= 90 ? 'text-green-600' : 
-                    score >= 80 ? 'text-blue-600' : 
+                    score >= 80 ? 'text-yellow-600' : 
                     'text-red-600'
       return (
         <span className={`font-semibold ${color}`}>
@@ -371,15 +407,14 @@ export const columns = [
     header: "Status",
     cell: ({ getValue }) => {
       const status = getValue()
-      const statusColors = {
-        'completed': 'bg-green-100 text-green-800',
-        'processing': 'bg-blue-100 text-blue-800',
-        'failed': 'bg-red-100 text-red-800',
-        'queued': 'bg-yellow-100 text-yellow-800'
+      const variants = {
+        'completed': 'default',
+        'processing': 'secondary',
+        'failed': 'destructive'
       }
       return (
-        <Badge variant="outline" className={statusColors[status] || ''}>
-          {status}
+        <Badge variant={variants[status] || 'secondary'}>
+          {status.charAt(0).toUpperCase() + status.slice(1)}
         </Badge>
       )
     }
@@ -389,65 +424,139 @@ export const columns = [
     header: "Actions",
     cell: ({ row }) => {
       const recording = row.original
-      
+      const [showDeleteDialog, setShowDeleteDialog] = useState(false)
+      const [isDeleting, setIsDeleting] = useState(false)
+
       const handleDownload = async () => {
         try {
           const backendUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
           
-          // Fetch the audio file
-          const response = await fetch(`${backendUrl}/api/temp-audio/${recording.id}`)
+          // Fetch audio file
+          const audioResponse = await fetch(`${backendUrl}/api/temp-audio/${recording.callId}`)
           
-          if (!response.ok) {
+          if (!audioResponse.ok) {
             throw new Error('Failed to fetch audio file')
           }
           
-          // Get filename from Content-Disposition header or use default
-          const contentDisposition = response.headers.get('Content-Disposition')
-          let filename = 'recording.mp3'
+          // Get filename from Content-Disposition header
+          const contentDisposition = audioResponse.headers.get('Content-Disposition')
+          let audioFilename = 'recording.mp3'
           
           if (contentDisposition) {
             const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/)
             if (filenameMatch && filenameMatch[1]) {
-              filename = filenameMatch[1].replace(/['"]/g, '')
+              audioFilename = filenameMatch[1].replace(/['"]/g, '')
             }
           }
           
-          // Get the blob and create download link
-          const blob = await response.blob()
-          const url = window.URL.createObjectURL(blob)
-          const link = document.createElement('a')
-          link.href = url
-          link.download = filename
-          document.body.appendChild(link)
-          link.click()
-          document.body.removeChild(link)
-          window.URL.revokeObjectURL(url)
+          // Download audio
+          const audioBlob = await audioResponse.blob()
+          const audioUrl = window.URL.createObjectURL(audioBlob)
+          const audioLink = document.createElement('a')
+          audioLink.href = audioUrl
+          audioLink.download = audioFilename
+          document.body.appendChild(audioLink)
+          audioLink.click()
+          document.body.removeChild(audioLink)
+          window.URL.revokeObjectURL(audioUrl)
           
-          toast.success('Download started!')
+          toast.success('Recording downloaded successfully!')
         } catch (error) {
           console.error('Download error:', error)
           toast.error('Failed to download recording')
         }
       }
+
+      const handleDelete = async () => {
+        setIsDeleting(true)
+        try {
+          const response = await fetch(API_ENDPOINTS.DELETE_CALL(recording.callId), {
+            method: 'DELETE',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+          })
+
+          if (!response.ok) {
+            throw new Error('Failed to delete recording')
+          }
+
+          toast.success('Recording deleted successfully')
+          setShowDeleteDialog(false)
+          window.location.reload()
+        } catch (error) {
+          console.error('Delete error:', error)
+          toast.error('Failed to delete recording')
+        } finally {
+          setIsDeleting(false)
+        }
+      }
+
+      const handleCancelDelete = () => {
+        if (!isDeleting) {
+          setShowDeleteDialog(false)
+        }
+      }
  
       return (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="h-8 w-8 p-0">
-              <span className="sr-only">Open menu</span>
-              <MoreHorizontal className="h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuLabel>Actions</DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            <ScoreDetailsDialog callId={recording.id} />
-            <DropdownMenuItem onClick={handleDownload}>
-              <Download className="mr-2 h-4 w-4" />
-              Download Recording
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" className="h-8 w-8 p-0">
+                <span className="sr-only">Open menu</span>
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuLabel>Actions</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <ScoreDetailsDialog callId={recording.callId} />
+              <DropdownMenuItem onClick={handleDownload}>
+                <Download className="mr-2 h-4 w-4" />
+                Download Recording
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem 
+                className="text-red-600 focus:text-red-600 focus:bg-red-50"
+                onClick={() => setShowDeleteDialog(true)}
+              >
+                <Trash2 className="mr-2 h-4 w-4" />
+                Delete Recording
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Delete Recording</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Are you sure you want to delete this call evaluation? This action cannot be undone 
+                  and will permanently remove the recording and all associated data including scores 
+                  and transcripts.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel 
+                  disabled={isDeleting}
+                  onClick={handleCancelDelete}
+                >
+                  Cancel
+                </AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={(e) => {
+                    e.preventDefault()
+                    handleDelete()
+                  }}
+                  disabled={isDeleting}
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                >
+                  {isDeleting ? "Deleting..." : "Delete"}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </>
       )
     },
   }
