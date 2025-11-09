@@ -1,20 +1,10 @@
-import { Download, Eye, Loader2, XCircle, RotateCcw, Trash2 } from "lucide-react"
+import { Download, Eye, Loader2, XCircle, RotateCcw } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { CallDetailsDialog } from "./call-details-dialog"
 import { useState } from "react"
 import { API_ENDPOINTS } from '@/config/api'
 import { toast } from "sonner"
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog"
 
 export const columns = [
   {
@@ -100,9 +90,6 @@ export const columns = [
       const [dialogOpen, setDialogOpen] = useState(false);
 
       const [cancelling, setCancelling] = useState(false);
-
-      const [showDeleteDialog, setShowDeleteDialog] = useState(false)
-      const [isDeleting, setIsDeleting] = useState(false)
 
       // Check if call is currently processing
       const isProcessing = [
@@ -359,127 +346,67 @@ export const columns = [
           alert('Failed to download files. Please try again.');
         }
       };
-
-      const handleDelete = async () => {
-        setIsDeleting(true)
-        try {
-          const response = await fetch(API_ENDPOINTS.DELETE_CALL(call.id), {
-            method: 'DELETE',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-          })
-
-          if (!response.ok) {
-            throw new Error('Failed to delete recording')
-          }
-
-          toast.success('Recording deleted successfully')
-          setShowDeleteDialog(false)
-          window.location.reload()
-        } catch (error) {
-          console.error('Delete error:', error)
-          toast.error('Failed to delete recording')
-        } finally {
-          setIsDeleting(false)
-        }
-      }
  
       return (
-        <>
-          <div className="flex gap-1">
-            <CallDetailsDialog 
-              callId={call.id} 
-              open={dialogOpen}
-              onOpenChange={setDialogOpen}
-            >
-              <Button
-                variant="ghost"
-                className="h-8 w-8 p-0"
-                onClick={() => setDialogOpen(true)}
-                title="View Details"
-                disabled={call.status === "pending" || call.status === "processing"}
-              >
-                <Eye className="h-4 w-4" />
-              </Button>
-            </CallDetailsDialog>
-            
+        <div className="flex gap-1">
+          <CallDetailsDialog 
+            callId={call.id} 
+            open={dialogOpen}
+            onOpenChange={setDialogOpen}
+          >
             <Button
               variant="ghost"
               className="h-8 w-8 p-0"
-              onClick={handleDownload}
-              title="Download Audio & Transcription"
+              onClick={() => setDialogOpen(true)}
+              title="View Details"
               disabled={call.status === "pending" || call.status === "processing"}
             >
-              <Download className="h-4 w-4" />
+              <Eye className="h-4 w-4" />
             </Button>
+          </CallDetailsDialog>
+          
+          <Button
+            variant="ghost"
+            className="h-8 w-8 p-0"
+            onClick={handleDownload}
+            title="Download Audio & Transcription"
+            disabled={call.status === "pending" || call.status === "processing"}
+          >
+            <Download className="h-4 w-4" />
+          </Button>
 
-            {isProcessing && (
-              <Button
-                variant="ghost"
-                className="h-8 w-8 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
-                onClick={handleCancel}
-                disabled={cancelling}
-                title="Cancel processing"
-              >
-                {cancelling ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <XCircle className="h-4 w-4" />
-                )}
-              </Button>
-            )}
-
-            {(call.status === "cancelled" || call.status === "failed") && (
-              <Button
-                variant="ghost"
-                className="h-8 w-8 p-0 text-blue-600 hover:text-blue-600 hover:bg-blue-50"
-                onClick={handleRetry}
-                disabled={cancelling}
-                title="Retry processing"
-              >
-                {cancelling ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <RotateCcw className="h-4 w-4" />
-                )}
-              </Button>
-            )}
-
-            <Button 
-              variant="ghost" 
-              className="h-8 w-8 p-0 text-destructive hover:text-destructive"
-              onClick={() => setShowDeleteDialog(true)}
-              title="Delete Recording"
+          {isProcessing && (
+            <Button
+              variant="ghost"
+              className="h-8 w-8 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
+              onClick={handleCancel}
+              disabled={cancelling}
+              title="Cancel processing"
             >
-              <Trash2 className="h-4 w-4" />
+              {cancelling ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <XCircle className="h-4 w-4" />
+              )}
             </Button>
-          </div>
+          )}
 
-          <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Delete Recording</AlertDialogTitle>
-                <AlertDialogDescription>
-                  Are you sure you want to delete "{call.fileName}"? This action cannot be undone and will permanently remove the recording and all associated data.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
-                <AlertDialogAction
-                  onClick={(e) => {
-                    e.preventDefault()
-                    handleDelete()
-                  }}
-                  disabled={isDeleting}
-                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                >
-                  {isDeleting ? "Deleting..." : "Delete"}
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-        </>
+          {(call.status === "cancelled" || call.status === "failed") && (
+            <Button
+              variant="ghost"
+              className="h-8 w-8 p-0 text-blue-600 hover:text-blue-600 hover:bg-blue-50"
+              onClick={handleRetry}
+              disabled={cancelling}
+              title="Retry processing"
+            >
+              {cancelling ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <RotateCcw className="h-4 w-4" />
+              )}
+            </Button>
+          )}
+        </div>
       );
     },
   }

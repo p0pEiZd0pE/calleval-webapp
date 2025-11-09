@@ -1,4 +1,4 @@
-import { MoreHorizontal, FileText, Play, Download, User, Phone, Trash2 } from "lucide-react"
+import { MoreHorizontal, FileText, Play, Download, User, Phone } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -22,16 +22,6 @@ import { Separator } from "@/components/ui/separator"
 import { useState } from "react"
 import { API_ENDPOINTS } from "@/config/api"
 import { toast } from "sonner"
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog"
 
 // Score Details Dialog Component with Audio Player and Diarized Transcript
 function ScoreDetailsDialog({ callId }) {
@@ -399,8 +389,6 @@ export const columns = [
     header: "Actions",
     cell: ({ row }) => {
       const recording = row.original
-      const [showDeleteDialog, setShowDeleteDialog] = useState(false)
-      const [isDeleting, setIsDeleting] = useState(false)
       
       const handleDownload = async () => {
         try {
@@ -441,84 +429,25 @@ export const columns = [
           toast.error('Failed to download recording')
         }
       }
-
-      const handleDelete = async () => {
-        setIsDeleting(true)
-        try {
-          const response = await fetch(API_ENDPOINTS.DELETE_CALL(recording.id), {
-            method: 'DELETE',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-          })
-
-          if (!response.ok) {
-            throw new Error('Failed to delete recording')
-          }
-
-          toast.success('Recording deleted successfully')
-          setShowDeleteDialog(false)
-          window.location.reload()
-        } catch (error) {
-          console.error('Delete error:', error)
-          toast.error('Failed to delete recording')
-        } finally {
-          setIsDeleting(false)
-        }
-      }
  
       return (
-        <>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="h-8 w-8 p-0">
-                <span className="sr-only">Open menu</span>
-                <MoreHorizontal className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuLabel>Actions</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <ScoreDetailsDialog callId={recording.id} />
-              <DropdownMenuItem onClick={handleDownload}>
-                <Download className="mr-2 h-4 w-4" />
-                Download Recording
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem 
-                className="text-red-600 focus:text-red-600"
-                onClick={() => setShowDeleteDialog(true)}
-              >
-                <Trash2 className="mr-2 h-4 w-4" />
-                Delete Recording
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-
-          <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Delete Recording</AlertDialogTitle>
-                <AlertDialogDescription>
-                  Are you sure you want to delete this call evaluation? This action cannot be undone and will permanently remove the recording and all associated data including scores and transcripts.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
-                <AlertDialogAction
-                  onClick={(e) => {
-                    e.preventDefault()
-                    handleDelete()
-                  }}
-                  disabled={isDeleting}
-                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                >
-                  {isDeleting ? "Deleting..." : "Delete"}
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-        </>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" className="h-8 w-8 p-0">
+              <span className="sr-only">Open menu</span>
+              <MoreHorizontal className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuLabel>Actions</DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <ScoreDetailsDialog callId={recording.id} />
+            <DropdownMenuItem onClick={handleDownload}>
+              <Download className="mr-2 h-4 w-4" />
+              Download Recording
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       )
     },
   }
