@@ -33,7 +33,7 @@ export const columns = [
       
       const variants = {
         completed: "default",
-        cancelled: "secondary",
+        cancelled: "secondary",  // <-- ADD THIS LINE
         pending: "secondary",
         processing: "secondary",
         transcribing: "secondary",
@@ -65,7 +65,7 @@ export const columns = [
         completed: "default",
         transcribed: "default",
         classified: "default",
-        cancelled: "secondary",
+        cancelled: "secondary",  // <-- ADD THIS LINE
         pending: "secondary",
         processing: "secondary",
         transcribing: "secondary",
@@ -76,13 +76,15 @@ export const columns = [
         failed: "destructive"
       };
       
-      const displayStatus = status ? 
-        status.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : 
+      const displayStatus = status ?
+        status.charAt(0).toUpperCase() + status.slice(1).replace(/_/g, ' ') : 
         "Pending";
       
       return (
         <Badge variant={variants[status] || "secondary"}>
-          {(status === "transcribing" || status === "analyzing" || status === "analyzing_bert" || status === "analyzing_wav2vec2" || status === "processing") && (
+          {(status === "processing" || status === "analyzing" || 
+            status === "transcribing" || status === "analyzing_bert" || 
+            status === "analyzing_wav2vec2" || status === "queued") && (
             <Loader2 className="mr-1 h-3 w-3 animate-spin" />
           )}
           {displayStatus}
@@ -94,93 +96,274 @@ export const columns = [
     id: "actions",
     header: "Actions",
     cell: ({ row }) => {
-      const recording = row.original
+      const call = row.original;
+      const [dialogOpen, setDialogOpen] = useState(false);
+
+      const [cancelling, setCancelling] = useState(false);
+
       const [showDeleteDialog, setShowDeleteDialog] = useState(false)
       const [isDeleting, setIsDeleting] = useState(false)
 
+      // Check if call is currently processing
+      const isProcessing = [
+        'processing', 'transcribing', 'analyzing', 
+        'analyzing_bert', 'analyzing_wav2vec2', 'queued'
+      ].includes(call.status) || [
+        'processing', 'transcribing', 'analyzing',
+        'analyzing_bert', 'analyzing_wav2vec2', 'queued'
+      ].includes(call.analysisStatus);
+
+      const handleCancel = async () => {
+        if (!window.confirm('Are you sure you want to cancel this processing? This action cannot be undone.')) {
+          return;
+        }
+
+        setCancelling(true);
+        try {
+          const backendUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+          const response = await fetch(`${backendUrl}/api/calls/${call.id}/cancel`, {
+            method: 'POST',
+          });
+
+          if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'Failed to cancel processing');
+          }
+
+          toast.success('Processing cancelled successfully');
+          window.location.reload();
+        } catch (error) {
+          console.error('Cancel error:', error);
+          toast.error(error.message || 'Failed to cancel processing');
+        } finally {
+          setCancelling(false);
+        }
+      };
+
+      const handleRetry = async () => {
+        if (!window.confirm('Are you sure you want to retry processing this call?')) {
+          return;
+        }
+
+        setCancelling(true); // Reusing the same loading state
+        try {
+          const backendUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+          const response = await fetch(`${backendUrl}/api/calls/${call.id}/retry`, {
+            method: 'POST',
+          });
+
+          if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'Failed to retry processing');
+          }
+
+          toast.success('Processing restarted successfully');
+          window.location.reload();
+        } catch (error) {
+          console.error('Retry error:', error);
+          toast.error(error.message || 'Failed to retry processing');
+        } finally {
+          setCancelling(false);
+        }
+      };
+      
       const handleDownload = async () => {
         try {
-          const backendUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+          const backendUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
           
-          const response = await fetch(`${backendUrl}/api/temp-audio/${recording.id}`)
+          // Download audio with proper filename extraction
+          const audioResponse = await fetch(`${backendUrl}/api/temp-audio/${call.id}`);
           
-          if (!response.ok) {
-            throw new Error('Failed to fetch audio file')
+          if (!audioResponse.ok) {
+            throw new Error('Failed to download audio');
           }
           
-          const contentDisposition = response.headers.get('Content-Disposition')
-          let filename = 'recording.mp3'
-          
+          // Extract filename from Content-Disposition header
+          let audioFilename = call.fileName || 'recording.mp3';
+          const contentDisposition = audioResponse.headers.get('Content-Disposition');
           if (contentDisposition) {
-            const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/)
+            const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
             if (filenameMatch && filenameMatch[1]) {
-              filename = filenameMatch[1].replace(/['"]/g, '')
+              audioFilename = filenameMatch[1].replace(/['"]/g, '');
             }
           }
           
-          const blob = await response.blob()
-          const url = window.URL.createObjectURL(blob)
-          const link = document.createElement('a')
-          link.href = url
-          link.download = filename
-          document.body.appendChild(link)
-          link.click()
-          document.body.removeChild(link)
-          window.URL.revokeObjectURL(url)
+          // Download audio blob
+          const audioBlob = await audioResponse.blob();
+          const audioUrl = window.URL.createObjectURL(audioBlob);
+          const audioLink = document.createElement('a');
+          audioLink.href = audioUrl;
+          audioLink.download = audioFilename;
+          document.body.appendChild(audioLink);
+          audioLink.click();
+          document.body.removeChild(audioLink);
+          window.URL.revokeObjectURL(audioUrl);
           
-          toast.success('Download started!')
-        } catch (error) {
-          console.error('Download error:', error)
-          toast.error('Failed to download audio')
-        }
-      }
-
-      const handleCancelProcessing = async () => {
-        try {
-          const response = await fetch(API_ENDPOINTS.CALL_DETAIL(recording.id) + '/cancel', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-          })
-
-          if (!response.ok) {
-            throw new Error('Failed to cancel processing')
+          // Download diarized transcription with CallEval metrics
+          const response = await fetch(`${backendUrl}/api/calls/${call.id}`);
+          if (response.ok) {
+            const data = await response.json();
+            
+            // Parse segments for diarized transcript
+            let segments = [];
+            if (data.segments && Array.isArray(data.segments)) {
+              segments = data.segments;
+            } else if (data.scores && typeof data.scores === 'string') {
+              try {
+                const scoresData = JSON.parse(data.scores);
+                segments = scoresData.segments || [];
+              } catch (e) {
+                console.error('Error parsing segments:', e);
+              }
+            }
+            
+            // Parse speaker roles
+            let speakers = {};
+            if (data.speakers) {
+              if (typeof data.speakers === 'string') {
+                try {
+                  speakers = JSON.parse(data.speakers);
+                } catch (e) {
+                  console.error('Error parsing speakers:', e);
+                }
+              } else {
+                speakers = data.speakers;
+              }
+            }
+            
+            // Parse evaluation metrics
+            let evaluationMetrics = {};
+            if (data.evaluation_results) {
+              if (typeof data.evaluation_results === 'string') {
+                try {
+                  evaluationMetrics = JSON.parse(data.evaluation_results);
+                } catch (e) {
+                  console.error('Error parsing evaluation_results:', e);
+                }
+              } else {
+                evaluationMetrics = data.evaluation_results;
+              }
+            }
+            
+            // Build formatted transcription
+            let transcriptText = '';
+            
+            // Header Section
+            transcriptText += `${'='.repeat(80)}\n`;
+            transcriptText += `               CALL TRANSCRIPTION WITH SPEAKER IDENTIFICATION\n`;
+            transcriptText += `${'='.repeat(80)}\n\n`;
+            
+            // Call Information
+            transcriptText += `CALL INFORMATION:\n`;
+            transcriptText += `${'-'.repeat(80)}\n`;
+            transcriptText += `Call ID       : ${call.id}\n`;
+            transcriptText += `Filename      : ${audioFilename}\n`;
+            transcriptText += `Upload Date   : ${call.uploadDate}\n`;
+            transcriptText += `Duration      : ${data.duration || 'N/A'}\n`;
+            transcriptText += `Overall Score : ${data.score || 'N/A'}/100\n`;
+            transcriptText += `Status        : ${data.status || 'N/A'}\n\n`;
+            
+            // Speaker Identification
+            if (Object.keys(speakers).length > 0) {
+              transcriptText += `SPEAKER IDENTIFICATION:\n`;
+              transcriptText += `${'-'.repeat(80)}\n`;
+              Object.entries(speakers).forEach(([speakerId, role]) => {
+                const icon = role === 'agent' ? '👤 AGENT' : role === 'caller' ? '📞 CALLER' : '❓ UNKNOWN';
+                transcriptText += `${speakerId.padEnd(15)} : ${icon}\n`;
+              });
+              transcriptText += `\n`;
+            }
+            
+            // CallEval Metrics (if available)
+            if (evaluationMetrics && Object.keys(evaluationMetrics).length > 0) {
+              transcriptText += `CALLEVAL METRICS:\n`;
+              transcriptText += `${'-'.repeat(80)}\n`;
+              
+              // Function to format metrics by phase
+              const formatPhaseMetrics = (metrics, phaseName) => {
+                if (!metrics) return '';
+                
+                let phaseText = `\n${phaseName.toUpperCase()}:\n`;
+                Object.entries(metrics).forEach(([key, metric]) => {
+                  if (typeof metric === 'object' && metric !== null) {
+                    const detected = metric.detected ? '✓' : '✗';
+                    const score = metric.weighted_score || 0;
+                    const weight = metric.weight || 0;
+                    phaseText += `  ${detected} ${key.replace(/_/g, ' ').padEnd(35)} : ${score.toFixed(1)}/${weight}\n`;
+                  }
+                });
+                return phaseText;
+              };
+              
+              // Display metrics by phase
+              if (evaluationMetrics.all_phases) {
+                transcriptText += formatPhaseMetrics(evaluationMetrics.all_phases, 'All Phases');
+              }
+              if (evaluationMetrics.opening) {
+                transcriptText += formatPhaseMetrics(evaluationMetrics.opening, 'I. Opening Spiel');
+              }
+              if (evaluationMetrics.middle) {
+                transcriptText += formatPhaseMetrics(evaluationMetrics.middle, 'II. Middle / Climax');
+              }
+              if (evaluationMetrics.closing) {
+                transcriptText += formatPhaseMetrics(evaluationMetrics.closing, 'III. Closing / Wrap Up');
+              }
+              
+              transcriptText += `\n`;
+            }
+            
+            // Diarized Transcript
+            transcriptText += `${'='.repeat(80)}\n`;
+            transcriptText += `                            DIARIZED TRANSCRIPT\n`;
+            transcriptText += `${'='.repeat(80)}\n\n`;
+            
+            if (segments.length > 0) {
+              segments.forEach((segment, index) => {
+                const speakerId = segment.speaker || 'UNKNOWN';
+                const role = speakers[speakerId] || 'unknown';
+                const roleLabel = role === 'agent' ? '👤 AGENT' : 
+                                role === 'caller' ? '📞 CALLER' : 
+                                '❓ UNKNOWN';
+                
+                const timestamp = segment.start !== undefined && segment.end !== undefined 
+                  ? `[${segment.start.toFixed(2)}s - ${segment.end.toFixed(2)}s]`
+                  : '';
+                
+                transcriptText += `${roleLabel} (${speakerId}) ${timestamp}:\n`;
+                transcriptText += `${segment.text}\n\n`;
+              });
+            } else if (data.transcript) {
+              // Fallback to plain transcript if no segments
+              transcriptText += `${data.transcript}\n`;
+            } else {
+              transcriptText += `No transcript available.\n`;
+            }
+            
+            transcriptText += `${'='.repeat(80)}\n`;
+            transcriptText += `                              END OF TRANSCRIPT\n`;
+            transcriptText += `${'='.repeat(80)}\n`;
+            
+            // Create and download transcript file
+            const blob = new Blob([transcriptText], { type: 'text/plain' });
+            const transcriptUrl = window.URL.createObjectURL(blob);
+            const transcriptLink = document.createElement('a');
+            transcriptLink.href = transcriptUrl;
+            transcriptLink.download = `transcript_${audioFilename.replace(/\.[^/.]+$/, '')}.txt`;
+            document.body.appendChild(transcriptLink);
+            transcriptLink.click();
+            document.body.removeChild(transcriptLink);
+            window.URL.revokeObjectURL(transcriptUrl);
           }
-
-          toast.success('Call processing cancelled')
-          window.location.reload()
         } catch (error) {
-          console.error('Cancel error:', error)
-          toast.error('Failed to cancel processing')
+          console.error('Download error:', error);
+          alert('Failed to download files. Please try again.');
         }
-      }
-
-      const handleRetry = async () => {
-        try {
-          const response = await fetch(API_ENDPOINTS.CALL_DETAIL(recording.id) + '/retry', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-          })
-
-          if (!response.ok) {
-            throw new Error('Failed to retry processing')
-          }
-
-          toast.success('Call processing restarted')
-          window.location.reload()
-        } catch (error) {
-          console.error('Retry error:', error)
-          toast.error('Failed to retry processing')
-        }
-      }
+      };
 
       const handleDelete = async () => {
         setIsDeleting(true)
         try {
-          const response = await fetch(API_ENDPOINTS.DELETE_CALL(recording.id), {
+          const response = await fetch(API_ENDPOINTS.DELETE_CALL(call.id), {
             method: 'DELETE',
             headers: {
               'Content-Type': 'application/json',
@@ -201,43 +384,65 @@ export const columns = [
           setIsDeleting(false)
         }
       }
-
-      const isProcessing = ['processing', 'transcribing', 'analyzing', 'analyzing_bert', 'analyzing_wav2vec2'].includes(recording.status)
-      const canRetry = ['cancelled', 'failed'].includes(recording.status)
-
+ 
       return (
         <>
-          <div className="flex items-center gap-2">
-            <CallDetailsDialog callId={recording.id} />
+          <div className="flex gap-1">
+            <CallDetailsDialog 
+              callId={call.id} 
+              open={dialogOpen}
+              onOpenChange={setDialogOpen}
+            >
+              <Button
+                variant="ghost"
+                className="h-8 w-8 p-0"
+                onClick={() => setDialogOpen(true)}
+                title="View Details"
+                disabled={call.status === "pending" || call.status === "processing"}
+              >
+                <Eye className="h-4 w-4" />
+              </Button>
+            </CallDetailsDialog>
             
-            <Button 
-              variant="ghost" 
+            <Button
+              variant="ghost"
               className="h-8 w-8 p-0"
               onClick={handleDownload}
-              title="Download Audio"
+              title="Download Audio & Transcription"
+              disabled={call.status === "pending" || call.status === "processing"}
             >
               <Download className="h-4 w-4" />
             </Button>
 
             {isProcessing && (
-              <Button 
-                variant="ghost" 
-                className="h-8 w-8 p-0 text-destructive hover:text-destructive"
-                onClick={handleCancelProcessing}
-                title="Cancel Processing"
+              <Button
+                variant="ghost"
+                className="h-8 w-8 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
+                onClick={handleCancel}
+                disabled={cancelling}
+                title="Cancel processing"
               >
-                <XCircle className="h-4 w-4" />
+                {cancelling ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <XCircle className="h-4 w-4" />
+                )}
               </Button>
             )}
 
-            {canRetry && (
-              <Button 
-                variant="ghost" 
-                className="h-8 w-8 p-0"
+            {(call.status === "cancelled" || call.status === "failed") && (
+              <Button
+                variant="ghost"
+                className="h-8 w-8 p-0 text-blue-600 hover:text-blue-600 hover:bg-blue-50"
                 onClick={handleRetry}
-                title="Retry Processing"
+                disabled={cancelling}
+                title="Retry processing"
               >
-                <RotateCcw className="h-4 w-4" />
+                {cancelling ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <RotateCcw className="h-4 w-4" />
+                )}
               </Button>
             )}
 
@@ -252,22 +457,20 @@ export const columns = [
           </div>
 
           <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
-            <AlertDialogContent onEscapeKeyDown={() => setShowDeleteDialog(false)}>
+            <AlertDialogContent>
               <AlertDialogHeader>
                 <AlertDialogTitle>Delete Recording</AlertDialogTitle>
                 <AlertDialogDescription>
-                  Are you sure you want to delete "{recording.fileName}"? This action cannot be undone and will permanently remove the recording and all associated data.
+                  Are you sure you want to delete "{call.fileName}"? This action cannot be undone and will permanently remove the recording and all associated data.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
-                <AlertDialogCancel 
-                  disabled={isDeleting}
-                  onClick={() => setShowDeleteDialog(false)}
-                >
-                  Cancel
-                </AlertDialogCancel>
+                <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
                 <AlertDialogAction
-                  onClick={handleDelete}
+                  onClick={(e) => {
+                    e.preventDefault()
+                    handleDelete()
+                  }}
                   disabled={isDeleting}
                   className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                 >
@@ -277,7 +480,7 @@ export const columns = [
             </AlertDialogContent>
           </AlertDialog>
         </>
-      )
+      );
     },
-  },
-]
+  }
+];
