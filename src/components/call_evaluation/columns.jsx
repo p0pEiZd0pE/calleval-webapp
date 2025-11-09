@@ -1,4 +1,4 @@
-import { MoreHorizontal, FileText, Play, Download, User, Phone } from "lucide-react"
+import { MoreHorizontal, FileText, Play, Download, User, Phone, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -17,6 +17,16 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
 import { useState } from "react"
@@ -193,91 +203,85 @@ function ScoreDetailsDialog({ callId }) {
               )}
 
               {/* Overall Score */}
-              <div className="bg-muted p-4 rounded-lg">
+              <div className="p-4 bg-primary/5 rounded-lg border-2 border-primary/20">
                 <div className="flex justify-between items-center">
-                  <span className="text-lg font-bold">Total Score</span>
+                  <span className="text-sm font-medium">Overall Score</span>
                   <span className="text-2xl font-bold text-primary">
-                    {callData.binary_scores?.total_score?.toFixed(1) || callData.score?.toFixed(1) || 0}/100
+                    {callData.score ? callData.score.toFixed(1) : 'N/A'}/100
                   </span>
-                </div>
-                <div className="text-sm text-muted-foreground mt-1">
-                  {callData.binary_scores?.percentage?.toFixed(1) || callData.score?.toFixed(1) || 0}% Performance
                 </div>
               </div>
 
-              {/* Metrics Breakdown */}
-              {callData.binary_scores?.metrics && (
-                <div className="space-y-2">
-                  <h3 className="font-semibold text-lg mb-3">Metrics Breakdown</h3>
-                  {Object.entries(callData.binary_scores.metrics).map(([name, metric]) => 
-                    renderMetricRow(name, metric)
+              {/* CallEval Metrics */}
+              {callData.bert_analysis?.evaluation_results && (
+                <div className="space-y-3">
+                  <h3 className="font-semibold text-lg flex items-center gap-2">
+                    <FileText className="h-5 w-5" />
+                    CallEval Metrics
+                  </h3>
+                  
+                  {/* All Phases */}
+                  {callData.bert_analysis.evaluation_results.all_phases && (
+                    <div className="border rounded-lg p-3">
+                      <h4 className="font-semibold mb-2 text-sm text-muted-foreground uppercase tracking-wide">
+                        All Phases
+                      </h4>
+                      <div className="space-y-1">
+                        {Object.entries(callData.bert_analysis.evaluation_results.all_phases).map(([key, metric]) => 
+                          renderMetricRow(key, metric)
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Opening Spiel */}
+                  {callData.bert_analysis.evaluation_results.opening && (
+                    <div className="border rounded-lg p-3">
+                      <h4 className="font-semibold mb-2 text-sm text-muted-foreground uppercase tracking-wide">
+                        I. Opening Spiel
+                      </h4>
+                      <div className="space-y-1">
+                        {Object.entries(callData.bert_analysis.evaluation_results.opening).map(([key, metric]) => 
+                          renderMetricRow(key, metric)
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Middle / Climax */}
+                  {callData.bert_analysis.evaluation_results.middle && (
+                    <div className="border rounded-lg p-3">
+                      <h4 className="font-semibold mb-2 text-sm text-muted-foreground uppercase tracking-wide">
+                        II. Middle / Climax
+                      </h4>
+                      <div className="space-y-1">
+                        {Object.entries(callData.bert_analysis.evaluation_results.middle).map(([key, metric]) => 
+                          renderMetricRow(key, metric)
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Closing / Wrap Up */}
+                  {callData.bert_analysis.evaluation_results.closing && (
+                    <div className="border rounded-lg p-3">
+                      <h4 className="font-semibold mb-2 text-sm text-muted-foreground uppercase tracking-wide">
+                        III. Closing / Wrap Up
+                      </h4>
+                      <div className="space-y-1">
+                        {Object.entries(callData.bert_analysis.evaluation_results.closing).map(([key, metric]) => 
+                          renderMetricRow(key, metric)
+                        )}
+                      </div>
+                    </div>
                   )}
                 </div>
               )}
 
-              {/* Speaker Identification - NEW SECTION */}
-              {callData.speakers && (() => {
-                const stats = getAgentStats();
-                return stats && (
-                  <div className="p-4 bg-gradient-to-r from-blue-50 to-green-50 dark:from-blue-950 dark:to-green-950 rounded-lg border">
-                    <p className="text-sm font-semibold mb-3">Speaker Identification</p>
-                    <div className="flex justify-between">
-                      <div className="flex items-center gap-2 bg-blue-100 dark:bg-blue-900 px-3 py-2 rounded-md">
-                        <User className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-                        <div>
-                          <span className="text-sm font-bold text-blue-700 dark:text-blue-300">AGENT</span>
-                          <span className="text-xs text-blue-600 dark:text-blue-400 ml-2">
-                            ({stats.agentSpeaker || 'Unknown'})
-                          </span>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2 bg-green-100 dark:bg-green-900 px-3 py-2 rounded-md">
-                        <Phone className="h-5 w-5 text-green-600 dark:text-green-400" />
-                        <div>
-                          <span className="text-sm font-bold text-green-700 dark:text-green-300">CALLER</span>
-                          <span className="text-xs text-green-600 dark:text-green-400 ml-2">
-                            ({stats.callerSpeaker || 'Unknown'})
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })()}
+              <Separator />
 
-              <Separator className="my-4" />
-
-              {/* Diarized Transcription */}
-              {callData.segments && callData.segments.length > 0 ? (
-                <div className="space-y-2">
-                  <h3 className="font-semibold text-lg">Diarized Transcription</h3>
-                  <div className="space-y-3">
-                    {callData.segments.map((segment, index) => {
-                      const speaker = segment.speaker || 'UNKNOWN'
-                      const speakerColor = speaker.includes('SPEAKER_00') ? 'text-blue-600' : 
-                                         speaker.includes('SPEAKER_01') ? 'text-green-600' : 
-                                         'text-gray-600'
-                      const timestamp = segment.start && segment.end ? 
-                        `${segment.start.toFixed(2)}s - ${segment.end.toFixed(2)}s` : 
-                        'N/A'
-                      
-                      return (
-                        <div key={index} className="bg-muted p-3 rounded-lg">
-                          <div className="flex items-center justify-between mb-1">
-                            <span className={`font-semibold text-sm ${speakerColor}`}>
-                              {speaker}
-                            </span>
-                            <span className="text-xs text-muted-foreground">
-                              [{timestamp}]
-                            </span>
-                          </div>
-                          <p className="text-sm">{segment.text}</p>
-                        </div>
-                      )
-                    })}
-                  </div>
-                </div>
-              ) : callData.transcript ? (
+              {/* Transcription */}
+              {callData.transcript ? (
                 <div className="space-y-2">
                   <h3 className="font-semibold text-lg">Transcription</h3>
                   <div className="bg-muted p-4 rounded-lg">
@@ -337,7 +341,6 @@ export const columns = [
     header: "Classification",
     cell: ({ getValue }) => {
       const classification = getValue()
-      // UPDATED: Now only 3 variants instead of 4
       const variants = {
         'Excellent': 'default',
         'Good': 'secondary',
@@ -355,7 +358,6 @@ export const columns = [
     header: "Overall Score",
     cell: ({ getValue }) => {
       const score = parseFloat(getValue())
-      // UPDATED: Changed thresholds to 90 and 80
       const color = score >= 90 ? 'text-green-600' : 
                     score >= 80 ? 'text-blue-600' : 
                     'text-red-600'
@@ -389,19 +391,19 @@ export const columns = [
     header: "Actions",
     cell: ({ row }) => {
       const recording = row.original
-      
+      const [showDeleteDialog, setShowDeleteDialog] = useState(false)
+      const [isDeleting, setIsDeleting] = useState(false)
+
       const handleDownload = async () => {
         try {
           const backendUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
           
-          // Fetch the audio file
           const response = await fetch(`${backendUrl}/api/temp-audio/${recording.id}`)
           
           if (!response.ok) {
             throw new Error('Failed to fetch audio file')
           }
           
-          // Get filename from Content-Disposition header or use default
           const contentDisposition = response.headers.get('Content-Disposition')
           let filename = 'recording.mp3'
           
@@ -412,7 +414,6 @@ export const columns = [
             }
           }
           
-          // Get the blob and create download link
           const blob = await response.blob()
           const url = window.URL.createObjectURL(blob)
           const link = document.createElement('a')
@@ -426,29 +427,88 @@ export const columns = [
           toast.success('Download started!')
         } catch (error) {
           console.error('Download error:', error)
-          toast.error('Failed to download recording')
+          toast.error('Failed to download audio')
         }
       }
- 
+
+      const handleDelete = async () => {
+        setIsDeleting(true)
+        try {
+          const response = await fetch(API_ENDPOINTS.DELETE_CALL(recording.id), {
+            method: 'DELETE',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+          })
+
+          if (!response.ok) {
+            throw new Error('Failed to delete recording')
+          }
+
+          toast.success('Recording deleted successfully')
+          setShowDeleteDialog(false)
+          window.location.reload()
+        } catch (error) {
+          console.error('Delete error:', error)
+          toast.error('Failed to delete recording')
+        } finally {
+          setIsDeleting(false)
+        }
+      }
+
       return (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="h-8 w-8 p-0">
-              <span className="sr-only">Open menu</span>
-              <MoreHorizontal className="h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuLabel>Actions</DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            <ScoreDetailsDialog callId={recording.id} />
-            <DropdownMenuItem onClick={handleDownload}>
-              <Download className="mr-2 h-4 w-4" />
-              Download Recording
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" className="h-8 w-8 p-0">
+                <span className="sr-only">Open menu</span>
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuLabel>Actions</DropdownMenuLabel>
+              <DropdownMenuItem onClick={() => navigator.clipboard.writeText(recording.callId)}>
+                Copy Call ID
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <ScoreDetailsDialog callId={recording.id} />
+              <DropdownMenuItem onClick={handleDownload}>
+                <Download className="mr-2 h-4 w-4" />
+                Download Audio
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem 
+                className="text-red-600 focus:text-red-600"
+                onClick={() => setShowDeleteDialog(true)}
+              >
+                <Trash2 className="mr-2 h-4 w-4" />
+                Delete Recording
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Delete Recording</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Are you sure you want to delete this call evaluation? This action cannot be undone and will permanently remove the recording and all associated data including scores and transcripts.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={handleDelete}
+                  disabled={isDeleting}
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                >
+                  {isDeleting ? "Deleting..." : "Delete"}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </>
       )
     },
-  }
+  },
 ]
