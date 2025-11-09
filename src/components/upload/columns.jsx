@@ -252,7 +252,7 @@ export const columns = [
           </div>
 
           <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
-            <AlertDialogContent>
+            <AlertDialogContent onEscapeKeyDown={() => setShowDeleteDialog(false)}>
               <AlertDialogHeader>
                 <AlertDialogTitle>Delete Recording</AlertDialogTitle>
                 <AlertDialogDescription>
@@ -260,7 +260,12 @@ export const columns = [
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
-                <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+                <AlertDialogCancel 
+                  disabled={isDeleting}
+                  onClick={() => setShowDeleteDialog(false)}
+                >
+                  Cancel
+                </AlertDialogCancel>
                 <AlertDialogAction
                   onClick={handleDelete}
                   disabled={isDeleting}

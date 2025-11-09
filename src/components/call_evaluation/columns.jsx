@@ -456,6 +456,10 @@ export const columns = [
         }
       }
 
+      const handleCancelDelete = () => {
+        setShowDeleteDialog(false)
+      }
+
       return (
         <>
           <DropdownMenu>
@@ -479,7 +483,10 @@ export const columns = [
               <DropdownMenuSeparator />
               <DropdownMenuItem 
                 className="text-red-600 focus:text-red-600"
-                onClick={() => setShowDeleteDialog(true)}
+                onSelect={(e) => {
+                  e.preventDefault()
+                  setShowDeleteDialog(true)
+                }}
               >
                 <Trash2 className="mr-2 h-4 w-4" />
                 Delete Recording
@@ -488,7 +495,7 @@ export const columns = [
           </DropdownMenu>
 
           <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
-            <AlertDialogContent>
+            <AlertDialogContent onEscapeKeyDown={handleCancelDelete}>
               <AlertDialogHeader>
                 <AlertDialogTitle>Delete Recording</AlertDialogTitle>
                 <AlertDialogDescription>
@@ -496,7 +503,12 @@ export const columns = [
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
-                <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+                <AlertDialogCancel 
+                  disabled={isDeleting}
+                  onClick={handleCancelDelete}
+                >
+                  Cancel
+                </AlertDialogCancel>
                 <AlertDialogAction
                   onClick={handleDelete}
                   disabled={isDeleting}
