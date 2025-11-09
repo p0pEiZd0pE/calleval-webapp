@@ -184,7 +184,8 @@ export default function AgentDirectory({ onAgentSelect, onCallsUpdate }) {
   }
 
   const handleDeleteAgent = async (agentId) => {
-    if (!window.confirm("Are you sure you want to delete this agent?")) return
+    if (!window.confirm("Are you sure you want to delete this agent?"))
+      return
 
     try {
       const response = await fetch(API_ENDPOINTS.AGENT_DETAIL(agentId), {
@@ -359,21 +360,6 @@ export default function AgentDirectory({ onAgentSelect, onCallsUpdate }) {
                         </SelectContent>
                       </Select>
                     </div>
-                    <div className="grid gap-2">
-                      <Label htmlFor="status">Status</Label>
-                      <Select 
-                        value={newAgent.status} 
-                        onValueChange={(value) => setNewAgent({...newAgent, status: value})}
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="Active">Active</SelectItem>
-                          <SelectItem value="Inactive">Inactive</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
                   </div>
                   <DialogFooter>
                     <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
@@ -416,13 +402,15 @@ export default function AgentDirectory({ onAgentSelect, onCallsUpdate }) {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Filter className="h-4 w-4" />
-                  <h5 className="font-semibold">Filters</h5>
-                  {hasActiveFilters && (
-                    <Badge variant="secondary">{filteredData.length} results</Badge>
-                  )}
+                  <h5 className="text-sm font-semibold">Filters</h5>
                 </div>
                 {hasActiveFilters && (
-                  <Button variant="ghost" size="sm" onClick={resetFilters}>
+                  <Button 
+                    variant="ghost" 
+                    size="sm"
+                    onClick={resetFilters}
+                  >
+                    <X className="h-4 w-4 mr-2" />
                     Clear All
                   </Button>
                 )}
@@ -440,7 +428,7 @@ export default function AgentDirectory({ onAgentSelect, onCallsUpdate }) {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">All Positions</SelectItem>
-                      {uniquePositions.map(position => (
+                      {uniquePositions.map((position) => (
                         <SelectItem key={position} value={position}>
                           {position}
                         </SelectItem>
@@ -459,8 +447,8 @@ export default function AgentDirectory({ onAgentSelect, onCallsUpdate }) {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all">All Status</SelectItem>
-                      {uniqueStatuses.map(status => (
+                      <SelectItem value="all">All Statuses</SelectItem>
+                      {uniqueStatuses.map((status) => (
                         <SelectItem key={status} value={status}>
                           {status}
                         </SelectItem>
