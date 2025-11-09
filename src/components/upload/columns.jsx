@@ -1,4 +1,4 @@
-import { Download, Eye, Loader2, XCircle, RotateCcw } from "lucide-react"
+import { Download, Eye, Loader2, XCircle, RotateCcw, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { CallDetailsDialog } from "./call-details-dialog"
@@ -23,7 +23,7 @@ export const columns = [
       
       const variants = {
         completed: "default",
-        cancelled: "secondary",  // <-- ADD THIS LINE
+        cancelled: "secondary",
         pending: "secondary",
         processing: "secondary",
         transcribing: "secondary",
@@ -55,7 +55,7 @@ export const columns = [
         completed: "default",
         transcribed: "default",
         classified: "default",
-        cancelled: "secondary",  // <-- ADD THIS LINE
+        cancelled: "secondary",
         pending: "secondary",
         processing: "secondary",
         transcribing: "secondary",
@@ -66,7 +66,7 @@ export const columns = [
         failed: "destructive"
       };
       
-      const displayStatus = status ?
+      const displayStatus = status ? 
         status.charAt(0).toUpperCase() + status.slice(1).replace(/_/g, ' ') : 
         "Pending";
       
@@ -88,8 +88,8 @@ export const columns = [
     cell: ({ row }) => {
       const call = row.original;
       const [dialogOpen, setDialogOpen] = useState(false);
-
       const [cancelling, setCancelling] = useState(false);
+      const [deleting, setDeleting] = useState(false);
 
       // Check if call is currently processing
       const isProcessing = [
@@ -346,6 +346,32 @@ export const columns = [
           alert('Failed to download files. Please try again.');
         }
       };
+
+      const handleDelete = async () => {
+        if (!window.confirm(`Are you sure you want to delete "${call.fileName}"? This action cannot be undone and will permanently remove the recording and all associated data.`)) {
+          return;
+        }
+
+        setDeleting(true);
+        try {
+          const response = await fetch(API_ENDPOINTS.DELETE_CALL(call.id), {
+            method: 'DELETE',
+          });
+
+          if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'Failed to delete recording');
+          }
+
+          toast.success('Recording deleted successfully');
+          window.location.reload();
+        } catch (error) {
+          console.error('Delete error:', error);
+          toast.error(error.message || 'Failed to delete recording');
+        } finally {
+          setDeleting(false);
+        }
+      };
  
       return (
         <div className="flex gap-1">
@@ -406,6 +432,20 @@ export const columns = [
               )}
             </Button>
           )}
+
+          <Button
+            variant="ghost"
+            className="h-8 w-8 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
+            onClick={handleDelete}
+            disabled={deleting || isProcessing}
+            title="Delete recording"
+          >
+            {deleting ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Trash2 className="h-4 w-4" />
+            )}
+          </Button>
         </div>
       );
     },
