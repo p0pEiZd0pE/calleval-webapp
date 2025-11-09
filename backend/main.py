@@ -1165,6 +1165,61 @@ async def retry_call_processing(
     except Exception as e:
         print(f"Error retrying call {call_id}: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+    
+
+@app.delete("/api/calls/{call_id}")
+async def delete_call(call_id: str, db: Session = Depends(get_db)):
+    """Delete a call recording and all associated data"""
+    try:
+        # Get the call from database
+        call = db.query(CallEvaluation).filter(CallEvaluation.id == call_id).first()
+        
+        if not call:
+            raise HTTPException(status_code=404, detail="Call not found")
+        
+        # Store info for logging before deletion
+        filename = call.filename
+        file_path = call.file_path
+        agent_id = call.agent_id
+        
+        # Delete the audio file from disk
+        if file_path and os.path.exists(file_path):
+            try:
+                os.remove(file_path)
+                print(f"✓ Deleted audio file: {file_path}")
+            except Exception as e:
+                print(f"⚠ Warning: Could not delete audio file: {e}")
+                # Continue with database deletion even if file deletion fails
+        
+        # Delete the call record from database
+        db.delete(call)
+        db.commit()
+        
+        # Add audit log
+        log_call_deleted(call_id, filename, user="Admin")
+        
+        # Update agent stats if the call had a score
+        if agent_id:
+            try:
+                update_agent_stats(agent_id, db)
+                print(f"✓ Updated agent stats for {agent_id}")
+            except Exception as e:
+                print(f"⚠ Warning: Could not update agent stats: {e}")
+        
+        print(f"✓ Call {call_id} deleted successfully")
+        
+        return {
+            "message": "Call deleted successfully",
+            "id": call_id,
+            "filename": filename
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        print(f"Error deleting call {call_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/api/calls")
