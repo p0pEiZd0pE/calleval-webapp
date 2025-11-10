@@ -649,7 +649,7 @@ def calculate_binary_scores(agent_segments, call_structure, bert_output_combined
     }
 
 def update_agent_stats(agent_id: str, db: Session):
-    """Update agent statistics after call processing"""
+    """Update agent statistics after call processing or deletion"""
     agent = db.query(Agent).filter(Agent.agentId == agent_id).first()
     if not agent:
         return
@@ -661,6 +661,7 @@ def update_agent_stats(agent_id: str, db: Session):
         CallEvaluation.score != None
     ).all()
     
+    # FIXED: Always update stats, even if no calls remain
     if completed_calls:
         # Calculate new average score
         total_score = sum(call.score for call in completed_calls)
@@ -672,6 +673,14 @@ def update_agent_stats(agent_id: str, db: Session):
         print(f"✅ Updated agent {agent.agentName} stats:")
         print(f"   Calls Handled: {agent.callsHandled}")
         print(f"   Average Score: {agent.avgScore}")
+    else:
+        # No calls left - reset stats to 0
+        agent.avgScore = 0.0
+        agent.callsHandled = 0
+        agent.updated_at = datetime.utcnow()
+        db.commit()
+        
+        print(f"✅ Reset agent {agent.agentName} stats to 0 (no remaining calls)")
 
 def process_call(call_id: str, file_path: str):
     """Background task: Process call with phase-aware evaluation"""
