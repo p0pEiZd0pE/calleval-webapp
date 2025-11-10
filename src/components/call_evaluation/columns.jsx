@@ -1,4 +1,4 @@
-import { MoreHorizontal, FileText, Play, Download, User, Phone } from "lucide-react"
+import { MoreHorizontal, FileText, Play, Download, User, Phone, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -17,6 +17,16 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
 import { useState } from "react"
@@ -650,6 +660,8 @@ export const columns = [
     id: "actions",
     cell: ({ row }) => {
       const recording = row.original
+      const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+      const [deleting, setDeleting] = useState(false)
       
       const handleDownload = async () => {
         try {
@@ -1000,25 +1012,78 @@ export const columns = [
           toast.error('Failed to download recording')
         }
       }
+
+      const handleDelete = async () => {
+        setDeleting(true)
+        try {
+          const response = await fetch(API_ENDPOINTS.DELETE_CALL(recording.callId), {
+            method: 'DELETE',
+          })
+
+          if (!response.ok) {
+            const error = await response.json()
+            throw new Error(error.detail || 'Failed to delete recording')
+          }
+
+          toast.success('Recording deleted successfully')
+          window.location.reload()
+        } catch (error) {
+          console.error('Delete error:', error)
+          toast.error(error.message || 'Failed to delete recording')
+        } finally {
+          setDeleting(false)
+          setDeleteDialogOpen(false)
+        }
+      }
  
       return (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="h-8 w-8 p-0">
-              <span className="sr-only">Open menu</span>
-              <MoreHorizontal className="h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuLabel>Actions</DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            <ScoreDetailsDialog callId={recording.callId} />
-            <DropdownMenuItem onClick={handleDownload}>
-              <Download className="mr-2 h-4 w-4" />
-              Download Recording
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" className="h-8 w-8 p-0">
+                <span className="sr-only">Open menu</span>
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuLabel>Actions</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <ScoreDetailsDialog callId={recording.callId} />
+              <DropdownMenuItem onClick={handleDownload}>
+                <Download className="mr-2 h-4 w-4" />
+                Download Recording
+              </DropdownMenuItem>
+              <DropdownMenuItem 
+                onClick={() => setDeleteDialogOpen(true)}
+                className="text-destructive focus:text-destructive"
+              >
+                <Trash2 className="mr-2 h-4 w-4" />
+                Delete Recording
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Delete Recording</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Are you sure you want to delete this call recording? This action cannot be undone and will permanently remove the recording and all associated data.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={handleDelete}
+                  disabled={deleting}
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                >
+                  {deleting ? 'Deleting...' : 'Delete'}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </>
       )
     },
   }
