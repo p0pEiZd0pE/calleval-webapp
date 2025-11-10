@@ -671,11 +671,74 @@ export const columns = [
               }
             }
             
-            // CallEval Metrics (if available)
-            if (evaluationMetrics && Object.keys(evaluationMetrics).length > 0) {
+            // Parse binary_scores for comprehensive metrics
+            let binaryScores = null
+            if (data.binary_scores) {
+              if (typeof data.binary_scores === 'string') {
+                try {
+                  binaryScores = JSON.parse(data.binary_scores)
+                } catch (e) {
+                  console.error('Error parsing binary_scores:', e)
+                }
+              } else {
+                binaryScores = data.binary_scores
+              }
+            }
+            
+            // Metrics Breakdown - All metrics in one list
+            if (binaryScores?.metrics && Object.keys(binaryScores.metrics).length > 0) {
               doc.setFontSize(12)
               doc.setFont(undefined, 'bold')
-              doc.text('CALLEVAL METRICS', 14, yPos)
+              doc.text('METRICS BREAKDOWN', 14, yPos)
+              yPos += 6
+              
+              const metricsBreakdownData = Object.entries(binaryScores.metrics).map(([key, metric]) => {
+                const detected = metric.detected ? '✓' : '✗'
+                const score = metric.weighted_score || 0
+                const weight = metric.max_score || metric.weight || 0
+                const metricName = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
+                return [detected, metricName, `${score.toFixed(1)}/${weight}`]
+              })
+              
+              if (metricsBreakdownData.length > 0) {
+                autoTable(doc, {
+                  startY: yPos,
+                  head: [['Status', 'Metric', 'Score']],
+                  body: metricsBreakdownData,
+                  theme: 'striped',
+                  headStyles: { fillColor: [34, 197, 94], textColor: [255, 255, 255], fontStyle: 'bold' },
+                  styles: { fontSize: 9, cellPadding: 3 },
+                  columnStyles: {
+                    0: { cellWidth: 15, halign: 'center', fontStyle: 'bold' },
+                    1: { cellWidth: 120 },
+                    2: { cellWidth: 35, halign: 'right', fontStyle: 'bold' }
+                  },
+                  didParseCell: function (data) {
+                    // Color the status column
+                    if (data.column.index === 0 && data.cell.section === 'body') {
+                      if (data.cell.raw === '✓') {
+                        data.cell.styles.textColor = [34, 197, 94] // Green
+                      } else if (data.cell.raw === '✗') {
+                        data.cell.styles.textColor = [239, 68, 68] // Red
+                      }
+                    }
+                  }
+                })
+                yPos = doc.lastAutoTable.finalY + 8
+              }
+            }
+            
+            // CallEval Metrics by Phase (if available)
+            if (evaluationMetrics && Object.keys(evaluationMetrics).length > 0) {
+              // Add new page if needed
+              if (yPos > 250) {
+                doc.addPage()
+                yPos = 20
+              }
+              
+              doc.setFontSize(12)
+              doc.setFont(undefined, 'bold')
+              doc.text('CALLEVAL METRICS BY PHASE', 14, yPos)
               yPos += 6
               
               const formatPhaseMetrics = (metrics, phaseName) => {
