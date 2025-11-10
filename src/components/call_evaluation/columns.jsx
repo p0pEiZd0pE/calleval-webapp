@@ -92,23 +92,48 @@ function ScoreDetailsDialog({ callId }) {
       document.body.removeChild(audioLink)
       window.URL.revokeObjectURL(audioUrl)
       
-      // Download diarized transcription with CallEval metrics
+      // Generate PDF with diarized transcription and CallEval metrics
       const response = await fetch(`${backendUrl}/api/calls/${callId}`)
       if (response.ok) {
         const data = await response.json()
         
-        // Parse segments for diarized transcript
-        let segments = []
-        if (data.segments && Array.isArray(data.segments)) {
-          segments = data.segments
-        } else if (data.scores && typeof data.scores === 'string') {
-          try {
-            const scoresData = JSON.parse(data.scores)
-            segments = scoresData.segments || []
-          } catch (e) {
-            console.error('Error parsing segments:', e)
-          }
-        }
+        // Dynamic import of jsPDF and autoTable
+        const jsPDF = (await import('jspdf')).default
+        const autoTable = (await import('jspdf-autotable')).default
+        
+        const doc = new jsPDF()
+        let yPos = 20
+        
+        // Title
+        doc.setFontSize(18)
+        doc.setFont(undefined, 'bold')
+        doc.text('CALL TRANSCRIPTION WITH SPEAKER IDENTIFICATION', 105, yPos, { align: 'center' })
+        yPos += 10
+        
+        doc.setLineWidth(0.5)
+        doc.line(14, yPos, 196, yPos)
+        yPos += 10
+        
+        // Call Information
+        doc.setFontSize(12)
+        doc.setFont(undefined, 'bold')
+        doc.text('CALL INFORMATION', 14, yPos)
+        yPos += 6
+        
+        doc.setFontSize(10)
+        doc.setFont(undefined, 'normal')
+        doc.text(`Call ID: ${callId}`, 14, yPos)
+        yPos += 5
+        doc.text(`Filename: ${audioFilename}`, 14, yPos)
+        yPos += 5
+        doc.text(`Upload Date: ${data.created_at || 'N/A'}`, 14, yPos)
+        yPos += 5
+        doc.text(`Duration: ${data.duration || 'N/A'}`, 14, yPos)
+        yPos += 5
+        doc.text(`Overall Score: ${data.score || 'N/A'}/100`, 14, yPos)
+        yPos += 5
+        doc.text(`Status: ${data.status || 'N/A'}`, 14, yPos)
+        yPos += 8
         
         // Parse speaker roles
         let speakers = {}
@@ -122,6 +147,23 @@ function ScoreDetailsDialog({ callId }) {
           } else {
             speakers = data.speakers
           }
+        }
+        
+        // Speaker Identification
+        if (Object.keys(speakers).length > 0) {
+          doc.setFontSize(12)
+          doc.setFont(undefined, 'bold')
+          doc.text('SPEAKER IDENTIFICATION', 14, yPos)
+          yPos += 6
+          
+          doc.setFontSize(10)
+          doc.setFont(undefined, 'normal')
+          Object.entries(speakers).forEach(([speakerId, role]) => {
+            const icon = role === 'agent' ? 'AGENT' : role === 'caller' ? 'CALLER' : 'UNKNOWN'
+            doc.text(`${speakerId}: ${icon}`, 14, yPos)
+            yPos += 5
+          })
+          yPos += 3
         }
         
         // Parse evaluation metrics
@@ -138,110 +180,127 @@ function ScoreDetailsDialog({ callId }) {
           }
         }
         
-        // Build formatted transcription
-        let transcriptText = ''
-        
-        // Header Section
-        transcriptText += `${'='.repeat(80)}\n`
-        transcriptText += `               CALL TRANSCRIPTION WITH SPEAKER IDENTIFICATION\n`
-        transcriptText += `${'='.repeat(80)}\n\n`
-        
-        // Call Information
-        transcriptText += `CALL INFORMATION:\n`
-        transcriptText += `${'-'.repeat(80)}\n`
-        transcriptText += `Call ID       : ${callId}\n`
-        transcriptText += `Filename      : ${audioFilename}\n`
-        transcriptText += `Upload Date   : ${data.created_at || 'N/A'}\n`
-        transcriptText += `Duration      : ${data.duration || 'N/A'}\n`
-        transcriptText += `Overall Score : ${data.score || 'N/A'}/100\n`
-        transcriptText += `Status        : ${data.status || 'N/A'}\n\n`
-        
-        // Speaker Identification
-        if (Object.keys(speakers).length > 0) {
-          transcriptText += `SPEAKER IDENTIFICATION:\n`
-          transcriptText += `${'-'.repeat(80)}\n`
-          Object.entries(speakers).forEach(([speakerId, role]) => {
-            const icon = role === 'agent' ? '👤 AGENT' : role === 'caller' ? '📞 CALLER' : '❓ UNKNOWN'
-            transcriptText += `${speakerId.padEnd(15)} : ${icon}\n`
-          })
-          transcriptText += `\n`
-        }
-        
         // CallEval Metrics (if available)
         if (evaluationMetrics && Object.keys(evaluationMetrics).length > 0) {
-          transcriptText += `CALLEVAL METRICS:\n`
-          transcriptText += `${'-'.repeat(80)}\n`
+          doc.setFontSize(12)
+          doc.setFont(undefined, 'bold')
+          doc.text('CALLEVAL METRICS', 14, yPos)
+          yPos += 6
           
-          // Function to format metrics by phase
           const formatPhaseMetrics = (metrics, phaseName) => {
-            if (!metrics) return ''
+            if (!metrics) return []
             
-            let phaseText = `\n${phaseName.toUpperCase()}:\n`
+            const rows = []
+            rows.push([{ content: phaseName.toUpperCase(), colSpan: 3, styles: { fontStyle: 'bold', fillColor: [220, 220, 220] } }])
+            
             Object.entries(metrics).forEach(([key, metric]) => {
               if (typeof metric === 'object' && metric !== null) {
                 const detected = metric.detected ? '✓' : '✗'
                 const score = metric.weighted_score || 0
                 const weight = metric.weight || 0
-                phaseText += `  ${detected} ${key.replace(/_/g, ' ').padEnd(35)} : ${score.toFixed(1)}/${weight}\n`
+                const metricName = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
+                rows.push([detected, metricName, `${score.toFixed(1)}/${weight}`])
               }
             })
-            return phaseText
+            return rows
           }
           
-          // Display metrics by phase
+          const metricsData = []
+          
           if (evaluationMetrics.all_phases) {
-            transcriptText += formatPhaseMetrics(evaluationMetrics.all_phases, 'All Phases')
+            metricsData.push(...formatPhaseMetrics(evaluationMetrics.all_phases, 'All Phases'))
           }
           if (evaluationMetrics.opening) {
-            transcriptText += formatPhaseMetrics(evaluationMetrics.opening, 'I. Opening Spiel')
+            metricsData.push(...formatPhaseMetrics(evaluationMetrics.opening, 'I. Opening Spiel'))
           }
           if (evaluationMetrics.middle) {
-            transcriptText += formatPhaseMetrics(evaluationMetrics.middle, 'II. Middle / Climax')
+            metricsData.push(...formatPhaseMetrics(evaluationMetrics.middle, 'II. Middle / Climax'))
           }
           if (evaluationMetrics.closing) {
-            transcriptText += formatPhaseMetrics(evaluationMetrics.closing, 'III. Closing / Wrap Up')
+            metricsData.push(...formatPhaseMetrics(evaluationMetrics.closing, 'III. Closing / Wrap Up'))
           }
           
-          transcriptText += `\n`
+          if (metricsData.length > 0) {
+            autoTable(doc, {
+              startY: yPos,
+              head: [['Status', 'Metric', 'Score']],
+              body: metricsData,
+              theme: 'grid',
+              headStyles: { fillColor: [34, 197, 94], textColor: [255, 255, 255], fontStyle: 'bold' },
+              styles: { fontSize: 9, cellPadding: 2 },
+              columnStyles: {
+                0: { cellWidth: 15, halign: 'center' },
+                1: { cellWidth: 120 },
+                2: { cellWidth: 35, halign: 'center' }
+              }
+            })
+            yPos = doc.lastAutoTable.finalY + 8
+          }
+        }
+        
+        // Parse segments for diarized transcript
+        let segments = []
+        if (data.segments && Array.isArray(data.segments)) {
+          segments = data.segments
+        } else if (data.scores && typeof data.scores === 'string') {
+          try {
+            const scoresData = JSON.parse(data.scores)
+            segments = scoresData.segments || []
+          } catch (e) {
+            console.error('Error parsing segments:', e)
+          }
+        }
+        
+        // Add new page for transcript if needed
+        if (yPos > 250) {
+          doc.addPage()
+          yPos = 20
         }
         
         // Diarized Transcript
-        transcriptText += `${'='.repeat(80)}\n`
-        transcriptText += `                            DIARIZED TRANSCRIPT\n`
-        transcriptText += `${'='.repeat(80)}\n\n`
+        doc.setFontSize(12)
+        doc.setFont(undefined, 'bold')
+        doc.text('DIARIZED TRANSCRIPT', 14, yPos)
+        yPos += 6
         
         if (segments.length > 0) {
-          segments.forEach((segment, index) => {
+          const transcriptData = segments.map(segment => {
             const speakerId = segment.speaker || 'UNKNOWN'
             const role = speakers[speakerId] || 'unknown'
-            const roleLabel = role === 'agent' ? '👤 AGENT' : 
-                            role === 'caller' ? '📞 CALLER' : 
-                            '❓ UNKNOWN'
+            const roleLabel = role === 'agent' ? 'AGENT' : role === 'caller' ? 'CALLER' : 'UNKNOWN'
             
             const timestamp = segment.start !== undefined && segment.end !== undefined 
-              ? `[${segment.start.toFixed(2)}s - ${segment.end.toFixed(2)}s]` 
+              ? `[${segment.start.toFixed(2)}s - ${segment.end.toFixed(2)}s]`
               : '[--:--]'
             
-            transcriptText += `${timestamp} ${roleLabel}\n${segment.text}\n\n`
+            return [
+              timestamp,
+              roleLabel,
+              segment.text
+            ]
+          })
+          
+          autoTable(doc, {
+            startY: yPos,
+            head: [['Time', 'Speaker', 'Text']],
+            body: transcriptData,
+            theme: 'grid',
+            headStyles: { fillColor: [34, 197, 94], textColor: [255, 255, 255], fontStyle: 'bold' },
+            styles: { fontSize: 8, cellPadding: 2 },
+            columnStyles: {
+              0: { cellWidth: 30 },
+              1: { cellWidth: 25 },
+              2: { cellWidth: 125 }
+            }
           })
         } else {
-          transcriptText += 'No diarized segments available.\n'
+          doc.setFontSize(10)
+          doc.setFont(undefined, 'normal')
+          doc.text('No diarized segments available.', 14, yPos)
         }
         
-        transcriptText += `${'='.repeat(80)}\n`
-        transcriptText += `                              END OF TRANSCRIPT\n`
-        transcriptText += `${'='.repeat(80)}\n`
-        
-        // Download transcript as .txt file
-        const transcriptBlob = new Blob([transcriptText], { type: 'text/plain' })
-        const transcriptUrl = window.URL.createObjectURL(transcriptBlob)
-        const transcriptLink = document.createElement('a')
-        transcriptLink.href = transcriptUrl
-        transcriptLink.download = `${callId}_transcript_with_metrics.txt`
-        document.body.appendChild(transcriptLink)
-        transcriptLink.click()
-        document.body.removeChild(transcriptLink)
-        window.URL.revokeObjectURL(transcriptUrl)
+        // Save the PDF
+        doc.save(`${callId}_transcript_with_metrics.pdf`)
       }
       
       toast.success('Files downloaded successfully!')
@@ -354,7 +413,7 @@ function ScoreDetailsDialog({ callId }) {
                 </div>
               )}
 
-              {/* Speaker Identification - NEW SECTION */}
+              {/* Speaker Identification */}
               {callData.speakers && (() => {
                 const stats = getAgentStats();
                 return stats && (
@@ -443,7 +502,6 @@ export const columns = [
     header: "Classification",
     cell: ({ getValue }) => {
       const classification = getValue()
-      // UPDATED: Now only 3 variants instead of 4
       const variants = {
         'Excellent': 'default',
         'Good': 'secondary',
@@ -461,7 +519,6 @@ export const columns = [
     header: "Overall Score",
     cell: ({ getValue }) => {
       const score = parseFloat(getValue())
-      // UPDATED: Changed thresholds to 90 and 80
       const color = score >= 90 ? 'text-green-600' : 
                     score >= 80 ? 'text-yellow-600' : 
                     'text-red-600'
@@ -526,23 +583,48 @@ export const columns = [
           document.body.removeChild(audioLink)
           window.URL.revokeObjectURL(audioUrl)
           
-          // Download diarized transcription with CallEval metrics
+          // Generate PDF with diarized transcription and CallEval metrics
           const response = await fetch(`${backendUrl}/api/calls/${recording.callId}`)
           if (response.ok) {
             const data = await response.json()
             
-            // Parse segments for diarized transcript
-            let segments = []
-            if (data.segments && Array.isArray(data.segments)) {
-              segments = data.segments
-            } else if (data.scores && typeof data.scores === 'string') {
-              try {
-                const scoresData = JSON.parse(data.scores)
-                segments = scoresData.segments || []
-              } catch (e) {
-                console.error('Error parsing segments:', e)
-              }
-            }
+            // Dynamic import of jsPDF and autoTable
+            const jsPDF = (await import('jspdf')).default
+            const autoTable = (await import('jspdf-autotable')).default
+            
+            const doc = new jsPDF()
+            let yPos = 20
+            
+            // Title
+            doc.setFontSize(18)
+            doc.setFont(undefined, 'bold')
+            doc.text('CALL TRANSCRIPTION WITH SPEAKER IDENTIFICATION', 105, yPos, { align: 'center' })
+            yPos += 10
+            
+            doc.setLineWidth(0.5)
+            doc.line(14, yPos, 196, yPos)
+            yPos += 10
+            
+            // Call Information
+            doc.setFontSize(12)
+            doc.setFont(undefined, 'bold')
+            doc.text('CALL INFORMATION', 14, yPos)
+            yPos += 6
+            
+            doc.setFontSize(10)
+            doc.setFont(undefined, 'normal')
+            doc.text(`Call ID: ${recording.callId}`, 14, yPos)
+            yPos += 5
+            doc.text(`Filename: ${audioFilename}`, 14, yPos)
+            yPos += 5
+            doc.text(`Upload Date: ${recording.dateOrTime}`, 14, yPos)
+            yPos += 5
+            doc.text(`Duration: ${data.duration || 'N/A'}`, 14, yPos)
+            yPos += 5
+            doc.text(`Overall Score: ${data.score || 'N/A'}/100`, 14, yPos)
+            yPos += 5
+            doc.text(`Status: ${data.status || 'N/A'}`, 14, yPos)
+            yPos += 8
             
             // Parse speaker roles
             let speakers = {}
@@ -556,6 +638,23 @@ export const columns = [
               } else {
                 speakers = data.speakers
               }
+            }
+            
+            // Speaker Identification
+            if (Object.keys(speakers).length > 0) {
+              doc.setFontSize(12)
+              doc.setFont(undefined, 'bold')
+              doc.text('SPEAKER IDENTIFICATION', 14, yPos)
+              yPos += 6
+              
+              doc.setFontSize(10)
+              doc.setFont(undefined, 'normal')
+              Object.entries(speakers).forEach(([speakerId, role]) => {
+                const icon = role === 'agent' ? 'AGENT' : role === 'caller' ? 'CALLER' : 'UNKNOWN'
+                doc.text(`${speakerId}: ${icon}`, 14, yPos)
+                yPos += 5
+              })
+              yPos += 3
             }
             
             // Parse evaluation metrics
@@ -572,110 +671,127 @@ export const columns = [
               }
             }
             
-            // Build formatted transcription
-            let transcriptText = ''
-            
-            // Header Section
-            transcriptText += `${'='.repeat(80)}\n`
-            transcriptText += `               CALL TRANSCRIPTION WITH SPEAKER IDENTIFICATION\n`
-            transcriptText += `${'='.repeat(80)}\n\n`
-            
-            // Call Information
-            transcriptText += `CALL INFORMATION:\n`
-            transcriptText += `${'-'.repeat(80)}\n`
-            transcriptText += `Call ID       : ${recording.callId}\n`
-            transcriptText += `Filename      : ${audioFilename}\n`
-            transcriptText += `Upload Date   : ${recording.dateOrTime}\n`
-            transcriptText += `Duration      : ${data.duration || 'N/A'}\n`
-            transcriptText += `Overall Score : ${data.score || 'N/A'}/100\n`
-            transcriptText += `Status        : ${data.status || 'N/A'}\n\n`
-            
-            // Speaker Identification
-            if (Object.keys(speakers).length > 0) {
-              transcriptText += `SPEAKER IDENTIFICATION:\n`
-              transcriptText += `${'-'.repeat(80)}\n`
-              Object.entries(speakers).forEach(([speakerId, role]) => {
-                const icon = role === 'agent' ? '👤 AGENT' : role === 'caller' ? '📞 CALLER' : '❓ UNKNOWN'
-                transcriptText += `${speakerId.padEnd(15)} : ${icon}\n`
-              })
-              transcriptText += `\n`
-            }
-            
             // CallEval Metrics (if available)
             if (evaluationMetrics && Object.keys(evaluationMetrics).length > 0) {
-              transcriptText += `CALLEVAL METRICS:\n`
-              transcriptText += `${'-'.repeat(80)}\n`
+              doc.setFontSize(12)
+              doc.setFont(undefined, 'bold')
+              doc.text('CALLEVAL METRICS', 14, yPos)
+              yPos += 6
               
-              // Function to format metrics by phase
               const formatPhaseMetrics = (metrics, phaseName) => {
-                if (!metrics) return ''
+                if (!metrics) return []
                 
-                let phaseText = `\n${phaseName.toUpperCase()}:\n`
+                const rows = []
+                rows.push([{ content: phaseName.toUpperCase(), colSpan: 3, styles: { fontStyle: 'bold', fillColor: [220, 220, 220] } }])
+                
                 Object.entries(metrics).forEach(([key, metric]) => {
                   if (typeof metric === 'object' && metric !== null) {
                     const detected = metric.detected ? '✓' : '✗'
                     const score = metric.weighted_score || 0
                     const weight = metric.weight || 0
-                    phaseText += `  ${detected} ${key.replace(/_/g, ' ').padEnd(35)} : ${score.toFixed(1)}/${weight}\n`
+                    const metricName = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
+                    rows.push([detected, metricName, `${score.toFixed(1)}/${weight}`])
                   }
                 })
-                return phaseText
+                return rows
               }
               
-              // Display metrics by phase
+              const metricsData = []
+              
               if (evaluationMetrics.all_phases) {
-                transcriptText += formatPhaseMetrics(evaluationMetrics.all_phases, 'All Phases')
+                metricsData.push(...formatPhaseMetrics(evaluationMetrics.all_phases, 'All Phases'))
               }
               if (evaluationMetrics.opening) {
-                transcriptText += formatPhaseMetrics(evaluationMetrics.opening, 'I. Opening Spiel')
+                metricsData.push(...formatPhaseMetrics(evaluationMetrics.opening, 'I. Opening Spiel'))
               }
               if (evaluationMetrics.middle) {
-                transcriptText += formatPhaseMetrics(evaluationMetrics.middle, 'II. Middle / Climax')
+                metricsData.push(...formatPhaseMetrics(evaluationMetrics.middle, 'II. Middle / Climax'))
               }
               if (evaluationMetrics.closing) {
-                transcriptText += formatPhaseMetrics(evaluationMetrics.closing, 'III. Closing / Wrap Up')
+                metricsData.push(...formatPhaseMetrics(evaluationMetrics.closing, 'III. Closing / Wrap Up'))
               }
               
-              transcriptText += `\n`
+              if (metricsData.length > 0) {
+                autoTable(doc, {
+                  startY: yPos,
+                  head: [['Status', 'Metric', 'Score']],
+                  body: metricsData,
+                  theme: 'grid',
+                  headStyles: { fillColor: [34, 197, 94], textColor: [255, 255, 255], fontStyle: 'bold' },
+                  styles: { fontSize: 9, cellPadding: 2 },
+                  columnStyles: {
+                    0: { cellWidth: 15, halign: 'center' },
+                    1: { cellWidth: 120 },
+                    2: { cellWidth: 35, halign: 'center' }
+                  }
+                })
+                yPos = doc.lastAutoTable.finalY + 8
+              }
+            }
+            
+            // Parse segments for diarized transcript
+            let segments = []
+            if (data.segments && Array.isArray(data.segments)) {
+              segments = data.segments
+            } else if (data.scores && typeof data.scores === 'string') {
+              try {
+                const scoresData = JSON.parse(data.scores)
+                segments = scoresData.segments || []
+              } catch (e) {
+                console.error('Error parsing segments:', e)
+              }
+            }
+            
+            // Add new page for transcript if needed
+            if (yPos > 250) {
+              doc.addPage()
+              yPos = 20
             }
             
             // Diarized Transcript
-            transcriptText += `${'='.repeat(80)}\n`
-            transcriptText += `                            DIARIZED TRANSCRIPT\n`
-            transcriptText += `${'='.repeat(80)}\n\n`
+            doc.setFontSize(12)
+            doc.setFont(undefined, 'bold')
+            doc.text('DIARIZED TRANSCRIPT', 14, yPos)
+            yPos += 6
             
             if (segments.length > 0) {
-              segments.forEach((segment, index) => {
+              const transcriptData = segments.map(segment => {
                 const speakerId = segment.speaker || 'UNKNOWN'
                 const role = speakers[speakerId] || 'unknown'
-                const roleLabel = role === 'agent' ? '👤 AGENT' : 
-                                role === 'caller' ? '📞 CALLER' : 
-                                '❓ UNKNOWN'
+                const roleLabel = role === 'agent' ? 'AGENT' : role === 'caller' ? 'CALLER' : 'UNKNOWN'
                 
                 const timestamp = segment.start !== undefined && segment.end !== undefined 
-                  ? `[${segment.start.toFixed(2)}s - ${segment.end.toFixed(2)}s]` 
+                  ? `[${segment.start.toFixed(2)}s - ${segment.end.toFixed(2)}s]`
                   : '[--:--]'
                 
-                transcriptText += `${timestamp} ${roleLabel}\n${segment.text}\n\n`
+                return [
+                  timestamp,
+                  roleLabel,
+                  segment.text
+                ]
+              })
+              
+              autoTable(doc, {
+                startY: yPos,
+                head: [['Time', 'Speaker', 'Text']],
+                body: transcriptData,
+                theme: 'grid',
+                headStyles: { fillColor: [34, 197, 94], textColor: [255, 255, 255], fontStyle: 'bold' },
+                styles: { fontSize: 8, cellPadding: 2 },
+                columnStyles: {
+                  0: { cellWidth: 30 },
+                  1: { cellWidth: 25 },
+                  2: { cellWidth: 125 }
+                }
               })
             } else {
-              transcriptText += 'No diarized segments available.\n'
+              doc.setFontSize(10)
+              doc.setFont(undefined, 'normal')
+              doc.text('No diarized segments available.', 14, yPos)
             }
             
-            transcriptText += `${'='.repeat(80)}\n`
-            transcriptText += `                              END OF TRANSCRIPT\n`
-            transcriptText += `${'='.repeat(80)}\n`
-            
-            // Download transcript as .txt file
-            const transcriptBlob = new Blob([transcriptText], { type: 'text/plain' })
-            const transcriptUrl = window.URL.createObjectURL(transcriptBlob)
-            const transcriptLink = document.createElement('a')
-            transcriptLink.href = transcriptUrl
-            transcriptLink.download = `${recording.callId}_transcript_with_metrics.txt`
-            document.body.appendChild(transcriptLink)
-            transcriptLink.click()
-            document.body.removeChild(transcriptLink)
-            window.URL.revokeObjectURL(transcriptUrl)
+            // Save the PDF
+            doc.save(`${recording.callId}_transcript_with_metrics.pdf`)
           }
           
           toast.success('Files downloaded successfully!')
