@@ -220,17 +220,21 @@ function ScoreDetailsDialog({ callId }) {
                 textColor: [255, 255, 255], 
                 fontStyle: 'bold',
                 halign: 'center',
-                fontSize: 10
+                valign: 'middle',
+                fontSize: 10,
+                minCellHeight: 8,
+                overflow: 'visible'
               },
               styles: { fontSize: 9, cellPadding: 3 },
               columnStyles: {
-                0: { cellWidth: 15, halign: 'center', fontStyle: 'bold' },
-                1: { cellWidth: 120, halign: 'left' },
+                0: { cellWidth: 22, halign: 'center', fontStyle: 'bold', overflow: 'visible' },
+                1: { cellWidth: 113, halign: 'left' },
                 2: { cellWidth: 35, halign: 'right', fontStyle: 'bold' }
               },
               didParseCell: function (data) {
                 // Align header cells individually
                 if (data.section === 'head') {
+                  data.cell.styles.valign = 'middle'
                   if (data.column.index === 0) {
                     data.cell.styles.halign = 'center'
                   } else if (data.column.index === 1) {
@@ -313,8 +317,8 @@ function ScoreDetailsDialog({ callId }) {
               },
               styles: { fontSize: 9, cellPadding: 2 },
               columnStyles: {
-                0: { cellWidth: 15, halign: 'center' },
-                1: { cellWidth: 120, halign: 'left' },
+                0: { cellWidth: 20, halign: 'center' },
+                1: { cellWidth: 115, halign: 'left' },
                 2: { cellWidth: 35, halign: 'right' }
               },
               didParseCell: function (data) {
@@ -807,17 +811,21 @@ export const columns = [
                     textColor: [255, 255, 255], 
                     fontStyle: 'bold',
                     halign: 'center',
-                    fontSize: 10
+                    valign: 'middle',
+                    fontSize: 10,
+                    minCellHeight: 8,
+                    overflow: 'visible'
                   },
                   styles: { fontSize: 9, cellPadding: 3 },
                   columnStyles: {
-                    0: { cellWidth: 15, halign: 'center', fontStyle: 'bold' },
-                    1: { cellWidth: 120, halign: 'left' },
+                    0: { cellWidth: 22, halign: 'center', fontStyle: 'bold', overflow: 'visible' },
+                    1: { cellWidth: 113, halign: 'left' },
                     2: { cellWidth: 35, halign: 'right', fontStyle: 'bold' }
                   },
                   didParseCell: function (data) {
                     // Align header cells individually
                     if (data.section === 'head') {
+                      data.cell.styles.valign = 'middle'
                       if (data.column.index === 0) {
                         data.cell.styles.halign = 'center'
                       } else if (data.column.index === 1) {
