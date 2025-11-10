@@ -92,13 +92,152 @@ function ScoreDetailsDialog({ callId }) {
       document.body.removeChild(audioLink)
       window.URL.revokeObjectURL(audioUrl)
       
-      // Download transcript if available
-      if (callData.transcript) {
-        const transcriptBlob = new Blob([callData.transcript], { type: 'text/plain' })
+      // Download diarized transcription with CallEval metrics
+      const response = await fetch(`${backendUrl}/api/calls/${callId}`)
+      if (response.ok) {
+        const data = await response.json()
+        
+        // Parse segments for diarized transcript
+        let segments = []
+        if (data.segments && Array.isArray(data.segments)) {
+          segments = data.segments
+        } else if (data.scores && typeof data.scores === 'string') {
+          try {
+            const scoresData = JSON.parse(data.scores)
+            segments = scoresData.segments || []
+          } catch (e) {
+            console.error('Error parsing segments:', e)
+          }
+        }
+        
+        // Parse speaker roles
+        let speakers = {}
+        if (data.speakers) {
+          if (typeof data.speakers === 'string') {
+            try {
+              speakers = JSON.parse(data.speakers)
+            } catch (e) {
+              console.error('Error parsing speakers:', e)
+            }
+          } else {
+            speakers = data.speakers
+          }
+        }
+        
+        // Parse evaluation metrics
+        let evaluationMetrics = {}
+        if (data.evaluation_results) {
+          if (typeof data.evaluation_results === 'string') {
+            try {
+              evaluationMetrics = JSON.parse(data.evaluation_results)
+            } catch (e) {
+              console.error('Error parsing evaluation_results:', e)
+            }
+          } else {
+            evaluationMetrics = data.evaluation_results
+          }
+        }
+        
+        // Build formatted transcription
+        let transcriptText = ''
+        
+        // Header Section
+        transcriptText += `${'='.repeat(80)}\n`
+        transcriptText += `               CALL TRANSCRIPTION WITH SPEAKER IDENTIFICATION\n`
+        transcriptText += `${'='.repeat(80)}\n\n`
+        
+        // Call Information
+        transcriptText += `CALL INFORMATION:\n`
+        transcriptText += `${'-'.repeat(80)}\n`
+        transcriptText += `Call ID       : ${callId}\n`
+        transcriptText += `Filename      : ${audioFilename}\n`
+        transcriptText += `Upload Date   : ${data.created_at || 'N/A'}\n`
+        transcriptText += `Duration      : ${data.duration || 'N/A'}\n`
+        transcriptText += `Overall Score : ${data.score || 'N/A'}/100\n`
+        transcriptText += `Status        : ${data.status || 'N/A'}\n\n`
+        
+        // Speaker Identification
+        if (Object.keys(speakers).length > 0) {
+          transcriptText += `SPEAKER IDENTIFICATION:\n`
+          transcriptText += `${'-'.repeat(80)}\n`
+          Object.entries(speakers).forEach(([speakerId, role]) => {
+            const icon = role === 'agent' ? '👤 AGENT' : role === 'caller' ? '📞 CALLER' : '❓ UNKNOWN'
+            transcriptText += `${speakerId.padEnd(15)} : ${icon}\n`
+          })
+          transcriptText += `\n`
+        }
+        
+        // CallEval Metrics (if available)
+        if (evaluationMetrics && Object.keys(evaluationMetrics).length > 0) {
+          transcriptText += `CALLEVAL METRICS:\n`
+          transcriptText += `${'-'.repeat(80)}\n`
+          
+          // Function to format metrics by phase
+          const formatPhaseMetrics = (metrics, phaseName) => {
+            if (!metrics) return ''
+            
+            let phaseText = `\n${phaseName.toUpperCase()}:\n`
+            Object.entries(metrics).forEach(([key, metric]) => {
+              if (typeof metric === 'object' && metric !== null) {
+                const detected = metric.detected ? '✓' : '✗'
+                const score = metric.weighted_score || 0
+                const weight = metric.weight || 0
+                phaseText += `  ${detected} ${key.replace(/_/g, ' ').padEnd(35)} : ${score.toFixed(1)}/${weight}\n`
+              }
+            })
+            return phaseText
+          }
+          
+          // Display metrics by phase
+          if (evaluationMetrics.all_phases) {
+            transcriptText += formatPhaseMetrics(evaluationMetrics.all_phases, 'All Phases')
+          }
+          if (evaluationMetrics.opening) {
+            transcriptText += formatPhaseMetrics(evaluationMetrics.opening, 'I. Opening Spiel')
+          }
+          if (evaluationMetrics.middle) {
+            transcriptText += formatPhaseMetrics(evaluationMetrics.middle, 'II. Middle / Climax')
+          }
+          if (evaluationMetrics.closing) {
+            transcriptText += formatPhaseMetrics(evaluationMetrics.closing, 'III. Closing / Wrap Up')
+          }
+          
+          transcriptText += `\n`
+        }
+        
+        // Diarized Transcript
+        transcriptText += `${'='.repeat(80)}\n`
+        transcriptText += `                            DIARIZED TRANSCRIPT\n`
+        transcriptText += `${'='.repeat(80)}\n\n`
+        
+        if (segments.length > 0) {
+          segments.forEach((segment, index) => {
+            const speakerId = segment.speaker || 'UNKNOWN'
+            const role = speakers[speakerId] || 'unknown'
+            const roleLabel = role === 'agent' ? '👤 AGENT' : 
+                            role === 'caller' ? '📞 CALLER' : 
+                            '❓ UNKNOWN'
+            
+            const timestamp = segment.start !== undefined && segment.end !== undefined 
+              ? `[${segment.start.toFixed(2)}s - ${segment.end.toFixed(2)}s]` 
+              : '[--:--]'
+            
+            transcriptText += `${timestamp} ${roleLabel}\n${segment.text}\n\n`
+          })
+        } else {
+          transcriptText += 'No diarized segments available.\n'
+        }
+        
+        transcriptText += `${'='.repeat(80)}\n`
+        transcriptText += `                              END OF TRANSCRIPT\n`
+        transcriptText += `${'='.repeat(80)}\n`
+        
+        // Download transcript as .txt file
+        const transcriptBlob = new Blob([transcriptText], { type: 'text/plain' })
         const transcriptUrl = window.URL.createObjectURL(transcriptBlob)
         const transcriptLink = document.createElement('a')
         transcriptLink.href = transcriptUrl
-        transcriptLink.download = `${callId}_transcript.txt`
+        transcriptLink.download = `${callId}_transcript_with_metrics.txt`
         document.body.appendChild(transcriptLink)
         transcriptLink.click()
         document.body.removeChild(transcriptLink)
@@ -226,18 +365,14 @@ function ScoreDetailsDialog({ callId }) {
                         <User className="h-5 w-5 text-blue-600 dark:text-blue-400" />
                         <div>
                           <span className="text-sm font-bold text-blue-700 dark:text-blue-300">AGENT</span>
-                          <span className="text-xs text-blue-600 dark:text-blue-400 ml-2">
-                            ({stats.agentSpeaker || 'Unknown'})
-                          </span>
+                          <span className="text-xs text-blue-600 dark:text-blue-400 ml-2">{stats.agentSpeaker}</span>
                         </div>
                       </div>
                       <div className="flex items-center gap-2 bg-green-100 dark:bg-green-900 px-3 py-2 rounded-md">
                         <Phone className="h-5 w-5 text-green-600 dark:text-green-400" />
                         <div>
                           <span className="text-sm font-bold text-green-700 dark:text-green-300">CALLER</span>
-                          <span className="text-xs text-green-600 dark:text-green-400 ml-2">
-                            ({stats.callerSpeaker || 'Unknown'})
-                          </span>
+                          <span className="text-xs text-green-600 dark:text-green-400 ml-2">{stats.callerSpeaker}</span>
                         </div>
                       </div>
                     </div>
@@ -245,39 +380,10 @@ function ScoreDetailsDialog({ callId }) {
                 );
               })()}
 
-              <Separator className="my-4" />
+              <Separator />
 
-              {/* Diarized Transcription */}
-              {callData.segments && callData.segments.length > 0 ? (
-                <div className="space-y-2">
-                  <h3 className="font-semibold text-lg">Diarized Transcription</h3>
-                  <div className="space-y-3">
-                    {callData.segments.map((segment, index) => {
-                      const speaker = segment.speaker || 'UNKNOWN'
-                      const speakerColor = speaker.includes('SPEAKER_00') ? 'text-blue-600' : 
-                                         speaker.includes('SPEAKER_01') ? 'text-green-600' : 
-                                         'text-gray-600'
-                      const timestamp = segment.start && segment.end ? 
-                        `${segment.start.toFixed(2)}s - ${segment.end.toFixed(2)}s` : 
-                        'N/A'
-                      
-                      return (
-                        <div key={index} className="bg-muted p-3 rounded-lg">
-                          <div className="flex items-center justify-between mb-1">
-                            <span className={`font-semibold text-sm ${speakerColor}`}>
-                              {speaker}
-                            </span>
-                            <span className="text-xs text-muted-foreground">
-                              [{timestamp}]
-                            </span>
-                          </div>
-                          <p className="text-sm">{segment.text}</p>
-                        </div>
-                      )
-                    })}
-                  </div>
-                </div>
-              ) : callData.transcript ? (
+              {/* Transcription */}
+              {callData.transcript ? (
                 <div className="space-y-2">
                   <h3 className="font-semibold text-lg">Transcription</h3>
                   <div className="bg-muted p-4 rounded-lg">
@@ -357,7 +463,7 @@ export const columns = [
       const score = parseFloat(getValue())
       // UPDATED: Changed thresholds to 90 and 80
       const color = score >= 90 ? 'text-green-600' : 
-                    score >= 80 ? 'text-blue-600' : 
+                    score >= 80 ? 'text-yellow-600' : 
                     'text-red-600'
       return (
         <span className={`font-semibold ${color}`}>
@@ -371,14 +477,13 @@ export const columns = [
     header: "Status",
     cell: ({ getValue }) => {
       const status = getValue()
-      const statusColors = {
-        'completed': 'bg-green-100 text-green-800',
-        'processing': 'bg-blue-100 text-blue-800',
-        'failed': 'bg-red-100 text-red-800',
-        'queued': 'bg-yellow-100 text-yellow-800'
+      const variants = {
+        'completed': 'default',
+        'processing': 'secondary',
+        'failed': 'destructive'
       }
       return (
-        <Badge variant="outline" className={statusColors[status] || ''}>
+        <Badge variant={variants[status] || 'secondary'}>
           {status}
         </Badge>
       )
@@ -386,7 +491,6 @@ export const columns = [
   },
   {
     id: "actions",
-    header: "Actions",
     cell: ({ row }) => {
       const recording = row.original
       
@@ -394,36 +498,187 @@ export const columns = [
         try {
           const backendUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
           
-          // Fetch the audio file
-          const response = await fetch(`${backendUrl}/api/temp-audio/${recording.id}`)
+          // Download audio with proper filename extraction
+          const audioResponse = await fetch(`${backendUrl}/api/temp-audio/${recording.callId}`)
           
-          if (!response.ok) {
-            throw new Error('Failed to fetch audio file')
+          if (!audioResponse.ok) {
+            throw new Error('Failed to download audio')
           }
           
-          // Get filename from Content-Disposition header or use default
-          const contentDisposition = response.headers.get('Content-Disposition')
-          let filename = 'recording.mp3'
-          
+          // Extract filename from Content-Disposition header
+          let audioFilename = recording.fileName || 'recording.mp3'
+          const contentDisposition = audioResponse.headers.get('Content-Disposition')
           if (contentDisposition) {
             const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/)
             if (filenameMatch && filenameMatch[1]) {
-              filename = filenameMatch[1].replace(/['"]/g, '')
+              audioFilename = filenameMatch[1].replace(/['"]/g, '')
             }
           }
           
-          // Get the blob and create download link
-          const blob = await response.blob()
-          const url = window.URL.createObjectURL(blob)
-          const link = document.createElement('a')
-          link.href = url
-          link.download = filename
-          document.body.appendChild(link)
-          link.click()
-          document.body.removeChild(link)
-          window.URL.revokeObjectURL(url)
+          // Download audio blob
+          const audioBlob = await audioResponse.blob()
+          const audioUrl = window.URL.createObjectURL(audioBlob)
+          const audioLink = document.createElement('a')
+          audioLink.href = audioUrl
+          audioLink.download = audioFilename
+          document.body.appendChild(audioLink)
+          audioLink.click()
+          document.body.removeChild(audioLink)
+          window.URL.revokeObjectURL(audioUrl)
           
-          toast.success('Download started!')
+          // Download diarized transcription with CallEval metrics
+          const response = await fetch(`${backendUrl}/api/calls/${recording.callId}`)
+          if (response.ok) {
+            const data = await response.json()
+            
+            // Parse segments for diarized transcript
+            let segments = []
+            if (data.segments && Array.isArray(data.segments)) {
+              segments = data.segments
+            } else if (data.scores && typeof data.scores === 'string') {
+              try {
+                const scoresData = JSON.parse(data.scores)
+                segments = scoresData.segments || []
+              } catch (e) {
+                console.error('Error parsing segments:', e)
+              }
+            }
+            
+            // Parse speaker roles
+            let speakers = {}
+            if (data.speakers) {
+              if (typeof data.speakers === 'string') {
+                try {
+                  speakers = JSON.parse(data.speakers)
+                } catch (e) {
+                  console.error('Error parsing speakers:', e)
+                }
+              } else {
+                speakers = data.speakers
+              }
+            }
+            
+            // Parse evaluation metrics
+            let evaluationMetrics = {}
+            if (data.evaluation_results) {
+              if (typeof data.evaluation_results === 'string') {
+                try {
+                  evaluationMetrics = JSON.parse(data.evaluation_results)
+                } catch (e) {
+                  console.error('Error parsing evaluation_results:', e)
+                }
+              } else {
+                evaluationMetrics = data.evaluation_results
+              }
+            }
+            
+            // Build formatted transcription
+            let transcriptText = ''
+            
+            // Header Section
+            transcriptText += `${'='.repeat(80)}\n`
+            transcriptText += `               CALL TRANSCRIPTION WITH SPEAKER IDENTIFICATION\n`
+            transcriptText += `${'='.repeat(80)}\n\n`
+            
+            // Call Information
+            transcriptText += `CALL INFORMATION:\n`
+            transcriptText += `${'-'.repeat(80)}\n`
+            transcriptText += `Call ID       : ${recording.callId}\n`
+            transcriptText += `Filename      : ${audioFilename}\n`
+            transcriptText += `Upload Date   : ${recording.dateOrTime}\n`
+            transcriptText += `Duration      : ${data.duration || 'N/A'}\n`
+            transcriptText += `Overall Score : ${data.score || 'N/A'}/100\n`
+            transcriptText += `Status        : ${data.status || 'N/A'}\n\n`
+            
+            // Speaker Identification
+            if (Object.keys(speakers).length > 0) {
+              transcriptText += `SPEAKER IDENTIFICATION:\n`
+              transcriptText += `${'-'.repeat(80)}\n`
+              Object.entries(speakers).forEach(([speakerId, role]) => {
+                const icon = role === 'agent' ? '👤 AGENT' : role === 'caller' ? '📞 CALLER' : '❓ UNKNOWN'
+                transcriptText += `${speakerId.padEnd(15)} : ${icon}\n`
+              })
+              transcriptText += `\n`
+            }
+            
+            // CallEval Metrics (if available)
+            if (evaluationMetrics && Object.keys(evaluationMetrics).length > 0) {
+              transcriptText += `CALLEVAL METRICS:\n`
+              transcriptText += `${'-'.repeat(80)}\n`
+              
+              // Function to format metrics by phase
+              const formatPhaseMetrics = (metrics, phaseName) => {
+                if (!metrics) return ''
+                
+                let phaseText = `\n${phaseName.toUpperCase()}:\n`
+                Object.entries(metrics).forEach(([key, metric]) => {
+                  if (typeof metric === 'object' && metric !== null) {
+                    const detected = metric.detected ? '✓' : '✗'
+                    const score = metric.weighted_score || 0
+                    const weight = metric.weight || 0
+                    phaseText += `  ${detected} ${key.replace(/_/g, ' ').padEnd(35)} : ${score.toFixed(1)}/${weight}\n`
+                  }
+                })
+                return phaseText
+              }
+              
+              // Display metrics by phase
+              if (evaluationMetrics.all_phases) {
+                transcriptText += formatPhaseMetrics(evaluationMetrics.all_phases, 'All Phases')
+              }
+              if (evaluationMetrics.opening) {
+                transcriptText += formatPhaseMetrics(evaluationMetrics.opening, 'I. Opening Spiel')
+              }
+              if (evaluationMetrics.middle) {
+                transcriptText += formatPhaseMetrics(evaluationMetrics.middle, 'II. Middle / Climax')
+              }
+              if (evaluationMetrics.closing) {
+                transcriptText += formatPhaseMetrics(evaluationMetrics.closing, 'III. Closing / Wrap Up')
+              }
+              
+              transcriptText += `\n`
+            }
+            
+            // Diarized Transcript
+            transcriptText += `${'='.repeat(80)}\n`
+            transcriptText += `                            DIARIZED TRANSCRIPT\n`
+            transcriptText += `${'='.repeat(80)}\n\n`
+            
+            if (segments.length > 0) {
+              segments.forEach((segment, index) => {
+                const speakerId = segment.speaker || 'UNKNOWN'
+                const role = speakers[speakerId] || 'unknown'
+                const roleLabel = role === 'agent' ? '👤 AGENT' : 
+                                role === 'caller' ? '📞 CALLER' : 
+                                '❓ UNKNOWN'
+                
+                const timestamp = segment.start !== undefined && segment.end !== undefined 
+                  ? `[${segment.start.toFixed(2)}s - ${segment.end.toFixed(2)}s]` 
+                  : '[--:--]'
+                
+                transcriptText += `${timestamp} ${roleLabel}\n${segment.text}\n\n`
+              })
+            } else {
+              transcriptText += 'No diarized segments available.\n'
+            }
+            
+            transcriptText += `${'='.repeat(80)}\n`
+            transcriptText += `                              END OF TRANSCRIPT\n`
+            transcriptText += `${'='.repeat(80)}\n`
+            
+            // Download transcript as .txt file
+            const transcriptBlob = new Blob([transcriptText], { type: 'text/plain' })
+            const transcriptUrl = window.URL.createObjectURL(transcriptBlob)
+            const transcriptLink = document.createElement('a')
+            transcriptLink.href = transcriptUrl
+            transcriptLink.download = `${recording.callId}_transcript_with_metrics.txt`
+            document.body.appendChild(transcriptLink)
+            transcriptLink.click()
+            document.body.removeChild(transcriptLink)
+            window.URL.revokeObjectURL(transcriptUrl)
+          }
+          
+          toast.success('Files downloaded successfully!')
         } catch (error) {
           console.error('Download error:', error)
           toast.error('Failed to download recording')
@@ -441,7 +696,7 @@ export const columns = [
           <DropdownMenuContent align="end">
             <DropdownMenuLabel>Actions</DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <ScoreDetailsDialog callId={recording.id} />
+            <ScoreDetailsDialog callId={recording.callId} />
             <DropdownMenuItem onClick={handleDownload}>
               <Download className="mr-2 h-4 w-4" />
               Download Recording
