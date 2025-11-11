@@ -15,6 +15,7 @@ from config import settings
 from pydantic import BaseModel
 from typing import Optional
 from fastapi import Form
+from profanity_filter import censor_segments, censor_transcript
 from audit_logger import (
     log_call_upload, log_call_analysis_complete, log_agent_created, 
     log_agent_updated, log_agent_deleted, log_settings_updated,
@@ -723,7 +724,7 @@ def process_call(call_id: str, file_path: str):
         
         # Store full text transcript
         full_text = " ".join([seg["text"] for seg in whisperx_result["segments"]])
-        call.transcript = full_text
+        call.transcript = censor_transcript(full_text)
         
         # UPDATED: Assign speaker roles
         print("\n🎭 Assigning speaker roles (agent/caller)...")
@@ -742,10 +743,13 @@ def process_call(call_id: str, file_path: str):
                 "start": seg.get("start", 0),
                 "end": seg.get("end", 0)
             })
+
+        # Apply profanity censoring to all segments ← NEW LINE
+        segments_data = censor_segments(segments_data)
         
         # Store segments in the scores field
         call.scores = json.dumps({"segments": segments_data})
-        print(f"✅ Stored {len(segments_data)} segments")
+        print(f"✅ Stored {len(segments_data)} segments (profanity censored)")
         
         # Calculate duration
         if whisperx_result["segments"]:
@@ -757,7 +761,7 @@ def process_call(call_id: str, file_path: str):
         else:
             duration_seconds = 0
         
-        print(f"✅ Transcription complete!")
+        print(f"✅ Transcription complete (with profanity censoring)!")
         print(f"   Transcript length: {len(full_text)} characters")
         print(f"   Duration: {call.duration}")
         print(f"   Segments: {len(segments_data)}")
