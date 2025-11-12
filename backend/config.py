@@ -21,11 +21,16 @@ class Settings(BaseSettings):
     FRONTEND_URL: str = "http://localhost:5173"
     
     # File upload settings
-    UPLOAD_DIR: str = "uploads"
+    # Use /data for persistent storage on Render, fallback to local for development
+    UPLOAD_DIR: str = os.getenv("UPLOAD_DIR", "/data/uploads" if os.path.exists("/data") else "uploads")
     MAX_FILE_SIZE: int = 100 * 1024 * 1024  # 100MB
     
     # Database
-    DATABASE_URL: str = "sqlite:///./calleval.db"
+    # Use /data for persistent storage on Render, fallback to local for development
+    DATABASE_URL: str = os.getenv(
+        "DATABASE_URL",
+        "sqlite:////data/calleval.db" if os.path.exists("/data") else "sqlite:///./calleval.db"
+    )
     
     class Config:
         env_file = ".env"

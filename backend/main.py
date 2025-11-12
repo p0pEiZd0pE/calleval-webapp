@@ -22,6 +22,7 @@ from audit_logger import (
     log_report_generated, log_call_deleted, log_user_login,
     log_call_cancel, log_call_retry
 )
+import init_storage  # Initialize persistent storage on startup
 
 
 settings_router = APIRouter()
@@ -80,7 +81,6 @@ else:
     print(f"  MODAL_TOKEN_SECRET exists: {bool(modal_token_secret)}")
     print("  Modal functions will NOT work without credentials!")
 
-os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
 
 app = FastAPI(title="CallEval API - Full Modal Stack")
 
