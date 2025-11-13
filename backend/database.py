@@ -10,6 +10,38 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
 
+# NEW: User model for authentication
+class User(Base):
+    """Database model for users with authentication"""
+    __tablename__ = "users"
+    
+    id = Column(String, primary_key=True)
+    email = Column(String, unique=True, nullable=False, index=True)
+    username = Column(String, unique=True, nullable=False, index=True)
+    hashed_password = Column(String, nullable=False)
+    full_name = Column(String, nullable=False)
+    role = Column(String, default="Agent")  # Admin, Manager, Agent
+    is_active = Column(Boolean, default=True)
+    
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    last_login = Column(DateTime, nullable=True)
+    
+    def to_dict(self):
+        """Convert to dictionary for API response (excluding password)"""
+        return {
+            "id": self.id,
+            "email": self.email,
+            "username": self.username,
+            "full_name": self.full_name,
+            "role": self.role,
+            "is_active": self.is_active,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "last_login": self.last_login.isoformat() if self.last_login else None
+        }
+
+
 class Agent(Base):
     """Database model for agents"""
     __tablename__ = "agents"

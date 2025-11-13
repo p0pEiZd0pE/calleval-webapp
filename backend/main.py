@@ -24,6 +24,7 @@ from audit_logger import (
 )
 # CHANGED: Import the function instead of the module
 from init_storage import initialize_persistent_storage
+from auth_routes import router as auth_router
 
 
 settings_router = APIRouter()
@@ -86,13 +87,14 @@ else:
 # Create FastAPI app
 app = FastAPI(title="CallEval API - Full Modal Stack")
 
+app.include_router(auth_router)
 
 # NEW: Add startup event to initialize storage
 @app.on_event("startup")
 async def startup_event():
     """Run initialization tasks on app startup"""
     initialize_persistent_storage()
-    
+
 
 allowed_origins = [origin.strip() for origin in settings.FRONTEND_URL.split(",")]
 if "http://localhost:5173" not in allowed_origins:

@@ -32,6 +32,9 @@ class Settings(BaseSettings):
         "sqlite:////data/calleval.db" if os.path.exists("/data") else "sqlite:///./calleval.db"
     )
     
+    # JWT Authentication - NEW
+    JWT_SECRET_KEY: str = "your-secret-key-change-this-in-production"
+    
     class Config:
         env_file = ".env"
 
