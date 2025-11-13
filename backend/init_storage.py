@@ -43,5 +43,4 @@ def initialize_persistent_storage():
     print(f"✓ Using database at: {settings.DATABASE_URL}")
     print("✅ Storage initialization complete!\n")
 
-# Run on import
-initialize_persistent_storage()
+# Don't run on import - should be called explicitly from main.py startup

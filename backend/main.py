@@ -22,7 +22,8 @@ from audit_logger import (
     log_report_generated, log_call_deleted, log_user_login,
     log_call_cancel, log_call_retry
 )
-import init_storage  # Initialize persistent storage on startup
+# CHANGED: Import the function instead of the module
+from init_storage import initialize_persistent_storage
 
 
 settings_router = APIRouter()
@@ -82,7 +83,16 @@ else:
     print("  Modal functions will NOT work without credentials!")
 
 
+# Create FastAPI app
 app = FastAPI(title="CallEval API - Full Modal Stack")
+
+
+# NEW: Add startup event to initialize storage
+@app.on_event("startup")
+async def startup_event():
+    """Run initialization tasks on app startup"""
+    initialize_persistent_storage()
+    
 
 allowed_origins = [origin.strip() for origin in settings.FRONTEND_URL.split(",")]
 if "http://localhost:5173" not in allowed_origins:
