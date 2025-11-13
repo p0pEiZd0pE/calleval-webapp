@@ -1,5 +1,6 @@
 import os
 from pydantic_settings import BaseSettings
+from typing import Optional
 
 class Settings(BaseSettings):
     # Modal Configuration - WhisperX
@@ -20,24 +21,67 @@ class Settings(BaseSettings):
     # Frontend URL for CORS
     FRONTEND_URL: str = "http://localhost:5173"
     
-    # File upload settings
-    # Use /data for persistent storage on Render, fallback to /tmp for development/analysis
-    # NEVER use current directory to avoid git sync loops
-    UPLOAD_DIR: str = os.getenv("UPLOAD_DIR", "/data/uploads" if os.path.exists("/data") else "/tmp/uploads")
+    # File upload settings - FIXED: No filesystem I/O at module level
+    UPLOAD_DIR: str = "/data/uploads"  # Default, will be overridden if needed
     MAX_FILE_SIZE: int = 100 * 1024 * 1024  # 100MB
     
-    # Database
-    # Use /data for persistent storage on Render, fallback to /tmp for development/analysis
-    # NEVER use current directory to avoid git sync loops
-    DATABASE_URL: str = os.getenv(
-        "DATABASE_URL",
-        "sqlite:////data/calleval.db" if os.path.exists("/data") else "sqlite:////tmp/calleval.db"
-    )
+    # Database - FIXED: No filesystem I/O at module level  
+    DATABASE_URL: str = "sqlite:////data/calleval.db"  # Default, will be overridden if needed
     
-    # JWT Authentication - NEW
+    # JWT Authentication
     JWT_SECRET_KEY: str = "your-secret-key-change-this-in-production"
     
     class Config:
         env_file = ".env"
+    
+    def __init__(self, **kwargs):
+        """
+        Initialize settings with dynamic path resolution.
+        Only performs filesystem checks when actually instantiated, not on import.
+        """
+        super().__init__(**kwargs)
+        
+        # Only check filesystem if no explicit env vars are set
+        if "UPLOAD_DIR" not in os.environ:
+            # Dynamically determine upload directory at runtime
+            if os.path.exists("/data"):
+                self.UPLOAD_DIR = "/data/uploads"
+            else:
+                self.UPLOAD_DIR = "/tmp/uploads"
+        
+        if "DATABASE_URL" not in os.environ:
+            # Dynamically determine database path at runtime
+            if os.path.exists("/data"):
+                self.DATABASE_URL = "sqlite:////data/calleval.db"
+            else:
+                self.DATABASE_URL = "sqlite:////tmp/calleval.db"
 
-settings = Settings()
+
+# CRITICAL FIX: Use lazy initialization - only create settings when actually accessed
+_settings_instance: Optional[Settings] = None
+
+def get_settings() -> Settings:
+    """
+    Lazy initialization of settings.
+    Only creates Settings instance when first accessed, not on module import.
+    """
+    global _settings_instance
+    if _settings_instance is None:
+        _settings_instance = Settings()
+    return _settings_instance
+
+
+# For backward compatibility, create a property-like access
+class SettingsProxy:
+    """Proxy object that lazily loads settings on attribute access"""
+    
+    def __getattr__(self, name):
+        return getattr(get_settings(), name)
+    
+    def __setattr__(self, name, value):
+        return setattr(get_settings(), name, value)
+
+
+# Export as 'settings' for backward compatibility
+# But it won't actually instantiate until accessed!
+settings = SettingsProxy()

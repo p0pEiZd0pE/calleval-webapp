@@ -68,32 +68,35 @@ class ReportCreate(BaseModel):
 
 
 # ==================== MODAL AUTHENTICATION ====================
-modal_token_id = os.getenv("MODAL_TOKEN_ID")
-modal_token_secret = os.getenv("MODAL_TOKEN_SECRET")
-
-if modal_token_id and modal_token_secret:
-    print(f"✓ Modal credentials found")
-    print(f"  Token ID: {modal_token_id[:10]}...")
-    os.environ["MODAL_TOKEN_ID"] = modal_token_id
-    os.environ["MODAL_TOKEN_SECRET"] = modal_token_secret
-    print(f"✓ Modal environment configured")
-else:
-    print("⚠ WARNING: Modal credentials NOT found!")
-    print(f"  MODAL_TOKEN_ID exists: {bool(modal_token_id)}")
-    print(f"  MODAL_TOKEN_SECRET exists: {bool(modal_token_secret)}")
-    print("  Modal functions will NOT work without credentials!")
-
+# MOVED TO STARTUP EVENT - No module-level execution!
 
 # Create FastAPI app
 app = FastAPI(title="CallEval API - Full Modal Stack")
 
 app.include_router(auth_router)
 
-# NEW: Add startup event to initialize storage
+# FIXED: Add startup event for all initialization tasks
 @app.on_event("startup")
 async def startup_event():
     """Run initialization tasks on app startup"""
+    # Initialize persistent storage
     initialize_persistent_storage()
+    
+    # Configure Modal authentication (moved from module level)
+    modal_token_id = os.getenv("MODAL_TOKEN_ID")
+    modal_token_secret = os.getenv("MODAL_TOKEN_SECRET")
+    
+    if modal_token_id and modal_token_secret:
+        print(f"✓ Modal credentials found")
+        print(f"  Token ID: {modal_token_id[:10]}...")
+        os.environ["MODAL_TOKEN_ID"] = modal_token_id
+        os.environ["MODAL_TOKEN_SECRET"] = modal_token_secret
+        print(f"✓ Modal environment configured")
+    else:
+        print("⚠ WARNING: Modal credentials NOT found!")
+        print(f"  MODAL_TOKEN_ID exists: {bool(modal_token_id)}")
+        print(f"  MODAL_TOKEN_SECRET exists: {bool(modal_token_secret)}")
+        print("  Modal functions will NOT work without credentials!")
 
 
 allowed_origins = [origin.strip() for origin in settings.FRONTEND_URL.split(",")]
@@ -1695,5 +1698,3 @@ async def get_audit_logs(
         print(f"Error fetching audit logs: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
     
-
-# ADD SOME RANDOM COMMENT FOR TESTING
