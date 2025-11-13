@@ -168,11 +168,16 @@ class AuditLog(Base):
 
 
 # Create all tables
-Base.metadata.create_all(bind=engine)
+# Commented out auto-execution to prevent import-time side effects
+# Tables will be created on first database access via get_db()
+# Base.metadata.create_all(bind=engine)
 
 
 # Dependency for FastAPI
 def get_db():
+    # Ensure tables exist on first access
+    Base.metadata.create_all(bind=engine)
+    
     db = SessionLocal()
     try:
         yield db
