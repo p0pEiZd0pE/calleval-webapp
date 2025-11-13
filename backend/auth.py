@@ -62,12 +62,14 @@ def verify_token(token: str) -> dict:
         )
 
 
-async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = None):
+async def get_current_user(
+    token: str = Depends(oauth2_scheme)
+):
     """Dependency to get the current authenticated user"""
-    from database import SessionLocal, User  # Import here to avoid circular dependency
+    from database import get_db, User  # Import here to avoid circular dependency
     
-    if db is None:
-        db = SessionLocal()
+    # Get database session
+    db = next(get_db())
     
     try:
         payload = verify_token(token)
@@ -87,8 +89,7 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = No
         
         return user
     finally:
-        if db:
-            db.close()
+        db.close()
 
 
 async def get_current_active_admin(current_user = Depends(get_current_user)):
