@@ -21,15 +21,17 @@ class Settings(BaseSettings):
     FRONTEND_URL: str = "http://localhost:5173"
     
     # File upload settings
-    # Use /data for persistent storage on Render, fallback to local for development
-    UPLOAD_DIR: str = os.getenv("UPLOAD_DIR", "/data/uploads" if os.path.exists("/data") else "uploads")
+    # Use /data for persistent storage on Render, fallback to /tmp for development/analysis
+    # NEVER use current directory to avoid git sync loops
+    UPLOAD_DIR: str = os.getenv("UPLOAD_DIR", "/data/uploads" if os.path.exists("/data") else "/tmp/uploads")
     MAX_FILE_SIZE: int = 100 * 1024 * 1024  # 100MB
     
     # Database
-    # Use /data for persistent storage on Render, fallback to local for development
+    # Use /data for persistent storage on Render, fallback to /tmp for development/analysis
+    # NEVER use current directory to avoid git sync loops
     DATABASE_URL: str = os.getenv(
         "DATABASE_URL",
-        "sqlite:////data/calleval.db" if os.path.exists("/data") else "sqlite:///./calleval.db"
+        "sqlite:////data/calleval.db" if os.path.exists("/data") else "sqlite:////tmp/calleval.db"
     )
     
     # JWT Authentication - NEW
