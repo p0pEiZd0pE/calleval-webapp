@@ -14,27 +14,71 @@ import Agent from "./pages/Agent"
 import Reports from "./pages/Reports"
 import Settings from "./pages/Settings"
 import Login from "./pages/Login"
+import Unauthorized from "./pages/Unauthorized"  // ← NEW
 import ProtectedRoute from "./components/protected-route"
 
 const App = () => {
   return (
     <ThemeProvider defaultTheme="system" storageKey="theme">
       <Routes>
+        {/* Public routes */}
         <Route path="/login" element={<Login />} />
+        <Route path="/unauthorized" element={<Unauthorized />} />  {/* ← NEW */}
+        
+        {/* Protected routes with sidebar */}
         <Route 
           path="/*" 
           element={
             <ProtectedRoute>
-            <SidebarProvider>
+              <SidebarProvider>
                 <AppSidebar />
                 <SidebarInset>
                   <Routes>
+                    {/* Dashboard - All authenticated users */}
                     <Route path="/" element={<Dashboard />} />
+                    
+                    {/* Call Evaluations - All users (with data filtering on backend) */}
                     <Route path="/call_evaluations" element={<CallEvaluations />} />
-                    <Route path="/upload" element={<Upload />} />
-                    <Route path="/agent" element={<Agent />} />
-                    <Route path="/reports" element={<Reports />} />
-                    <Route path="/settings" element={<Settings />} />
+                    
+                    {/* Upload - Admin and Manager only */}
+                    <Route 
+                      path="/upload" 
+                      element={
+                        <ProtectedRoute allowedRoles={['Admin', 'Manager']}>
+                          <Upload />
+                        </ProtectedRoute>
+                      } 
+                    />
+                    
+                    {/* Agent - Admin and Manager only */}
+                    <Route 
+                      path="/agent" 
+                      element={
+                        <ProtectedRoute allowedRoles={['Admin', 'Manager']}>
+                          <Agent />
+                        </ProtectedRoute>
+                      } 
+                    />
+                    
+                    {/* Reports - Admin and Manager only */}
+                    <Route 
+                      path="/reports" 
+                      element={
+                        <ProtectedRoute allowedRoles={['Admin', 'Manager']}>
+                          <Reports />
+                        </ProtectedRoute>
+                      } 
+                    />
+                    
+                    {/* Settings - Admin only */}
+                    <Route 
+                      path="/settings" 
+                      element={
+                        <ProtectedRoute allowedRoles={['Admin']}>
+                          <Settings />
+                        </ProtectedRoute>
+                      } 
+                    />
                   </Routes>
                 </SidebarInset>
               </SidebarProvider>

@@ -20,59 +20,75 @@ import {
   SidebarMenuItem,
   SidebarMenuButton,
 } from "@/components/ui/sidebar";
-
-
-// Sample data
-const data = {
-  user: {
-    name: "Admin",
-    email: "admin@example.com",
-    avatar: "/avatars/shadcn.jpg",
-  },
-  navMain: [
-    {
-      title: "Dashboard",
-      url: "/",
-      icon: LayoutDashboard,
-      isActive: true,
-    },
-    {
-      title: "Call Evaluations",
-      url: "/call_evaluations",
-      icon: PhoneCall,
-    },
-    {
-      title: "Upload",
-      url: "/upload",
-      icon: Upload,
-    },
-    {
-      title: "Agent",
-      url: "/agent",
-      icon: Users,
-    },
-    {
-      title: "Reports",
-      url: "/reports",
-      icon: FileText,
-    },
-    {
-      title: "Settings",
-      url: "/settings",
-      icon: Settings,
-    },
-  ],
-};
+import { getCurrentUser, isAdminOrManager, isAdmin } from "@/lib/permissions";  // ← ADD THIS
 
 export function AppSidebar(props) {
+  const user = getCurrentUser();  // ← ADD THIS
+  
+  // Build navigation items based on role
+  const getNavItems = () => {
+    const baseItems = [
+      {
+        title: "Dashboard",
+        url: "/",
+        icon: LayoutDashboard,
+        isActive: true,
+      },
+      {
+        title: "Call Evaluations",
+        url: "/call_evaluations",
+        icon: PhoneCall,
+      },
+    ];
+    
+    // Admin and Manager see these
+    if (isAdminOrManager()) {
+      baseItems.push(
+        {
+          title: "Upload",
+          url: "/upload",
+          icon: Upload,
+        },
+        {
+          title: "Agent",
+          url: "/agent",
+          icon: Users,
+        },
+        {
+          title: "Reports",
+          url: "/reports",
+          icon: FileText,
+        }
+      );
+    }
+    
+    // Only Admin sees Settings
+    if (isAdmin()) {
+      baseItems.push({
+        title: "Settings",
+        url: "/settings",
+        icon: Settings,
+      });
+    }
+    
+    return baseItems;
+  };
+  
+  const data = {
+    user: {
+      name: user?.full_name || "User",
+      email: user?.email || "user@example.com",
+      avatar: "/avatars/shadcn.jpg",
+    },
+    navMain: getNavItems(),
+  };
+
   return (
     <Sidebar collapsible="icon" {...props}>
       <SidebarHeader>
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton
-              size="lg"
-            >
+            <SidebarMenuButton size="lg">
               <a href="#">
                 <div className="flex items-center">
                   <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-amber-50">

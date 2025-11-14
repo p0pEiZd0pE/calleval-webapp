@@ -25,6 +25,14 @@ from audit_logger import (
 # CHANGED: Import the function instead of the module
 from init_storage import initialize_persistent_storage
 from auth_routes import router as auth_router
+from auth import (
+    get_current_user,
+    get_current_active_admin,
+    get_current_admin_or_manager,
+    get_current_active_user,
+    check_resource_access,
+    filter_data_by_role
+)
 
 
 settings_router = APIRouter()
@@ -1013,12 +1021,13 @@ async def root():
 async def upload_audio(
     file: UploadFile = File(...),
     agent_id: str = Form(...),
-    background_tasks: BackgroundTasks = None,
+    current_user = Depends(get_current_admin_or_manager),  # ADDED: Admin/Manager only
+    background_tasks: BackgroundTasks = BackgroundTasks(),
     db: Session = Depends(get_db)
 ):
-    """Upload and process audio file with agent assignment"""
+    """Upload audio file for evaluation - Admin/Manager only"""
     
-    if not file.filename.endswith(('.mp3', '.wav', '.m4a', '.ogg')):
+    if not file.filename.endswith(('.mp3', '.wav', '.m4a')):
         raise HTTPException(status_code=400, detail="Invalid file type")
     
     # Verify agent exists
@@ -1048,7 +1057,12 @@ async def upload_audio(
     db.commit()
     
     # ADD AUDIT LOG
-    log_call_upload(call_id, file.filename, agent.agentName, user="Admin")
+    log_call_upload(
+        call_id=call_id,
+        filename=file.filename,
+        agent_name=agent.agentName,
+        user=current_user.full_name  # ADDED: Track who uploaded
+    )
     
     background_tasks.add_task(process_call, call_id, file_path)
     
@@ -1062,41 +1076,49 @@ async def upload_audio(
 
 
 @app.get("/api/calls/{call_id}")
-async def get_call(call_id: str, db: Session = Depends(get_db)):
-    """Get call evaluation results"""
+async def get_call(
+    call_id: str,
+    current_user = Depends(get_current_user),  # ADDED: Require authentication
+    db: Session = Depends(get_db)
+):
+    """
+    Get call evaluation results with access control
+    - Admin/Manager: Can view any call
+    - Agent: Can only view their own calls
+    """
     call = db.query(CallEvaluation).filter(CallEvaluation.id == call_id).first()
     
     if not call:
         raise HTTPException(status_code=404, detail="Call not found")
     
+    # ADDED: Check if user has permission to view this call
+    if current_user.role == "Agent" and call.agent_id != current_user.id:
+        raise HTTPException(
+            status_code=403,
+            detail="You don't have permission to access this call"
+        )
+    
+    # Parse JSON fields if they exist
     bert_analysis = json.loads(call.bert_analysis) if call.bert_analysis else None
     wav2vec2_analysis = json.loads(call.wav2vec2_analysis) if call.wav2vec2_analysis else None
     binary_scores = json.loads(call.binary_scores) if call.binary_scores else None
-    speakers = json.loads(call.speakers) if call.speakers else None
-    
-    # ADD THIS CODE BLOCK:
-    # Parse segments from scores field
-    segments = []
-    if call.scores:
-        try:
-            scores_data = json.loads(call.scores)
-            segments = scores_data.get("segments", [])
-        except:
-            pass
+    transcript = json.loads(call.transcript) if call.transcript else None
     
     return {
         "id": call.id,
         "filename": call.filename,
         "status": call.status,
         "analysis_status": call.analysis_status,
-        "transcript": call.transcript,
-        "segments": segments,  # ADD THIS LINE
         "duration": call.duration,
         "score": call.score,
+        "agent_id": call.agent_id,
+        "agent_name": call.agent_name,
         "bert_analysis": bert_analysis,
         "wav2vec2_analysis": wav2vec2_analysis,
         "binary_scores": binary_scores,
-        "speakers": speakers,
+        "transcript": transcript,
+        "processing_time": call.processing_time,
+        "error_message": call.error_message,
         "created_at": call.created_at.isoformat() if call.created_at else None,
         "updated_at": call.updated_at.isoformat() if call.updated_at else None,
     }
@@ -1196,43 +1218,41 @@ async def retry_call_processing(
     
 
 @app.delete("/api/calls/{call_id}")
-async def delete_call(call_id: str, db: Session = Depends(get_db)):
-    """Delete a call recording and all associated data"""
+async def delete_call(
+    call_id: str,
+    current_user = Depends(get_current_active_admin),  # ADDED: Admin only
+    db: Session = Depends(get_db)
+):
+    """Delete call evaluation - Admin only"""
     try:
-        # Get the call from database
         call = db.query(CallEvaluation).filter(CallEvaluation.id == call_id).first()
         
         if not call:
             raise HTTPException(status_code=404, detail="Call not found")
         
-        # Store info for logging before deletion
         filename = call.filename
         file_path = call.file_path
-        agent_id = call.agent_id
+        agent_name = call.agent_name
         
-        # Delete the audio file from disk
+        # Delete audio file if it exists
         if file_path and os.path.exists(file_path):
             try:
                 os.remove(file_path)
                 print(f"✓ Deleted audio file: {file_path}")
             except Exception as e:
-                print(f"⚠ Warning: Could not delete audio file: {e}")
-                # Continue with database deletion even if file deletion fails
+                print(f"⚠ Failed to delete audio file: {e}")
         
-        # Delete the call record from database
+        # Delete from database
         db.delete(call)
         db.commit()
         
-        # Add audit log
-        log_call_deleted(call_id, filename, user="Admin")
-        
-        # Update agent stats if the call had a score
-        if agent_id:
-            try:
-                update_agent_stats(agent_id, db)
-                print(f"✓ Updated agent stats for {agent_id}")
-            except Exception as e:
-                print(f"⚠ Warning: Could not update agent stats: {e}")
+        # ADD AUDIT LOG
+        log_call_deleted(
+            call_id=call_id,
+            filename=filename,
+            agent_name=agent_name,
+            user=current_user.full_name  # ADDED: Track who deleted
+        )
         
         print(f"✓ Call {call_id} deleted successfully")
         
@@ -1251,9 +1271,22 @@ async def delete_call(call_id: str, db: Session = Depends(get_db)):
 
 
 @app.get("/api/calls")
-async def list_calls(db: Session = Depends(get_db)):
-    """List all call evaluations"""
+async def list_calls(
+    current_user = Depends(get_current_user),  # ADDED: Require authentication
+    db: Session = Depends(get_db)
+):
+    """
+    List call evaluations based on user role:
+    - Admin/Manager: See all calls
+    - Agent: See only their own calls
+    """
     calls = db.query(CallEvaluation).order_by(CallEvaluation.created_at.desc()).all()
+    
+    # ADDED: Filter calls based on role
+    if current_user.role == "Agent":
+        # Agents only see their own calls
+        calls = [call for call in calls if call.agent_id == current_user.id]
+    # Admin and Manager see all calls (no filtering needed)
     
     return [{
         "id": call.id,
@@ -1290,8 +1323,11 @@ async def get_temp_audio(call_id: str, db: Session = Depends(get_db)):
 
 
 @app.get("/api/agents")
-async def get_all_agents(db: Session = Depends(get_db)):
-    """Get all agents"""
+async def get_all_agents(
+    current_user = Depends(get_current_admin_or_manager),  # ADDED: Require Admin or Manager
+    db: Session = Depends(get_db)
+):
+    """Get all agents - Admin/Manager only"""
     try:
         agents = db.query(Agent).all()
         return agents
@@ -1301,8 +1337,12 @@ async def get_all_agents(db: Session = Depends(get_db)):
 
 
 @app.get("/api/agents/{agent_id}")
-async def get_agent(agent_id: str, db: Session = Depends(get_db)):
-    """Get a specific agent by ID"""
+async def get_agent(
+    agent_id: str,
+    current_user = Depends(get_current_user),  # ADDED: Require authentication
+    db: Session = Depends(get_db)
+):
+    """Get a specific agent by ID - Authenticated users"""
     agent = db.query(Agent).filter(Agent.agentId == agent_id).first()
     
     if not agent:
@@ -1311,66 +1351,91 @@ async def get_agent(agent_id: str, db: Session = Depends(get_db)):
     return agent
 
 
-@app.post("/api/agents", response_model=AgentResponse)
-async def create_agent(agent: AgentCreate, db: Session = Depends(get_db)):
-    """Create a new agent"""
+@app.post("/api/agents")
+async def create_agent(
+    agent: AgentCreate,
+    current_user = Depends(get_current_admin_or_manager),  # ADDED: Admin/Manager only
+    db: Session = Depends(get_db)
+):
+    """Create new agent - Admin/Manager only"""
     try:
-        # Generate unique agent ID
-        agent_id = f"AGT-{datetime.now().strftime('%Y%m')}-{str(uuid.uuid4().int)[:6]}"
+        # Check if agent ID already exists
+        existing_agent = db.query(Agent).filter(Agent.agentId == agent.agentId).first()
+        if existing_agent:
+            raise HTTPException(status_code=400, detail="Agent ID already exists")
         
         # Create new agent
-        db_agent = Agent(
-            agentId=agent_id,
+        new_agent = Agent(
+            agentId=agent.agentId,
             agentName=agent.agentName,
             position=agent.position,
-            status=agent.status,
-            avgScore=agent.avgScore or 0.0,
-            callsHandled=agent.callsHandled or 0
+            status=agent.status or "Active",
+            avgScore=0.0,
+            callsHandled=0
         )
         
-        db.add(db_agent)
+        db.add(new_agent)
         db.commit()
-        db.refresh(db_agent)
+        db.refresh(new_agent)
         
         # ADD AUDIT LOG
-        log_agent_created(db_agent.agentId, db_agent.agentName, user="Admin")
+        log_agent_created(
+            agent_id=new_agent.agentId,
+            agent_name=new_agent.agentName,
+            user=current_user.full_name  # ADDED: Track who created
+        )
         
-        return db_agent
+        return new_agent
+        
+    except HTTPException:
+        raise
     except Exception as e:
         db.rollback()
         print(f"Error creating agent: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.put("/api/agents/{agent_id}", response_model=AgentResponse)
+@app.put("/api/agents/{agent_id}")
 async def update_agent(
-    agent_id: str, 
-    agent_update: AgentUpdate, 
+    agent_id: str,
+    agent_update: AgentUpdate,
+    current_user = Depends(get_current_admin_or_manager),  # ADDED: Admin/Manager only
     db: Session = Depends(get_db)
 ):
-    """Update an existing agent"""
-    db_agent = db.query(Agent).filter(Agent.agentId == agent_id).first()
-    
-    if not db_agent:
-        raise HTTPException(status_code=404, detail="Agent not found")
-    
+    """Update agent information - Admin/Manager only"""
     try:
+        agent = db.query(Agent).filter(Agent.agentId == agent_id).first()
+        
+        if not agent:
+            raise HTTPException(status_code=404, detail="Agent not found")
+        
         # Track changes for audit log
-        update_data = agent_update.dict(exclude_unset=True)
+        changes = {}
         
-        # Update only provided fields
-        for field, value in update_data.items():
-            setattr(db_agent, field, value)
+        if agent_update.agentName is not None:
+            changes['agentName'] = agent_update.agentName
+            agent.agentName = agent_update.agentName
+        if agent_update.position is not None:
+            changes['position'] = agent_update.position
+            agent.position = agent_update.position
+        if agent_update.status is not None:
+            changes['status'] = agent_update.status
+            agent.status = agent_update.status
         
-        db_agent.updated_at = datetime.utcnow()
         db.commit()
-        db.refresh(db_agent)
         
         # ADD AUDIT LOG
-        if update_data:
-            log_agent_updated(agent_id, db_agent.agentName, update_data, user="Admin")
+        log_agent_updated(
+            agent_id=agent.agentId,
+            agent_name=agent.agentName,
+            changes=changes,
+            user=current_user.full_name  # ADDED: Track who updated
+        )
         
-        return db_agent
+        return agent
+        
+    except HTTPException:
+        raise
     except Exception as e:
         db.rollback()
         print(f"Error updating agent: {str(e)}")
@@ -1378,24 +1443,38 @@ async def update_agent(
 
 
 @app.delete("/api/agents/{agent_id}")
-async def delete_agent(agent_id: str, db: Session = Depends(get_db)):
-    """Delete an agent"""
-    db_agent = db.query(Agent).filter(Agent.agentId == agent_id).first()
-    
-    if not db_agent:
-        raise HTTPException(status_code=404, detail="Agent not found")
-    
+async def delete_agent(
+    agent_id: str,
+    current_user = Depends(get_current_active_admin),  # ADDED: Admin only
+    db: Session = Depends(get_db)
+):
+    """Delete an agent - Admin only"""
     try:
-        # Store name before deleting for audit log
-        agent_name = db_agent.agentName
+        agent = db.query(Agent).filter(Agent.agentId == agent_id).first()
         
-        db.delete(db_agent)
+        if not agent:
+            raise HTTPException(status_code=404, detail="Agent not found")
+        
+        agent_name = agent.agentName
+        
+        # Delete related call evaluations first (or handle as needed)
+        db.query(CallEvaluation).filter(CallEvaluation.agent_id == agent_id).update(
+            {"agent_id": None, "agent_name": f"{agent_name} (Deleted)"}
+        )
+        
+        # Delete the agent
+        db.delete(agent)
         db.commit()
         
         # ADD AUDIT LOG
-        log_agent_deleted(agent_id, agent_name, user="Admin")
+        log_agent_deleted(
+            agent_id=agent_id,
+            agent_name=agent_name,
+            user=current_user.full_name  # ADDED: Track who deleted
+        )
         
         return {"message": "Agent deleted successfully", "agentId": agent_id}
+        
     except Exception as e:
         db.rollback()
         print(f"Error deleting agent: {str(e)}")
@@ -1403,12 +1482,27 @@ async def delete_agent(agent_id: str, db: Session = Depends(get_db)):
     
 
 @app.get("/api/agents/{agent_id}/calls")
-async def get_agent_calls(agent_id: str, db: Session = Depends(get_db)):
-    """Get all calls for a specific agent"""
+async def get_agent_calls(
+    agent_id: str,
+    current_user = Depends(get_current_user),  # ADDED: Require authentication
+    db: Session = Depends(get_db)
+):
+    """
+    Get all calls for a specific agent
+    - Admin/Manager: Can view any agent's calls
+    - Agent: Can only view their own calls
+    """
     agent = db.query(Agent).filter(Agent.agentId == agent_id).first()
     
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
+    
+    # ADDED: Check if user has permission to view this agent's calls
+    if current_user.role == "Agent" and current_user.id != agent_id:
+        raise HTTPException(
+            status_code=403,
+            detail="You can only view your own calls"
+        )
     
     calls = db.query(CallEvaluation).filter(
         CallEvaluation.agent_id == agent_id
@@ -1434,10 +1528,23 @@ async def get_agent_calls(agent_id: str, db: Session = Depends(get_db)):
 
 
 @app.get("/api/agents/stats/summary")
-async def get_agent_stats(db: Session = Depends(get_db)):
-    """Get aggregate statistics for all agents"""
+async def get_agent_stats(
+    current_user = Depends(get_current_user),  # ADDED: Require authentication
+    db: Session = Depends(get_db)
+):
+    """
+    Get aggregate statistics for agents
+    - Admin/Manager: See all agent stats
+    - Agent: See only their own stats
+    """
     try:
-        agents = db.query(Agent).all()
+        # ADDED: Filter agents based on role
+        if current_user.role == "Agent":
+            # Agent sees only their own stats
+            agents = db.query(Agent).filter(Agent.agentId == current_user.id).all()
+        else:
+            # Admin/Manager see all agents
+            agents = db.query(Agent).all()
         
         if not agents:
             return {
@@ -1466,8 +1573,12 @@ async def get_agent_stats(db: Session = Depends(get_db)):
     
 
 @app.post("/api/reports")
-async def create_report(report: ReportCreate, db: Session = Depends(get_db)):
-    """Create a new report record"""
+async def create_report(
+    report: ReportRequest,
+    current_user = Depends(get_current_admin_or_manager),  # ADDED: Admin/Manager only
+    db: Session = Depends(get_db)
+):
+    """Create evaluation report - Admin/Manager only"""
     try:
         import uuid
         
@@ -1520,8 +1631,11 @@ async def create_report(report: ReportCreate, db: Session = Depends(get_db)):
 
 
 @app.get("/api/reports")
-async def get_reports(db: Session = Depends(get_db)):
-    """Get all generated reports"""
+async def list_reports(
+    current_user = Depends(get_current_admin_or_manager),  # ADDED: Admin/Manager only
+    db: Session = Depends(get_db)
+):
+    """List all reports - Admin/Manager only"""
     try:
         from database import Report
         reports = db.query(Report).order_by(Report.created_at.desc()).all()

@@ -1,5 +1,6 @@
 """
 Authentication utilities for JWT tokens and password hashing
+Enhanced with Role-Based Access Control (RBAC)
 """
 from datetime import datetime, timedelta
 from typing import Optional
@@ -23,8 +24,7 @@ pwd_context = CryptContext(
 )
 
 # OAuth2 scheme for token extraction
-# Points to the form-based login endpoint for /docs authorization
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login/form")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
@@ -93,6 +93,10 @@ async def get_current_user(
         db.close()
 
 
+# ============================================================================
+# ROLE-BASED ACCESS CONTROL DEPENDENCIES
+# ============================================================================
+
 async def get_current_active_admin(current_user = Depends(get_current_user)):
     """Dependency to ensure the current user is an admin"""
     if current_user.role != "Admin":
@@ -101,3 +105,79 @@ async def get_current_active_admin(current_user = Depends(get_current_user)):
             detail="Not enough permissions. Admin access required."
         )
     return current_user
+
+
+async def get_current_admin_or_manager(current_user = Depends(get_current_user)):
+    """Dependency to ensure the current user is an admin or manager"""
+    if current_user.role not in ["Admin", "Manager"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not enough permissions. Admin or Manager access required."
+        )
+    return current_user
+
+
+async def get_current_active_user(current_user = Depends(get_current_user)):
+    """Dependency to ensure user is active (any role)"""
+    if not current_user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="User account is inactive"
+        )
+    return current_user
+
+
+def check_resource_access(current_user, resource_owner_id: str, allow_manager: bool = True):
+    """
+    Helper function to check if user can access a specific resource
+    
+    Args:
+        current_user: The authenticated user
+        resource_owner_id: The ID of the user who owns the resource
+        allow_manager: Whether managers should have access (default: True)
+    
+    Returns:
+        bool: True if access allowed
+    
+    Raises:
+        HTTPException: If access denied
+    """
+    # Admins can access everything
+    if current_user.role == "Admin":
+        return True
+    
+    # Managers can access if allowed
+    if allow_manager and current_user.role == "Manager":
+        return True
+    
+    # Users can access their own resources
+    if current_user.id == resource_owner_id:
+        return True
+    
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="You don't have permission to access this resource"
+    )
+
+
+def filter_data_by_role(current_user, data_list, owner_id_field: str = "agent_id"):
+    """
+    Filter data based on user role
+    
+    Args:
+        current_user: The authenticated user
+        data_list: List of data to filter
+        owner_id_field: Field name that contains the owner ID
+    
+    Returns:
+        Filtered list based on user permissions
+    """
+    # Admin and Manager can see all data
+    if current_user.role in ["Admin", "Manager"]:
+        return data_list
+    
+    # Agents can only see their own data
+    if current_user.role == "Agent":
+        return [item for item in data_list if getattr(item, owner_id_field, None) == current_user.id]
+    
+    return []

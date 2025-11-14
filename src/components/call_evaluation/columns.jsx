@@ -32,6 +32,7 @@ import { Separator } from "@/components/ui/separator"
 import { useState } from "react"
 import { API_ENDPOINTS } from "@/config/api"
 import { toast } from "sonner"
+import Can from '@/components/Can'
 
 // Score Details Dialog Component with Audio Player and Diarized Transcript
 function ScoreDetailsDialog({ callId }) {
@@ -1053,13 +1054,15 @@ export const columns = [
                 <Download className="mr-2 h-4 w-4" />
                 Download Recording
               </DropdownMenuItem>
-              <DropdownMenuItem 
-                onClick={() => setDeleteDialogOpen(true)}
-                className="text-destructive focus:text-destructive"
-              >
-                <Trash2 className="mr-2 h-4 w-4" />
-                Delete Recording
-              </DropdownMenuItem>
+              <Can role="Admin">
+                <DropdownMenuItem 
+                  onClick={() => setDeleteDialogOpen(true)}
+                  className="text-destructive focus:text-destructive"
+                >
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Delete Recording
+                </DropdownMenuItem>
+              </Can>
             </DropdownMenuContent>
           </DropdownMenu>
 

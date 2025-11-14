@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react'
 import { columns } from '@/components/agent/columns'
 import { DataTable } from '@/components/agent/data-table'
+import Can from '@/components/Can'
 import { AgentCallsDialog } from './agent-calls-dialog'
 import {
   Card,
@@ -275,24 +276,28 @@ export default function AgentDirectory({ onAgentSelect, onCallsUpdate }) {
                   >
                     View Calls
                   </DropdownMenuItem>
-                  <DropdownMenuItem 
-                    onSelect={(e) => {
-                      e.preventDefault()
-                      setTimeout(() => {
-                        setEditingAgent(agent)
-                        setIsEditDialogOpen(true)
-                      }, 0)
-                    }}
-                  >
-                    Edit Profile
-                  </DropdownMenuItem>
+                  <Can roles={['Admin', 'Manager']}>
+                    <DropdownMenuItem 
+                      onSelect={(e) => {
+                        e.preventDefault()
+                        setTimeout(() => {
+                          setEditingAgent(agent)
+                          setIsEditDialogOpen(true)
+                        }, 0)
+                      }}
+                    >
+                      Edit Profile
+                    </DropdownMenuItem>
+                  </Can>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem 
-                    className="text-red-600"
-                    onClick={() => handleDeleteAgent(agent.agentId)}
-                  >
-                    Delete Agent
-                  </DropdownMenuItem>
+                  <Can role="Admin">
+                    <DropdownMenuItem 
+                      className="text-red-600"
+                      onClick={() => handleDeleteAgent(agent.agentId)}
+                    >
+                      Delete Agent
+                    </DropdownMenuItem>
+                  </Can>
                 </DropdownMenuContent>
               </DropdownMenu>
             )
@@ -321,54 +326,57 @@ export default function AgentDirectory({ onAgentSelect, onCallsUpdate }) {
                 <RefreshCw className="h-4 w-4 mr-2" />
                 Refresh
               </Button>
-              <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-                <DialogTrigger asChild>
-                  <Button className="gap-2" size="sm">
-                    <Plus className="h-4 w-4" />
-                    Add Agent
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="sm:max-w-[500px]">
-                  <DialogHeader>
-                    <DialogTitle>Add New Agent</DialogTitle>
-                    <DialogDescription>
-                      Enter the details of the new agent. Click save when you're done.
-                    </DialogDescription>
-                  </DialogHeader>
-                  <div className="grid gap-4 py-4">
-                    <div className="grid gap-2">
-                      <Label htmlFor="agentName">Agent Name *</Label>
-                      <Input
-                        id="agentName"
-                        value={newAgent.agentName}
-                        onChange={(e) => setNewAgent({...newAgent, agentName: e.target.value})}
-                      />
-                    </div>
-                    <div className="grid gap-2">
-                      <Label htmlFor="position">Position *</Label>
-                      <Select 
-                        value={newAgent.position} 
-                        onValueChange={(value) => setNewAgent({...newAgent, position: value})}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select position" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="Customer Support">Customer Support</SelectItem>
-                          <SelectItem value="Technical Support">Technical Support</SelectItem>
-                          <SelectItem value="Sales Representative">Sales Representative</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                  <DialogFooter>
-                    <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
-                      Cancel
+              {/* WRAP ADD AGENT BUTTON WITH PERMISSION CHECK */}
+              <Can roles={['Admin', 'Manager']}>
+                <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+                  <DialogTrigger asChild>
+                    <Button className="gap-2" size="sm">
+                      <Plus className="h-4 w-4" />
+                      Add Agent
                     </Button>
-                    <Button onClick={handleAddAgent}>Save Agent</Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
+                  </DialogTrigger>
+                  <DialogContent className="sm:max-w-[500px]">
+                    <DialogHeader>
+                      <DialogTitle>Add New Agent</DialogTitle>
+                      <DialogDescription>
+                        Enter the details of the new agent. Click save when you're done.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="grid gap-4 py-4">
+                      <div className="grid gap-2">
+                        <Label htmlFor="agentName">Agent Name *</Label>
+                        <Input
+                          id="agentName"
+                          value={newAgent.agentName}
+                          onChange={(e) => setNewAgent({...newAgent, agentName: e.target.value})}
+                        />
+                      </div>
+                      <div className="grid gap-2">
+                        <Label htmlFor="position">Position *</Label>
+                        <Select 
+                          value={newAgent.position} 
+                          onValueChange={(value) => setNewAgent({...newAgent, position: value})}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select position" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="Customer Support">Customer Support</SelectItem>
+                            <SelectItem value="Technical Support">Technical Support</SelectItem>
+                            <SelectItem value="Sales Representative">Sales Representative</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    <DialogFooter>
+                      <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
+                        Cancel
+                      </Button>
+                      <Button onClick={handleAddAgent}>Save Agent</Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+              </Can>
             </div>
           </div>
         </CardHeader>

@@ -57,17 +57,28 @@ def log_action(
         db.close()
 
 
+def get_user_role(user_name: str) -> str:
+    """
+    Helper function to get user role based on user name
+    You can enhance this to query the database if needed
+    """
+    # For now, return generic role
+    # TODO: Query database to get actual role if needed
+    return "User"
+
+
 # Convenience functions for common actions
 
-def log_call_upload(call_id: str, filename: str, agent_name: str, user: str = "Admin"):
-    """Log when a call is uploaded"""
+def log_call_upload(call_id: str, filename: str, agent_name: str, user: str = "System"):
+    """Log when a call is uploaded - enhanced with user tracking"""
     log_action(
         action="create",
         resource_type="call",
         resource_id=call_id,
-        message=f"Uploaded call '{filename}' for agent {agent_name}",
-        user=user,
-        role="Admin"
+        message=f"Uploaded call '{filename}' for agent '{agent_name}'",
+        user=user,  # NOW TRACKS WHO UPLOADED
+        role=get_user_role(user),
+        details={"filename": filename, "agent_name": agent_name}
     )
 
 def log_call_analysis_complete(call_id: str, filename: str, score: float):
@@ -89,7 +100,7 @@ def log_agent_created(agent_id: str, agent_name: str, user: str = "Admin"):
         resource_id=agent_id,
         message=f"Created new agent: '{agent_name}'",
         user=user,
-        role="Admin"
+        role=get_user_role(user)
     )
 
 def log_agent_updated(agent_id: str, agent_name: str, changes: dict, user: str = "Admin"):
@@ -101,7 +112,7 @@ def log_agent_updated(agent_id: str, agent_name: str, changes: dict, user: str =
         resource_id=agent_id,
         message=f"Updated agent '{agent_name}': {change_desc}",
         user=user,
-        role="Admin",
+        role=get_user_role(user),
         details=changes
     )
 
@@ -113,7 +124,7 @@ def log_agent_deleted(agent_id: str, agent_name: str, user: str = "Admin"):
         resource_id=agent_id,
         message=f"Deleted agent: '{agent_name}'",
         user=user,
-        role="Admin"
+        role=get_user_role(user)
     )
 
 def log_settings_updated(changes: dict, user: str = "Admin"):
@@ -150,15 +161,16 @@ def log_user_login(user: str, role: str, ip_address: str = None):
         ip_address=ip_address
     )
 
-def log_call_deleted(call_id: str, filename: str, user: str = "Admin"):
+def log_call_deleted(call_id: str, filename: str, agent_name: str, user: str = "Admin"):
     """Log when a call is deleted"""
     log_action(
         action="delete",
         resource_type="call",
         resource_id=call_id,
-        message=f"Deleted call '{filename}'",
+        message=f"Deleted call '{filename}' for agent '{agent_name}'",
         user=user,
-        role="Admin"
+        role=get_user_role(user),
+        details={"filename": filename, "agent_name": agent_name}
     )
 
 def log_call_cancel(call_id: str, filename: str, user: str = "Admin"):
