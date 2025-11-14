@@ -35,6 +35,13 @@ class UserLogin(BaseModel):
     password: str
 
 
+# FIXED: Separate OAuth2-compliant token response (for /docs)
+class OAuth2Token(BaseModel):
+    access_token: str
+    token_type: str
+
+
+# Token response with user info (for frontend app)
 class Token(BaseModel):
     access_token: str
     token_type: str
@@ -93,7 +100,7 @@ async def register(user_data: UserRegister, db: Session = Depends(get_db)):
 @router.post("/login", response_model=Token)
 async def login(user_credentials: UserLogin, db: Session = Depends(get_db)):
     """
-    Login endpoint - returns JWT token
+    Login endpoint - returns JWT token with user info (for frontend)
     """
     # Find user by username
     user = db.query(User).filter(User.username == user_credentials.username).first()
@@ -125,15 +132,17 @@ async def login(user_credentials: UserLogin, db: Session = Depends(get_db)):
     }
 
 
-@router.post("/login/form", response_model=Token)
+@router.post("/login/form", response_model=OAuth2Token)
 async def login_form(
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: Session = Depends(get_db)
 ):
     """
-    OAuth2 compatible login endpoint (for OAuth2PasswordBearer)
+    OAuth2 compatible login endpoint (for OAuth2PasswordBearer and /docs)
     Uses form data instead of JSON
+    FIXED: Returns only access_token and token_type (OAuth2 spec compliant)
     """
+    # Find user by username
     user = db.query(User).filter(User.username == form_data.username).first()
     
     if not user or not verify_password(form_data.password, user.hashed_password):
@@ -156,10 +165,10 @@ async def login_form(
     # Create access token
     access_token = create_access_token(data={"sub": user.id, "role": user.role})
     
+    # FIXED: Return ONLY access_token and token_type (OAuth2 compliant)
     return {
         "access_token": access_token,
-        "token_type": "bearer",
-        "user": user.to_dict()
+        "token_type": "bearer"
     }
 
 
