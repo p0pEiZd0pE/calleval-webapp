@@ -23,7 +23,8 @@ pwd_context = CryptContext(
 )
 
 # OAuth2 scheme for token extraction
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
+# Points to the form-based login endpoint for /docs authorization
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login/form")
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
