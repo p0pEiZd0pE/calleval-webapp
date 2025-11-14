@@ -64,34 +64,50 @@ def verify_token(token: str) -> dict:
         )
 
 
+def _get_db_dependency():
+    """Helper to get database dependency dynamically to avoid circular imports"""
+    from database import get_db
+    return get_db
+
+
 async def get_current_user(
-    token: str = Depends(oauth2_scheme)
+    token: str = Depends(oauth2_scheme),
+    db: Session = Depends(_get_db_dependency)  # FIXED: Proper dependency injection
 ):
-    """Dependency to get the current authenticated user"""
-    from database import get_db, User  # Import here to avoid circular dependency
+    """
+    Dependency to get the current authenticated user
+    FIXED: Now uses proper FastAPI dependency injection for database session
+    """
+    from database import User  # Import here to avoid circular dependency
     
-    # Get database session
-    db = next(get_db())
+    # Verify token
+    payload = verify_token(token)
+    user_id: str = payload.get("sub")
     
-    try:
-        payload = verify_token(token)
-        user_id: str = payload.get("sub")
-        if user_id is None:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Could not validate credentials"
-            )
-        
-        user = db.query(User).filter(User.id == user_id).first()
-        if user is None or not user.is_active:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="User not found or inactive"
-            )
-        
-        return user
-    finally:
-        db.close()
+    if user_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not validate credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    # Get user from database
+    user = db.query(User).filter(User.id == user_id).first()
+    
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User not found",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="User account is inactive"
+        )
+    
+    return user
 
 
 # ============================================================================
