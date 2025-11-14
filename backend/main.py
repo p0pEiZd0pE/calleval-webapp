@@ -1574,7 +1574,7 @@ async def get_agent_stats(
 
 @app.post("/api/reports")
 async def create_report(
-    report: ReportRequest,
+    report: ReportCreate,
     current_user = Depends(get_current_admin_or_manager),  # ADDED: Admin/Manager only
     db: Session = Depends(get_db)
 ):
