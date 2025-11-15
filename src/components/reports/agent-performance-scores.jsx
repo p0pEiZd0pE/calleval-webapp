@@ -13,6 +13,7 @@ import {
   ChartTooltipContent,
 } from "@/components/ui/chart"
 import { API_ENDPOINTS } from '@/config/api'
+import { authenticatedFetch } from '@/lib/api'
 
 const chartConfig = {
   score: {
@@ -33,10 +34,10 @@ export default function AgentPerformanceScores({ filters }) {
     try {
       setLoading(true);
       
-      const agentsResponse = await fetch(API_ENDPOINTS.AGENTS);
+      const agentsResponse = await authenticatedFetch(API_ENDPOINTS.AGENTS);
       const agentsData = await agentsResponse.json();
       
-      const callsResponse = await fetch(API_ENDPOINTS.CALLS);
+      const callsResponse = await authenticatedFetch(API_ENDPOINTS.CALLS);
       const callsData = await callsResponse.json();
       
       // Filter and calculate scores

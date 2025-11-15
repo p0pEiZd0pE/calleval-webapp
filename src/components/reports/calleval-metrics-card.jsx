@@ -10,6 +10,7 @@ import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
 import { CheckCircle2, XCircle } from "lucide-react"
 import { API_ENDPOINTS } from '@/config/api'
+import { authenticatedFetch } from '@/lib/api'
 
 const SCORECARD_METRICS = {
   // All Phases - 10%
@@ -44,7 +45,7 @@ export default function CallEvalMetricsCard({ filters }) {
     try {
       setLoading(true);
       
-      const callsResponse = await fetch(API_ENDPOINTS.CALLS);
+      const callsResponse = await authenticatedFetch(API_ENDPOINTS.CALLS);
       const callsData = await callsResponse.json();
       
       // Filter calls based on filters

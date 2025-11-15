@@ -2,6 +2,7 @@ import React from 'react'
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { FileText, BarChart2, Phone, Users } from "lucide-react";
 import { API_ENDPOINTS } from '@/config/api';
+import { authenticatedFetch } from '@/lib/api';
 
 export default function StatsCards({ filters }) {
   const [stats, setStats] = React.useState({
@@ -21,11 +22,11 @@ export default function StatsCards({ filters }) {
       setLoading(true);
       
       // Fetch calls
-      const callsResponse = await fetch(API_ENDPOINTS.CALLS);
+      const callsResponse = await authenticatedFetch(API_ENDPOINTS.CALLS);
       const callsData = await callsResponse.json();
       
       // Fetch agents
-      const agentsResponse = await fetch(API_ENDPOINTS.AGENT_STATS);
+      const agentsResponse = await authenticatedFetch(API_ENDPOINTS.AGENT_STATS);
       const agentsData = await agentsResponse.json();
       
       // Apply filters

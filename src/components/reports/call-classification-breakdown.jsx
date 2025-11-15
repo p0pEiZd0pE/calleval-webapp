@@ -15,6 +15,7 @@ import {
   ChartTooltipContent,
 } from "@/components/ui/chart"
 import { API_ENDPOINTS } from '@/config/api'
+import { authenticatedFetch } from '@/lib/api'
 
 const chartConfig = {
   excellent: {
@@ -44,7 +45,7 @@ export default function CallClassificationBreakdown({ filters }) {
     try {
       setLoading(true);
       
-      const callsResponse = await fetch(API_ENDPOINTS.CALLS);
+      const callsResponse = await authenticatedFetch(API_ENDPOINTS.CALLS);
       let callsData = await callsResponse.json();
       
       // Filter by agent if specified
