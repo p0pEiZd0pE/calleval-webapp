@@ -64,19 +64,24 @@ def verify_token(token: str) -> dict:
         )
 
 
-def _get_db_dependency():
-    """Helper to get database dependency dynamically to avoid circular imports"""
+# CRITICAL FIX: Properly handle database dependency without circular imports
+def get_db_dependency():
+    """
+    Wrapper to get database session - resolves circular import
+    This function is called by FastAPI's dependency injection system
+    """
     from database import get_db
-    return get_db
+    # This returns the generator function itself, which FastAPI will then call
+    yield from get_db()
 
 
 async def get_current_user(
     token: str = Depends(oauth2_scheme),
-    db: Session = Depends(_get_db_dependency)  # FIXED: Proper dependency injection
+    db: Session = Depends(get_db_dependency)  # FIXED: Proper dependency injection!
 ):
     """
     Dependency to get the current authenticated user
-    FIXED: Now uses proper FastAPI dependency injection for database session
+    FIXED: Database session is properly managed by FastAPI's dependency system
     """
     from database import User  # Import here to avoid circular dependency
     
