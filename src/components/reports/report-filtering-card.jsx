@@ -4,6 +4,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Button } from "@/components/ui/button"
 import { Funnel } from 'lucide-react';
 import { API_ENDPOINTS } from '@/config/api';
+import { authenticatedFetch } from '@/lib/api';
 
 export default function ReportFilteringCard({ onFilterChange }) {
   const [agents, setAgents] = React.useState([]);
@@ -17,7 +18,7 @@ export default function ReportFilteringCard({ onFilterChange }) {
 
   const fetchAgents = async () => {
     try {
-      const response = await fetch(API_ENDPOINTS.AGENTS);
+      const response = await authenticatedFetch(API_ENDPOINTS.AGENTS);
       const data = await response.json();
       setAgents(data);
     } catch (error) {

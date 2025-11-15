@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
 import { toast } from "sonner"
+import { authenticatedFetch } from '@/lib/api';
 
 export default function UploadSection({ onUploadComplete }) {
   const [files, setFiles] = useState([]);
@@ -35,7 +36,7 @@ export default function UploadSection({ onUploadComplete }) {
   const fetchAgents = async () => {
     try {
       setLoadingAgents(true);
-      const response = await fetch(API_ENDPOINTS.AGENTS);
+      const response = await authenticatedFetch(API_ENDPOINTS.AGENTS);
       if (!response.ok) throw new Error('Failed to fetch agents');
       const data = await response.json();
       setAgents(data.filter(agent => agent.status === 'Active'));

@@ -11,6 +11,7 @@ import { CalendarIcon } from "lucide-react";
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { toast } from "sonner";
 import { API_ENDPOINTS } from '@/config/api';
+import { authenticatedFetch } from '@/lib/api';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
@@ -49,7 +50,7 @@ export default function GenerateReportCard({ filters, onReportGenerated }) {
         endDate.setHours(23, 59, 59, 999);
       }
       
-      const callsResponse = await fetch(API_ENDPOINTS.CALLS);
+      const callsResponse = await authenticatedFetch(API_ENDPOINTS.CALLS);
       const callsData = await callsResponse.json();
       
       console.log('Date range:', { startDate, endDate });
