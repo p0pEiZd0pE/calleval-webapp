@@ -9,6 +9,7 @@ import {
 import { columns } from './columns';
 import { DataTable } from './data-table';
 import { API_ENDPOINTS } from '@/config/api';
+import { authenticatedFetch } from '@/lib/api';
 
 export default function RecentlyUploadedCall({ refreshTrigger }) {
   const [data, setData] = useState([]);
@@ -18,7 +19,7 @@ export default function RecentlyUploadedCall({ refreshTrigger }) {
   const fetchCalls = async () => {
     try {
       console.log('Fetching calls from:', API_ENDPOINTS.CALLS);
-      const response = await fetch(API_ENDPOINTS.CALLS);
+      const response = await authenticatedFetch(API_ENDPOINTS.CALLS);
       
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);

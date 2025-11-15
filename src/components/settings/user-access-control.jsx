@@ -30,6 +30,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { authenticatedFetch } from '@/lib/api';
 
 export default function UserAccessControl() {
   const [data, setData] = React.useState([])
@@ -48,7 +49,7 @@ export default function UserAccessControl() {
   const fetchUsers = async () => {
     setLoading(true)
     try {
-      const response = await fetch(`${API_URL}/api/users`)
+      const response = await authenticatedFetch(`${API_URL}/api/users`)
       if (response.ok) {
         const users = await response.json()
         setData(users)
@@ -65,7 +66,7 @@ export default function UserAccessControl() {
 
   const handleAddUser = async () => {
     try {
-      const response = await fetch(`${API_URL}/api/users`, {
+      const response = await authenticatedFetch(`${API_URL}/api/users`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newUser),

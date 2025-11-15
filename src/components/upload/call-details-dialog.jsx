@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge"
 import { Loader2, User, Phone, UserCircle } from "lucide-react"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
+import { authenticatedFetch } from '@/lib/api';
 
 export function CallDetailsDialog({ callId, open, onOpenChange, children }) {
   const [callData, setCallData] = useState(null);
@@ -28,7 +29,7 @@ export function CallDetailsDialog({ callId, open, onOpenChange, children }) {
     
     try {
       const backendUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-      const response = await fetch(`${backendUrl}/api/calls/${callId}`);
+      const response = await authenticatedFetch(`${backendUrl}/api/calls/${callId}`);
       
       if (!response.ok) {
         throw new Error('Failed to fetch call details');

@@ -18,6 +18,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
+import { authenticatedFetch } from '@/lib/api';
 
 export function AgentCallsDialog({ agentId, open, onOpenChange, children }) {
   const [data, setData] = useState(null);
@@ -35,7 +36,7 @@ export function AgentCallsDialog({ agentId, open, onOpenChange, children }) {
     setError(null);
     
     try {
-      const response = await fetch(API_ENDPOINTS.AGENT_CALLS(agentId));
+      const response = await authenticatedFetch(API_ENDPOINTS.AGENT_CALLS(agentId));
       
       if (!response.ok) {
         throw new Error('Failed to fetch agent calls');

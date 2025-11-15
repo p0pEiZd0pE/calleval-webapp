@@ -5,6 +5,7 @@ import { CallDetailsDialog } from "./call-details-dialog"
 import { useState } from "react"
 import { API_ENDPOINTS } from '@/config/api'
 import { toast } from "sonner"
+import { authenticatedFetch } from '@/lib/api';
 
 export const columns = [
   {
@@ -135,7 +136,7 @@ export const columns = [
         setCancelling(true); // Reusing the same loading state
         try {
           const backendUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-          const response = await fetch(`${backendUrl}/api/calls/${call.id}/retry`, {
+          const response = await authenticatedFetch(`${backendUrl}/api/calls/${call.id}/retry`, {
             method: 'POST',
           });
 
@@ -159,7 +160,7 @@ export const columns = [
           const backendUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
           
           // Download audio with proper filename extraction
-          const audioResponse = await fetch(`${backendUrl}/api/temp-audio/${call.id}`);
+          const audioResponse = await authenticatedFetch(`${backendUrl}/api/temp-audio/${call.id}`);
           
           if (!audioResponse.ok) {
             throw new Error('Failed to download audio');
@@ -187,7 +188,7 @@ export const columns = [
           window.URL.revokeObjectURL(audioUrl);
           
           // Download diarized transcription with CallEval metrics
-          const response = await fetch(`${backendUrl}/api/calls/${call.id}`);
+          const response = await authenticatedFetch(`${backendUrl}/api/calls/${call.id}`);
           if (response.ok) {
             const data = await response.json();
             

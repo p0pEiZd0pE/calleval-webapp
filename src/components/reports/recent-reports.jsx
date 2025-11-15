@@ -19,6 +19,7 @@ import { Badge } from "@/components/ui/badge"
 import { Download } from "lucide-react"
 import { toast } from "sonner"
 import { API_ENDPOINTS } from '@/config/api'
+import { authenticatedFetch } from '@/lib/api';
 
 export default function RecentReports({ refreshTrigger }) {
   const [reports, setReports] = React.useState([]);
@@ -31,7 +32,7 @@ export default function RecentReports({ refreshTrigger }) {
   const fetchReports = async () => {
     try {
       setLoading(true);
-      const response = await fetch(API_ENDPOINTS.REPORTS);
+      const response = await authenticatedFetch(API_ENDPOINTS.REPORTS);
       
       if (!response.ok) {
         throw new Error('Failed to fetch reports');
@@ -53,11 +54,11 @@ export default function RecentReports({ refreshTrigger }) {
       toast.info(`Regenerating ${formatReportType(report.type)}...`);
       
       // Fetch the calls data again
-      const callsResponse = await fetch(API_ENDPOINTS.CALLS);
+      const callsResponse = await authenticatedFetch(API_ENDPOINTS.CALLS);
       const callsData = await callsResponse.json();
       
       // Get the report details to check date range
-      const reportResponse = await fetch(API_ENDPOINTS.REPORT_DETAIL(report.id));
+      const reportResponse = await authenticatedFetch(API_ENDPOINTS.REPORT_DETAIL(report.id));
       const reportDetails = await reportResponse.json();
       
       let filteredCalls = callsData;

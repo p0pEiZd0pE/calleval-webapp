@@ -33,6 +33,7 @@ import { useState } from "react"
 import { API_ENDPOINTS } from "@/config/api"
 import { toast } from "sonner"
 import Can from '@/components/Can'
+import { authenticatedFetch } from '@/lib/api';
 
 // Score Details Dialog Component with Audio Player and Diarized Transcript
 function ScoreDetailsDialog({ callId }) {
@@ -43,7 +44,7 @@ function ScoreDetailsDialog({ callId }) {
   const fetchCallDetails = async () => {
     setLoading(true)
     try {
-      const response = await fetch(API_ENDPOINTS.CALL_DETAIL(callId))
+      const response = await authenticatedFetch(API_ENDPOINTS.CALL_DETAIL(callId))
       const data = await response.json()
       setCallData(data)
     } catch (error) {
@@ -75,7 +76,7 @@ function ScoreDetailsDialog({ callId }) {
       const backendUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
       
       // Fetch audio file
-      const audioResponse = await fetch(`${backendUrl}/api/temp-audio/${callId}`)
+      const audioResponse = await authenticatedFetch(`${backendUrl}/api/temp-audio/${callId}`)
       
       if (!audioResponse.ok) {
         throw new Error('Failed to fetch audio file')

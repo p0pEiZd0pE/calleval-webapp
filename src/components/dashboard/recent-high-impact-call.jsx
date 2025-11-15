@@ -22,6 +22,7 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { API_ENDPOINTS } from '@/config/api'
 import { DateRangeContext } from './date-picker'
+import { authenticatedFetch } from '@/lib/api';
 
 export function RecentHighImpactCalls() {
   const navigate = useNavigate()
@@ -36,7 +37,7 @@ export function RecentHighImpactCalls() {
   const fetchRecentCalls = async () => {
     try {
       setLoading(true)
-      const response = await fetch(API_ENDPOINTS.CALLS)
+      const response = await authenticatedFetch(API_ENDPOINTS.CALLS)
       const callsData = await response.json()
       
       // Filter by date range and get recent 5 calls

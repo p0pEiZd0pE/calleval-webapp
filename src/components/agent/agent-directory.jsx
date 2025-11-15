@@ -41,6 +41,7 @@ import { Plus, Filter, X, RefreshCw, MoreHorizontal } from 'lucide-react'
 import { Badge } from "@/components/ui/badge"
 import { API_ENDPOINTS } from '@/config/api'
 import { toast } from "sonner"
+import { authenticatedFetch } from '@/lib/api';
 
 export default function AgentDirectory({ onAgentSelect, onCallsUpdate }) {
   const [data, setData] = useState([])
@@ -69,7 +70,7 @@ export default function AgentDirectory({ onAgentSelect, onCallsUpdate }) {
   const fetchAgents = async () => {
     try {
       setLoading(true)
-      const response = await fetch(API_ENDPOINTS.AGENTS)
+      const response = await authenticatedFetch(API_ENDPOINTS.AGENTS)
       if (!response.ok) throw new Error('Failed to fetch agents')
       const agents = await response.json()
       setData(agents)

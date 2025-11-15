@@ -19,6 +19,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { API_ENDPOINTS } from '@/config/api'
 import { DateRangeContext } from './date-picker'
+import { authenticatedFetch } from '@/lib/api';
 
 export function PerformanceLeaderboard({ className = "" }) {
   const navigate = useNavigate()
@@ -35,11 +36,11 @@ export function PerformanceLeaderboard({ className = "" }) {
       setLoading(true)
       
       // Fetch agents
-      const agentsResponse = await fetch(API_ENDPOINTS.AGENTS)
+      const agentsResponse = await authenticatedFetch(API_ENDPOINTS.AGENTS)
       const agentsData = await agentsResponse.json()
       
       // Fetch all calls
-      const callsResponse = await fetch(API_ENDPOINTS.CALLS)
+      const callsResponse = await authenticatedFetch(API_ENDPOINTS.CALLS)
       const callsData = await callsResponse.json()
       
       // Filter calls by date range

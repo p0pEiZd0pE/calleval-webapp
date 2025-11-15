@@ -19,6 +19,7 @@ import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { toast } from 'sonner'
 import { API_URL } from '@/config/api'
+import { authenticatedFetch } from '@/lib/api';
 
 export default function GeneralApplicationSettings() {
   const [emailNotifications, setEmailNotifications] = React.useState(true)
@@ -38,7 +39,7 @@ export default function GeneralApplicationSettings() {
     setIsLoading(true)
     try {
       console.log('Fetching settings from:', `${API_URL}/api/settings`)
-      const response = await fetch(`${API_URL}/api/settings`)
+      const response = await authenticatedFetch(`${API_URL}/api/settings`)
       
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`)
