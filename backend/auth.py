@@ -1,6 +1,7 @@
 """
 Authentication utilities for JWT tokens and password hashing
 Enhanced with Role-Based Access Control (RBAC)
+PRODUCTION FIX
 """
 from datetime import datetime, timedelta
 from typing import Optional
@@ -10,6 +11,9 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 import os
+
+# Import get_db at module level to avoid runtime issues
+from database import get_db
 
 # JWT Configuration
 SECRET_KEY = os.getenv("JWT_SECRET_KEY", "your-secret-key-change-this-in-production")
@@ -24,7 +28,6 @@ pwd_context = CryptContext(
 )
 
 # OAuth2 scheme for token extraction
-# FIXED: Changed from /api/auth/login to /api/auth/login/form for /docs authorization compatibility
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login/form")
 
 
@@ -64,26 +67,15 @@ def verify_token(token: str) -> dict:
         )
 
 
-# CRITICAL FIX: Properly handle database dependency without circular imports
-def get_db_dependency():
-    """
-    Wrapper to get database session - resolves circular import
-    This function is called by FastAPI's dependency injection system
-    """
-    from database import get_db
-    # This returns the generator function itself, which FastAPI will then call
-    yield from get_db()
-
-
 async def get_current_user(
     token: str = Depends(oauth2_scheme),
-    db: Session = Depends(get_db_dependency)  # FIXED: Proper dependency injection!
+    db: Session = Depends(get_db)  # FIXED: Direct import at module level!
 ):
     """
     Dependency to get the current authenticated user
-    FIXED: Database session is properly managed by FastAPI's dependency system
+    FIXED: Now properly uses FastAPI's dependency injection with direct import
     """
-    from database import User  # Import here to avoid circular dependency
+    from database import User  # Import User here since it's only needed at runtime
     
     # Verify token
     payload = verify_token(token)
