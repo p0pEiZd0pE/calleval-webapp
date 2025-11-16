@@ -130,9 +130,8 @@ export default function AgentDirectory({ onAgentSelect, onCallsUpdate }) {
     }
 
     try {
-      const response = await fetch(API_ENDPOINTS.AGENTS, {
+      const response = await authenticatedFetch(API_ENDPOINTS.AGENTS, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           agentName: newAgent.agentName,
           position: newAgent.position,
@@ -162,9 +161,8 @@ export default function AgentDirectory({ onAgentSelect, onCallsUpdate }) {
     if (!editingAgent) return
 
     try {
-      const response = await fetch(API_ENDPOINTS.AGENT_DETAIL(editingAgent.agentId), {
+      const response = await authenticatedFetch(API_ENDPOINTS.AGENT_DETAIL(editingAgent.agentId), {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           agentName: editingAgent.agentName,
           position: editingAgent.position,

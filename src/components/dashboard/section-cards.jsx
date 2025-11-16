@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/card'
 import { API_ENDPOINTS } from '@/config/api'
 import { DateRangeContext } from './date-picker'
+import { authenticatedFetch } from '@/lib/api';
 
 export function SectionCards() {
   const { dateRange } = useContext(DateRangeContext)
@@ -36,11 +37,11 @@ export function SectionCards() {
       setLoading(true)
       
       // Fetch calls data
-      const callsResponse = await fetch(API_ENDPOINTS.CALLS)
+      const callsResponse = await authenticatedFetch(API_ENDPOINTS.CALLS)
       const callsData = await callsResponse.json()
       
       // Fetch agent stats
-      const agentsResponse = await fetch(API_ENDPOINTS.AGENT_STATS)
+      const agentsResponse = await authenticatedFetch(API_ENDPOINTS.AGENT_STATS)
       const agentsData = await agentsResponse.json()
       
       // Filter calls by date range

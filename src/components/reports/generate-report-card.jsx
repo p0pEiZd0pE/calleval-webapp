@@ -264,11 +264,8 @@ export default function GenerateReportCard({ filters, onReportGenerated }) {
         avg_score: parseFloat(avgScore.toFixed(1))
       };
       
-      const response = await fetch(API_ENDPOINTS.REPORTS, {
+      const response = await authenticatedFetch(API_ENDPOINTS.REPORTS, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify(reportMetadata)
       });
       
