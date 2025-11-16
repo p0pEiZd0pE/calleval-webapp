@@ -35,6 +35,15 @@ class UserLogin(BaseModel):
     password: str
 
 
+class ChangePassword(BaseModel):
+    old_password: str
+    new_password: str
+
+
+class ResetPassword(BaseModel):
+    new_password: str
+
+
 # FIXED: Separate OAuth2-compliant token response (for /docs)
 class OAuth2Token(BaseModel):
     access_token: str
@@ -255,21 +264,20 @@ async def delete_user(
 
 @router.post("/change-password")
 async def change_password(
-    old_password: str,
-    new_password: str,
+    password_data: ChangePassword,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Change current user's password"""
     # Verify old password
-    if not verify_password(old_password, current_user.hashed_password):
+    if not verify_password(password_data.old_password, current_user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Incorrect password"
         )
     
     # Update password
-    current_user.hashed_password = get_password_hash(new_password)
+    current_user.hashed_password = get_password_hash(password_data.new_password)
     current_user.updated_at = datetime.utcnow()
     db.commit()
     
@@ -279,7 +287,7 @@ async def change_password(
 @router.post("/users/{user_id}/reset-password")
 async def reset_user_password(
     user_id: str,
-    new_password: str,
+    password_data: ResetPassword,
     current_user: User = Depends(get_current_active_admin),
     db: Session = Depends(get_db)
 ):
@@ -293,7 +301,7 @@ async def reset_user_password(
         )
     
     # Update password
-    user.hashed_password = get_password_hash(new_password)
+    user.hashed_password = get_password_hash(password_data.new_password)
     user.updated_at = datetime.utcnow()
     db.commit()
     
