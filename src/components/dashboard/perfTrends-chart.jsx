@@ -29,6 +29,7 @@ import {
   ToggleGroupItem,
 } from "@/components/ui/toggle-group"
 import { API_ENDPOINTS } from '@/config/api'
+import { authenticatedFetch } from '@/lib/api';
 import { DateRangeContext } from './date-picker'
 
 const chartConfig = {
@@ -58,7 +59,7 @@ export function ChartAreaInteractive({ className = "" }) {
   const fetchChartData = async () => {
     try {
       setLoading(true)
-      const response = await fetch(API_ENDPOINTS.CALLS)
+      const response = await authenticatedFetch(API_ENDPOINTS.CALLS)
       const calls = await response.json()
       
       console.log('=== CHART DATA DEBUG ===')
