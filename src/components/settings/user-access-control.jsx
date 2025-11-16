@@ -149,18 +149,24 @@ export default function UserAccessControl() {
 
   const handleUpdateProfile = async () => {
     try {
-      const response = await authenticatedFetch(`${API_URL}/api/users/${currentUser.id}`, {
+      const response = await authenticatedFetch(`${API_URL}/api/auth/users/${currentUser.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(profileData),
       })
 
       if (response.ok) {
+        const updatedUser = await response.json()
+        
+        // Update localStorage with new user data
+        localStorage.setItem('user', JSON.stringify(updatedUser))
+        
         toast.success('Profile updated successfully')
         setIsEditProfileOpen(false)
         fetchCurrentUser()
       } else {
-        throw new Error('Failed to update profile')
+        const errorData = await response.json()
+        toast.error(errorData.detail || 'Failed to update profile')
       }
     } catch (error) {
       console.error('Update profile error:', error)
