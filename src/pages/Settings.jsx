@@ -12,6 +12,11 @@ export default function Settings() {
     setAuditLogsRefreshKey(prev => prev + 1);
   };
 
+  const handleSettingsActionComplete = () => {
+    // Trigger refresh of AuditLogs component
+    setAuditLogsRefreshKey(prev => prev + 1);
+  };
+
   return (
     <>
         <SiteHeader />
@@ -23,7 +28,7 @@ export default function Settings() {
             </div>
             <UserAccessControl onUserActionComplete={handleUserActionComplete} />
             <div className="flex flex-row gap-4">
-                <GeneralApplicationSettings />
+                <GeneralApplicationSettings onSettingsActionComplete={handleSettingsActionComplete} />
                 <AuditLogs refreshTrigger={auditLogsRefreshKey} />
             </div>
         </div>

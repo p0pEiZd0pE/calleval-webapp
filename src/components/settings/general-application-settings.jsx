@@ -21,7 +21,7 @@ import { toast } from 'sonner'
 import { API_URL } from '@/config/api'
 import { authenticatedFetch } from '@/lib/api';
 
-export default function GeneralApplicationSettings() {
+export default function GeneralApplicationSettings({ onSettingsActionComplete }) {
   const [emailNotifications, setEmailNotifications] = React.useState(true)
   const [language, setLanguage] = React.useState('English')
   const [retentionPeriod, setRetentionPeriod] = React.useState('12')
@@ -146,6 +146,11 @@ export default function GeneralApplicationSettings() {
       
       // Ensure localStorage is synced after save
       localStorage.setItem('theme', settingsData.theme)
+      
+      // ADDED: Trigger audit log refresh
+      if (onSettingsActionComplete) {
+        onSettingsActionComplete()
+      }
     } catch (error) {
       console.error('Save error:', error)
       toast.error(`Failed to save settings: ${error.message}`)
