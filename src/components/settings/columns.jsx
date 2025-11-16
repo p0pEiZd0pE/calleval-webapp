@@ -272,7 +272,7 @@ const DeleteUserDialog = ({ user, open, onOpenChange, onSuccess }) => {
   )
 }
 
-export const columns = [
+export const createColumns = (refreshData) => [
   {
     accessorKey: "id",
     header: "User ID",
@@ -307,10 +307,10 @@ export const columns = [
       const [resetPasswordOpen, setResetPasswordOpen] = React.useState(false)
       const [deleteOpen, setDeleteOpen] = React.useState(false)
       
-      // Callback to refresh data (will be passed from parent component)
+      // Use the passed refreshData function directly
       const onSuccess = () => {
-        if (row.table.options.meta?.refreshData) {
-          row.table.options.meta.refreshData()
+        if (refreshData) {
+          refreshData()
         }
       }
  
@@ -364,3 +364,6 @@ export const columns = [
     },
   }
 ]
+
+// For backward compatibility - export static columns
+export const columns = createColumns()

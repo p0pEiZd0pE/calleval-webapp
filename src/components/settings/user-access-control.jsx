@@ -8,7 +8,7 @@ import {
 } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Plus, Edit, Lock } from "lucide-react"
-import { columns } from '@/components/settings/columns'
+import { createColumns } from '@/components/settings/columns'
 import { DataTable } from '@/components/settings/data-table'
 import { API_URL } from '@/config/api'
 import { toast } from 'sonner'
@@ -58,28 +58,6 @@ export default function UserAccessControl() {
     new_password: '',
     confirm_password: ''
   })
-  
-  React.useEffect(() => {
-    fetchCurrentUser()
-    fetchUsers()
-  }, [])
-
-  const fetchCurrentUser = async () => {
-    try {
-      const response = await authenticatedFetch(`${API_URL}/api/auth/me`)
-      if (response.ok) {
-        const user = await response.json()
-        setCurrentUser(user)
-        setProfileData({
-          full_name: user.full_name,
-          email: user.email,
-          username: user.username
-        })
-      }
-    } catch (error) {
-      console.error('Failed to fetch current user:', error)
-    }
-  }
 
   const fetchUsers = async () => {
     setLoading(true)
@@ -111,6 +89,31 @@ export default function UserAccessControl() {
       toast.error('Failed to load users')
     } finally {
       setLoading(false)
+    }
+  }
+
+  // Create columns with fetchUsers callback
+  const columns = React.useMemo(() => createColumns(fetchUsers), [])
+  
+  React.useEffect(() => {
+    fetchCurrentUser()
+    fetchUsers()
+  }, [])
+
+  const fetchCurrentUser = async () => {
+    try {
+      const response = await authenticatedFetch(`${API_URL}/api/auth/me`)
+      if (response.ok) {
+        const user = await response.json()
+        setCurrentUser(user)
+        setProfileData({
+          full_name: user.full_name,
+          email: user.email,
+          username: user.username
+        })
+      }
+    } catch (error) {
+      console.error('Failed to fetch current user:', error)
     }
   }
 
@@ -457,9 +460,6 @@ export default function UserAccessControl() {
             <DataTable 
               columns={columns} 
               data={data}
-              meta={{
-                refreshData: fetchUsers
-              }}
             />
           )}
         </CardContent>
