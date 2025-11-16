@@ -274,3 +274,27 @@ async def change_password(
     db.commit()
     
     return {"message": "Password changed successfully"}
+
+
+@router.post("/users/{user_id}/reset-password")
+async def reset_user_password(
+    user_id: str,
+    new_password: str,
+    current_user: User = Depends(get_current_active_admin),
+    db: Session = Depends(get_db)
+):
+    """Reset another user's password (Admin only)"""
+    user = db.query(User).filter(User.id == user_id).first()
+    
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+    
+    # Update password
+    user.hashed_password = get_password_hash(new_password)
+    user.updated_at = datetime.utcnow()
+    db.commit()
+    
+    return {"message": "Password reset successfully"}

@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button"
 
-export function DataTable({ columns, data }) {
+export function DataTable({ columns, data, meta }) {
   const [sorting, setSorting] = React.useState([]);
 
   const table = useReactTable({
@@ -29,6 +29,7 @@ export function DataTable({ columns, data }) {
     state: {
       sorting,
     },
+    meta,
   });
 
   return (

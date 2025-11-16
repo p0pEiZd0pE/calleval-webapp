@@ -87,7 +87,9 @@ export default function UserAccessControl() {
       const response = await authenticatedFetch(`${API_URL}/api/users`)
       if (response.ok) {
         const users = await response.json()
-        setData(users)
+        // Filter out the current admin user from the table
+        const filteredUsers = users.filter(user => user.id !== currentUser?.id)
+        setData(filteredUsers)
       } else {
         toast.error('Failed to load users')
       }
@@ -433,7 +435,13 @@ export default function UserAccessControl() {
               Loading users...
             </div>
           ) : (
-            <DataTable columns={columns} data={data} />
+            <DataTable 
+              columns={columns} 
+              data={data}
+              meta={{
+                refreshData: fetchUsers
+              }}
+            />
           )}
         </CardContent>
       </Card>
