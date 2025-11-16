@@ -5,6 +5,13 @@ import GeneralApplicationSettings from '../components/settings/general-applicati
 import AuditLogs from '../components/settings/audit-logs'
 
 export default function Settings() {
+  const [auditLogsRefreshKey, setAuditLogsRefreshKey] = React.useState(0);
+
+  const handleUserActionComplete = () => {
+    // Trigger refresh of AuditLogs component
+    setAuditLogsRefreshKey(prev => prev + 1);
+  };
+
   return (
     <>
         <SiteHeader />
@@ -14,10 +21,10 @@ export default function Settings() {
                   System Settings
                 </h2>
             </div>
-            <UserAccessControl />
+            <UserAccessControl onUserActionComplete={handleUserActionComplete} />
             <div className="flex flex-row gap-4">
                 <GeneralApplicationSettings />
-                <AuditLogs />
+                <AuditLogs refreshTrigger={auditLogsRefreshKey} />
             </div>
         </div>
     </>

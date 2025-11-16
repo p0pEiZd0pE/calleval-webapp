@@ -32,7 +32,7 @@ import {
 } from "@/components/ui/select"
 import { authenticatedFetch } from '@/lib/api';
 
-export default function UserAccessControl() {
+export default function UserAccessControl({ onUserActionComplete }) {
   const [data, setData] = React.useState([])
   const [loading, setLoading] = React.useState(true)
   const [isDialogOpen, setIsDialogOpen] = React.useState(false)
@@ -92,8 +92,16 @@ export default function UserAccessControl() {
     }
   }
 
-  // Create columns with fetchUsers callback
-  const columns = React.useMemo(() => createColumns(fetchUsers), [])
+  // Wrapper function that refreshes both user table AND audit logs
+  const handleRefreshAfterUserAction = React.useCallback(() => {
+    fetchUsers(); // Refresh user table
+    if (onUserActionComplete) {
+      onUserActionComplete(); // Trigger audit log refresh
+    }
+  }, [onUserActionComplete]);
+
+  // Create columns with the wrapper callback
+  const columns = React.useMemo(() => createColumns(handleRefreshAfterUserAction), [handleRefreshAfterUserAction])
   
   React.useEffect(() => {
     fetchCurrentUser()
@@ -139,7 +147,7 @@ export default function UserAccessControl() {
         toast.success('User added successfully')
         setIsDialogOpen(false)
         setNewUser({ full_name: '', username: '', email: '', password: '', role: 'Agent' })
-        fetchUsers()
+        handleRefreshAfterUserAction() // Trigger both refreshes
       } else {
         const errorData = await response.json()
         toast.error(errorData.detail || 'Failed to add user')
@@ -167,6 +175,11 @@ export default function UserAccessControl() {
         toast.success('Profile updated successfully')
         setIsEditProfileOpen(false)
         fetchCurrentUser()
+        
+        // Trigger audit log refresh
+        if (onUserActionComplete) {
+          onUserActionComplete()
+        }
       } else {
         const errorData = await response.json()
         toast.error(errorData.detail || 'Failed to update profile')
@@ -202,6 +215,11 @@ export default function UserAccessControl() {
         toast.success('Password changed successfully')
         setIsChangePasswordOpen(false)
         setPasswordData({ old_password: '', new_password: '', confirm_password: '' })
+        
+        // Trigger audit log refresh
+        if (onUserActionComplete) {
+          onUserActionComplete()
+        }
       } else {
         const errorData = await response.json()
         toast.error(errorData.detail || 'Failed to change password')
@@ -222,7 +240,7 @@ export default function UserAccessControl() {
               <div>
                 <CardTitle>My Profile</CardTitle>
                 <CardDescription>
-                  View and manage your account information
+                  View and manage your account information.
                 </CardDescription>
               </div>
               <div className="flex gap-2">
@@ -257,6 +275,7 @@ export default function UserAccessControl() {
                           type="password"
                           value={passwordData.new_password}
                           onChange={(e) => setPasswordData({...passwordData, new_password: e.target.value})}
+                          placeholder="Minimum 6 characters"
                         />
                       </div>
                       <div className="grid gap-2">
@@ -453,14 +472,9 @@ export default function UserAccessControl() {
         </CardHeader>
         <CardContent>
           {loading ? (
-            <div className="text-center py-8 text-muted-foreground">
-              Loading users...
-            </div>
+            <div className="text-center py-8">Loading users...</div>
           ) : (
-            <DataTable 
-              columns={columns} 
-              data={data}
-            />
+            <DataTable columns={columns} data={data} />
           )}
         </CardContent>
       </Card>

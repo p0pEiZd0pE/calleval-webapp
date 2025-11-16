@@ -21,7 +21,7 @@ import {
 import { API_URL } from '@/config/api'
 import { toast } from 'sonner'
 
-export default function AuditLogs() {
+export default function AuditLogs({ refreshTrigger }) {
   const [logs, setLogs] = React.useState([])
   const [filteredLogs, setFilteredLogs] = React.useState([])
   const [searchTerm, setSearchTerm] = React.useState('')
@@ -29,7 +29,7 @@ export default function AuditLogs() {
 
   React.useEffect(() => {
     fetchAuditLogs()
-  }, [])
+  }, [refreshTrigger]) // Re-fetch when refreshTrigger changes
 
   React.useEffect(() => {
     if (searchTerm) {
