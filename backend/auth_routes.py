@@ -58,10 +58,13 @@ class UserResponse(BaseModel):
 
 
 @router.post("/register", response_model=UserResponse)
-async def register(user_data: UserRegister, db: Session = Depends(get_db)):
+async def register(
+    user_data: UserRegister, 
+    current_user: User = Depends(get_current_active_admin),  # ADDED: Admin-only authentication
+    db: Session = Depends(get_db)
+):
     """
-    Register a new user
-    Only admins can register new users (you can modify this based on your needs)
+    Register a new user (Admin only)
     """
     # Check if email already exists
     existing_user = db.query(User).filter(User.email == user_data.email).first()
@@ -209,6 +212,8 @@ async def update_user(
         user.full_name = user_data["full_name"]
     if "email" in user_data:
         user.email = user_data["email"]
+    if "username" in user_data:
+        user.username = user_data["username"]
     if "role" in user_data:
         user.role = user_data["role"]
     if "is_active" in user_data:
