@@ -195,3 +195,63 @@ def log_call_retry(call_id: str, filename: str, user: str = "System"):
         user=user,
         role="System"
     )
+
+# ==================== NEW: USER MANAGEMENT AUDIT LOGGING ====================
+
+def log_user_created(user_id: str, username: str, role: str, created_by: str = "Admin"):
+    """Log when a new user is created"""
+    log_action(
+        action="create",
+        resource_type="user",
+        resource_id=user_id,
+        message=f"Created new user: '{username}' with role '{role}'",
+        user=created_by,
+        role="Admin",
+        details={"username": username, "assigned_role": role}
+    )
+
+def log_user_updated(user_id: str, username: str, changes: dict, updated_by: str = "Admin"):
+    """Log when a user is updated"""
+    change_desc = ", ".join([f"{k}={v}" for k, v in changes.items()])
+    log_action(
+        action="update",
+        resource_type="user",
+        resource_id=user_id,
+        message=f"Updated user '{username}': {change_desc}",
+        user=updated_by,
+        role="Admin",
+        details=changes
+    )
+
+def log_user_deleted(user_id: str, username: str, deleted_by: str = "Admin"):
+    """Log when a user is deleted"""
+    log_action(
+        action="delete",
+        resource_type="user",
+        resource_id=user_id,
+        message=f"Deleted user: '{username}'",
+        user=deleted_by,
+        role="Admin"
+    )
+
+def log_password_changed(user_id: str, username: str, changed_by: str):
+    """Log when a user changes their password"""
+    log_action(
+        action="update",
+        resource_type="user",
+        resource_id=user_id,
+        message=f"User '{username}' changed their password",
+        user=changed_by,
+        role=get_user_role(changed_by)
+    )
+
+def log_password_reset(user_id: str, username: str, reset_by: str = "Admin"):
+    """Log when an admin resets a user's password"""
+    log_action(
+        action="update",
+        resource_type="user",
+        resource_id=user_id,
+        message=f"Admin reset password for user '{username}'",
+        user=reset_by,
+        role="Admin"
+    )

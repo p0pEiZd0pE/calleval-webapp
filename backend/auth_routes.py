@@ -1,5 +1,6 @@
 """
 Authentication routes for login, registration, and user management
+Enhanced with audit logging for user management actions
 """
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
@@ -16,6 +17,14 @@ from auth import (
     create_access_token,
     get_current_user,
     get_current_active_admin
+)
+from audit_logger import (
+    log_user_created,
+    log_user_updated,
+    log_user_deleted,
+    log_password_changed,
+    log_password_reset,
+    log_user_login
 )
 
 router = APIRouter(prefix="/api/auth", tags=["authentication"])
@@ -69,7 +78,7 @@ class UserResponse(BaseModel):
 @router.post("/register", response_model=UserResponse)
 async def register(
     user_data: UserRegister, 
-    current_user: User = Depends(get_current_active_admin),  # ADDED: Admin-only authentication
+    current_user: User = Depends(get_current_active_admin),  # Admin-only authentication
     db: Session = Depends(get_db)
 ):
     """
@@ -106,6 +115,14 @@ async def register(
     db.commit()
     db.refresh(new_user)
     
+    # ADD AUDIT LOG
+    log_user_created(
+        user_id=new_user.id,
+        username=new_user.username,
+        role=new_user.role,
+        created_by=current_user.full_name
+    )
+    
     return new_user
 
 
@@ -133,6 +150,12 @@ async def login(user_credentials: UserLogin, db: Session = Depends(get_db)):
     # Update last login
     user.last_login = datetime.utcnow()
     db.commit()
+    
+    # ADD AUDIT LOG
+    log_user_login(
+        user=user.full_name,
+        role=user.role
+    )
     
     # Create access token
     access_token = create_access_token(data={"sub": user.id, "role": user.role})
@@ -173,6 +196,12 @@ async def login_form(
     # Update last login
     user.last_login = datetime.utcnow()
     db.commit()
+    
+    # ADD AUDIT LOG
+    log_user_login(
+        user=user.full_name,
+        role=user.role
+    )
     
     # Create access token
     access_token = create_access_token(data={"sub": user.id, "role": user.role})
@@ -216,20 +245,41 @@ async def update_user(
             detail="User not found"
         )
     
+    # Track changes for audit log
+    changes = {}
+    
     # Update allowed fields
-    if "full_name" in user_data:
+    if "full_name" in user_data and user_data["full_name"] != user.full_name:
+        changes["full_name"] = user_data["full_name"]
         user.full_name = user_data["full_name"]
-    if "email" in user_data:
+    
+    if "email" in user_data and user_data["email"] != user.email:
+        changes["email"] = user_data["email"]
         user.email = user_data["email"]
-    if "username" in user_data:
+    
+    if "username" in user_data and user_data["username"] != user.username:
+        changes["username"] = user_data["username"]
         user.username = user_data["username"]
-    if "role" in user_data:
+    
+    if "role" in user_data and user_data["role"] != user.role:
+        changes["role"] = user_data["role"]
         user.role = user_data["role"]
-    if "is_active" in user_data:
+    
+    if "is_active" in user_data and user_data["is_active"] != user.is_active:
+        changes["is_active"] = user_data["is_active"]
         user.is_active = user_data["is_active"]
     
     user.updated_at = datetime.utcnow()
     db.commit()
+    
+    # ADD AUDIT LOG
+    if changes:
+        log_user_updated(
+            user_id=user.id,
+            username=user.username,
+            changes=changes,
+            updated_by=current_user.full_name
+        )
     
     return user.to_dict()
 
@@ -256,8 +306,17 @@ async def delete_user(
             detail="Cannot delete your own account"
         )
     
+    username = user.username
+    
     db.delete(user)
     db.commit()
+    
+    # ADD AUDIT LOG
+    log_user_deleted(
+        user_id=user_id,
+        username=username,
+        deleted_by=current_user.full_name
+    )
     
     return {"message": "User deleted successfully"}
 
@@ -280,6 +339,13 @@ async def change_password(
     current_user.hashed_password = get_password_hash(password_data.new_password)
     current_user.updated_at = datetime.utcnow()
     db.commit()
+    
+    # ADD AUDIT LOG
+    log_password_changed(
+        user_id=current_user.id,
+        username=current_user.username,
+        changed_by=current_user.full_name
+    )
     
     return {"message": "Password changed successfully"}
 
@@ -304,5 +370,12 @@ async def reset_user_password(
     user.hashed_password = get_password_hash(password_data.new_password)
     user.updated_at = datetime.utcnow()
     db.commit()
+    
+    # ADD AUDIT LOG
+    log_password_reset(
+        user_id=user.id,
+        username=user.username,
+        reset_by=current_user.full_name
+    )
     
     return {"message": "Password reset successfully"}
