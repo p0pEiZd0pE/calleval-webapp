@@ -87,8 +87,21 @@ export default function UserAccessControl() {
       const response = await authenticatedFetch(`${API_URL}/api/users`)
       if (response.ok) {
         const users = await response.json()
+        
+        // Get current user ID from localStorage to filter
+        const userStr = localStorage.getItem('user')
+        let currentUserId = null
+        if (userStr) {
+          try {
+            const userData = JSON.parse(userStr)
+            currentUserId = userData.id
+          } catch (e) {
+            console.error('Failed to parse user data:', e)
+          }
+        }
+        
         // Filter out the current admin user from the table
-        const filteredUsers = users.filter(user => user.id !== currentUser?.id)
+        const filteredUsers = users.filter(user => user.id !== currentUserId)
         setData(filteredUsers)
       } else {
         toast.error('Failed to load users')
