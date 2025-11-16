@@ -84,7 +84,7 @@ export default function UserAccessControl() {
   const fetchUsers = async () => {
     setLoading(true)
     try {
-      const response = await authenticatedFetch(`${API_URL}/api/users`)
+      const response = await authenticatedFetch(`${API_URL}/api/auth/users`)
       if (response.ok) {
         const users = await response.json()
         

@@ -57,7 +57,7 @@ const EditUserDialog = ({ user, open, onOpenChange, onSuccess }) => {
 
   const handleUpdate = async () => {
     try {
-      const response = await authenticatedFetch(`${API_URL}/api/users/${user.id}`, {
+      const response = await authenticatedFetch(`${API_URL}/api/auth/users/${user.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(editData),
@@ -157,7 +157,7 @@ const ResetPasswordDialog = ({ user, open, onOpenChange }) => {
     }
 
     try {
-      const response = await authenticatedFetch(`${API_URL}/api/users/${user.id}/reset-password`, {
+      const response = await authenticatedFetch(`${API_URL}/api/auth/users/${user.id}/reset-password`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ new_password: newPassword }),
@@ -227,7 +227,7 @@ const DeleteUserDialog = ({ user, open, onOpenChange, onSuccess }) => {
   const handleDelete = async () => {
     setDeleting(true)
     try {
-      const response = await authenticatedFetch(`${API_URL}/api/users/${user.id}`, {
+      const response = await authenticatedFetch(`${API_URL}/api/auth/users/${user.id}`, {
         method: 'DELETE',
       })
 
