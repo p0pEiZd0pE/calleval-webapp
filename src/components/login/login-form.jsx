@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label"
 import { toast } from "sonner"
 import { API_URL } from "@/config/api"
 import { Loader2 } from "lucide-react"
+import { fetchAndApplyUserTheme } from "@/lib/theme-utils"
 
 export function LoginForm({ className, ...props }) {
   const [username, setUsername] = React.useState("");
@@ -47,9 +48,23 @@ export function LoginForm({ className, ...props }) {
       localStorage.setItem("user", JSON.stringify(data.user));
       
       toast.success("Login successful!");
-      navigate("/");
+      
+      // ADDED: Fetch and apply user's theme from backend
+      // This ensures theme is consistent across devices/browsers
+      await fetchAndApplyUserTheme();
+      
+      // Redirect based on user role
+      setTimeout(() => {
+        if (data.user.role === 'Agent') {
+          navigate("/agent-dashboard");
+        } else {
+          navigate("/");
+        }
+      }, 500);
+
     } catch (error) {
-      toast.error(error.message || "Invalid credentials");
+      console.error("Login error:", error);
+      toast.error(error.message || "Login failed. Please check your credentials.");
     } finally {
       setLoading(false);
     }
@@ -59,51 +74,45 @@ export function LoginForm({ className, ...props }) {
     <form onSubmit={handleSubmit} className={cn("flex flex-col gap-6", className)} {...props}>
       <div className="flex flex-col items-center gap-2 text-center">
         <h1 className="text-2xl font-bold">Login to your account</h1>
-        <p className="text-muted-foreground text-sm text-balance">
-          Enter your username and password to login
+        <p className="text-balance text-sm text-muted-foreground">
+          Enter your credentials below to login
         </p>
       </div>
-
       <div className="grid gap-6">
-        {/* Username field */}
-        <div className="grid gap-3">
+        <div className="grid gap-2">
           <Label htmlFor="username">Username</Label>
-          <Input 
-            id="username" 
-            type="text" 
-            placeholder="Enter your username" 
-            value={username} 
-            onChange={(e) => setUsername(e.target.value)} 
+          <Input
+            id="username"
+            type="text"
+            placeholder="Enter your username"
+            required
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
             disabled={loading}
-            required 
           />
         </div>
-
-        {/* Password field */}
-        <div className="grid gap-3">
+        <div className="grid gap-2">
           <div className="flex items-center">
             <Label htmlFor="password">Password</Label>
           </div>
-          <Input 
-            id="password" 
-            type="password" 
+          <Input
+            id="password"
+            type="password"
             placeholder="Enter your password"
+            required
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             disabled={loading}
-            required 
           />
         </div>
-
-        {/* Submit button */}
         <Button type="submit" className="w-full" disabled={loading}>
           {loading ? (
             <>
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Signing in...
+              Logging in...
             </>
           ) : (
-            'Login'
+            "Login"
           )}
         </Button>
       </div>

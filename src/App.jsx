@@ -14,16 +14,37 @@ import Agent from "./pages/Agent"
 import Reports from "./pages/Reports"
 import Settings from "./pages/Settings"
 import Login from "./pages/Login"
-import Unauthorized from "./pages/Unauthorized"  // ← NEW
+import Unauthorized from "./pages/Unauthorized"
 import ProtectedRoute from "./components/protected-route"
+import { useEffect } from 'react'
+import { fetchAndApplyUserTheme, applyStoredTheme } from "@/lib/theme-utils"
 
 const App = () => {
+  // ADDED: Sync theme on app initialization
+  useEffect(() => {
+    const syncTheme = async () => {
+      const token = localStorage.getItem('auth_token');
+      
+      if (token) {
+        // User is logged in - fetch theme from backend
+        console.log('User logged in, fetching theme from backend...');
+        await fetchAndApplyUserTheme();
+      } else {
+        // User not logged in - apply theme from localStorage
+        console.log('User not logged in, applying stored theme...');
+        applyStoredTheme();
+      }
+    };
+    
+    syncTheme();
+  }, []); // Run once on mount
+
   return (
     <ThemeProvider defaultTheme="system" storageKey="theme">
       <Routes>
         {/* Public routes */}
         <Route path="/login" element={<Login />} />
-        <Route path="/unauthorized" element={<Unauthorized />} />  {/* ← NEW */}
+        <Route path="/unauthorized" element={<Unauthorized />} />
         
         {/* Protected routes with sidebar */}
         <Route 
