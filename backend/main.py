@@ -710,6 +710,7 @@ def process_call(call_id: str, file_path: str):
     """Background task: Process call with phase-aware evaluation"""
     
     db = SessionLocal()
+    start_time = datetime.now()
     
     try:
         call = db.query(CallEvaluation).filter(CallEvaluation.id == call_id).first()
@@ -962,6 +963,8 @@ def process_call(call_id: str, file_path: str):
             print(f"⚠️ Call {call_id} was cancelled before marking complete")
             return
         # =====================================================================
+
+        processing_time = (datetime.now() - start_time).total_seconds()
         
         # SAVE RESULTS
         call.status = "completed"
@@ -970,6 +973,8 @@ def process_call(call_id: str, file_path: str):
         call.bert_analysis = json.dumps(bert_output_combined)
         call.wav2vec2_analysis = json.dumps(wav2vec2_output) if wav2vec2_output else None
         call.binary_scores = json.dumps(binary_scores)
+        call.processing_time = processing_time
+        call.error_message = None
         
         db.commit()
         db.refresh(call)
@@ -997,6 +1002,7 @@ def process_call(call_id: str, file_path: str):
             if call.status != "cancelled":
                 call.status = "failed"
                 call.analysis_status = f"error: {str(e)}"
+                call.error_message = str(e)
             # =================================================================================
             db.commit()
     
@@ -1117,6 +1123,8 @@ async def get_call(
         "wav2vec2_analysis": wav2vec2_analysis,
         "binary_scores": binary_scores,
         "transcript": transcript,
+        "processing_time": call.processing_time,
+        "error_message": call.error_message,
         "created_at": call.created_at.isoformat() if call.created_at else None,
         "updated_at": call.updated_at.isoformat() if call.updated_at else None,
     }
@@ -1357,12 +1365,14 @@ async def create_agent(
 ):
     """Create new agent - Admin/Manager only"""
     try:
-        # Generate unique agent ID
-        agent_id = f"AGT-{datetime.now().strftime('%Y%m%d%H%M%S')}-{str(uuid.uuid4().int)[:4]}"
+        # Check if agent ID already exists
+        existing_agent = db.query(Agent).filter(Agent.agentId == agent.agentId).first()
+        if existing_agent:
+            raise HTTPException(status_code=400, detail="Agent ID already exists")
         
         # Create new agent
         new_agent = Agent(
-            agentId=agent_id,  # ✅ Use generated ID
+            agentId=agent.agentId,
             agentName=agent.agentName,
             position=agent.position,
             status=agent.status or "Active",

@@ -85,6 +85,10 @@ class CallEvaluation(Base):
     # Legacy columns
     scores = Column(Text, nullable=True)
     speakers = Column(Text, nullable=True)
+
+    # ✅ ADD THESE TWO LINES:
+    processing_time = Column(Float, nullable=True)  # Time in seconds
+    error_message = Column(Text, nullable=True)     # Error details if failed
     
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow)
