@@ -710,7 +710,6 @@ def process_call(call_id: str, file_path: str):
     """Background task: Process call with phase-aware evaluation"""
     
     db = SessionLocal()
-    start_time = datetime.now()
     
     try:
         call = db.query(CallEvaluation).filter(CallEvaluation.id == call_id).first()
@@ -963,8 +962,6 @@ def process_call(call_id: str, file_path: str):
             print(f"⚠️ Call {call_id} was cancelled before marking complete")
             return
         # =====================================================================
-
-        processing_time = (datetime.now() - start_time).total_seconds()
         
         # SAVE RESULTS
         call.status = "completed"
@@ -973,8 +970,6 @@ def process_call(call_id: str, file_path: str):
         call.bert_analysis = json.dumps(bert_output_combined)
         call.wav2vec2_analysis = json.dumps(wav2vec2_output) if wav2vec2_output else None
         call.binary_scores = json.dumps(binary_scores)
-        call.processing_time = processing_time
-        call.error_message = None
         
         db.commit()
         db.refresh(call)
@@ -1002,7 +997,6 @@ def process_call(call_id: str, file_path: str):
             if call.status != "cancelled":
                 call.status = "failed"
                 call.analysis_status = f"error: {str(e)}"
-                call.error_message = str(e)
             # =================================================================================
             db.commit()
     
