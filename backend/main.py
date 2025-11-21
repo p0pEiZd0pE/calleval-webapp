@@ -1370,7 +1370,6 @@ async def create_agent(
     """Create new agent - All authenticated users"""
     try:
         # ✅ AUTO-GENERATE agent ID
-        import uuid
         from datetime import datetime
         timestamp = datetime.now().strftime('%Y%m')
         agent_id = f"AGT-{timestamp}-{str(uuid.uuid4().int)[:6]}"
