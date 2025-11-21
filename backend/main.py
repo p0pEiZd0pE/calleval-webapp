@@ -1102,7 +1102,7 @@ async def get_call(
     bert_analysis = json.loads(call.bert_analysis) if call.bert_analysis else None
     wav2vec2_analysis = json.loads(call.wav2vec2_analysis) if call.wav2vec2_analysis else None
     binary_scores = json.loads(call.binary_scores) if call.binary_scores else None
-    transcript = call.transcript
+    transcript = json.loads(call.transcript) if call.transcript else None
     
     return {
         "id": call.id,
