@@ -1117,8 +1117,6 @@ async def get_call(
         "wav2vec2_analysis": wav2vec2_analysis,
         "binary_scores": binary_scores,
         "transcript": transcript,
-        "processing_time": call.processing_time,
-        "error_message": call.error_message,
         "created_at": call.created_at.isoformat() if call.created_at else None,
         "updated_at": call.updated_at.isoformat() if call.updated_at else None,
     }
