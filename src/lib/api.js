@@ -23,10 +23,15 @@ export function getAuthHeaders() {
 export async function authenticatedFetch(url, options = {}) {
   const token = localStorage.getItem('auth_token');
   
+  // ✓ Only add Content-Type for non-FormData requests
   const headers = {
-    'Content-Type': 'application/json',
     ...options.headers,
   };
+  
+  // Don't set Content-Type for FormData - browser will set it with boundary
+  if (!(options.body instanceof FormData)) {
+    headers['Content-Type'] = 'application/json';
+  }
   
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
