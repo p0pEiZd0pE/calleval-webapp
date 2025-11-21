@@ -1102,7 +1102,7 @@ async def get_call(
     bert_analysis = json.loads(call.bert_analysis) if call.bert_analysis else None
     wav2vec2_analysis = json.loads(call.wav2vec2_analysis) if call.wav2vec2_analysis else None
     binary_scores = json.loads(call.binary_scores) if call.binary_scores else None
-    transcript = json.loads(call.transcript) if call.transcript else None
+    transcript = call.transcript
     
     return {
         "id": call.id,
@@ -1359,14 +1359,12 @@ async def create_agent(
 ):
     """Create new agent - Admin/Manager only"""
     try:
-        # Check if agent ID already exists
-        existing_agent = db.query(Agent).filter(Agent.agentId == agent.agentId).first()
-        if existing_agent:
-            raise HTTPException(status_code=400, detail="Agent ID already exists")
+        # Generate unique agent ID
+        agent_id = f"AGT-{datetime.now().strftime('%Y%m%d%H%M%S')}-{str(uuid.uuid4().int)[:4]}"
         
         # Create new agent
         new_agent = Agent(
-            agentId=agent.agentId,
+            agentId=agent_id,  # ✅ Use generated ID
             agentName=agent.agentName,
             position=agent.position,
             status=agent.status or "Active",
