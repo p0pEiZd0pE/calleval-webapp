@@ -1138,30 +1138,40 @@ async def get_call(
 
 
 @app.post("/api/calls/{call_id}/cancel")
-async def cancel_call_processing(call_id: str, db: Session = Depends(get_db)):
-    """Cancel an ongoing call processing/analysis"""
+async def cancel_call_processing(
+    call_id: str,
+    current_user = Depends(get_current_admin_or_manager),  # ADD THIS LINE
+    db: Session = Depends(get_db)
+):
+    """Cancel an ongoing call processing/analysis - Admin/Manager only"""
     try:
         call = db.query(CallEvaluation).filter(CallEvaluation.id == call_id).first()
         
         if not call:
             raise HTTPException(status_code=404, detail="Call not found")
         
-        # Update call status to cancelled
+        if call.status in ["completed", "failed", "cancelled"]:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Cannot cancel call with status: {call.status}"
+            )
+        
+        # Update status to cancelled
         call.status = "cancelled"
-        call.analysis_status = "cancelled"
+        call.analysis_status = "cancelled by user"
         call.updated_at = datetime.utcnow()
         db.commit()
         
-        # ADD AUDIT LOG
-        log_call_cancel(call_id, call.filename, user="Admin")
+        # Add audit log
+        log_call_cancel(call_id, call.filename)
         
         print(f"✓ Call {call_id} cancelled successfully")
         
         return {
+            "message": "Call processing cancelled successfully",
             "id": call.id,
             "filename": call.filename,
-            "status": "cancelled",
-            "message": "Call processing cancelled successfully"
+            "status": "cancelled"
         }
     except HTTPException:
         raise
@@ -1319,6 +1329,7 @@ async def list_calls(
 @app.get("/api/temp-audio/{call_id}")
 async def get_temp_audio(call_id: str, db: Session = Depends(get_db)):
     """Serve audio file temporarily for Modal to download"""
+    # NO AUTHENTICATION - Modal needs access
     call = db.query(CallEvaluation).filter(CallEvaluation.id == call_id).first()
     
     if not call:

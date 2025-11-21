@@ -81,6 +81,10 @@ class CallEvaluation(Base):
     bert_analysis = Column(Text, nullable=True)
     wav2vec2_analysis = Column(Text, nullable=True)
     binary_scores = Column(Text, nullable=True)
+
+    # Processing metadata
+    processing_time = Column(Float, nullable=True)
+    error_message = Column(Text, nullable=True)
     
     # Legacy columns
     scores = Column(Text, nullable=True)
