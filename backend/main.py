@@ -123,7 +123,6 @@ for url in production_urls:
     if url not in allowed_origins:
         allowed_origins.append(url)
 
-print(f"✓ CORS allowed origins: {allowed_origins}")
 
 app.add_middleware(
     CORSMiddleware,
