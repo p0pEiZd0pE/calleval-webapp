@@ -98,7 +98,7 @@ export default function UploadSection({ onUploadComplete }) {
       }
       
       try {
-        const response = await fetch(API_ENDPOINTS.UPLOAD, {
+        const response = await authenticatedFetch(API_ENDPOINTS.UPLOAD, {
           method: 'POST',
           headers,  // Add auth header
           body: formData,
