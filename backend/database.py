@@ -168,16 +168,24 @@ class AuditLog(Base):
 
 
 # Create all tables
-# Commented out auto-execution to prevent import-time side effects
-# Tables will be created on first database access via get_db()
+# Tables should be created in startup event, not here!
+# This prevents sync loops from repeated Base.metadata.create_all() calls
 # Base.metadata.create_all(bind=engine)
 
+# Flag to ensure tables are created only once
+_tables_created = False
+
+def create_tables():
+    """Create database tables - call this once in startup event"""
+    global _tables_created
+    if not _tables_created:
+        Base.metadata.create_all(bind=engine)
+        _tables_created = True
+        print("✓ Database tables created/verified")
 
 # Dependency for FastAPI
 def get_db():
-    # Ensure tables exist on first access
-    Base.metadata.create_all(bind=engine)
-    
+    """Get database session - does NOT create tables on every request"""
     db = SessionLocal()
     try:
         yield db

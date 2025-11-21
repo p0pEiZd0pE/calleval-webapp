@@ -10,7 +10,7 @@ import librosa
 from pathlib import Path
 import json
 import re
-from database import get_db, CallEvaluation, SessionLocal, Agent, Report, Settings, AuditLog
+from database import get_db, CallEvaluation, SessionLocal, Agent, Report, Settings, AuditLog, create_tables
 from config import settings
 from pydantic import BaseModel
 from typing import Optional
@@ -90,6 +90,9 @@ async def startup_event():
     # Initialize persistent storage
     initialize_persistent_storage()
     
+    # Create database tables (only runs once per startup)
+    create_tables()
+    
     # Configure Modal authentication (moved from module level)
     modal_token_id = os.getenv("MODAL_TOKEN_ID")
     modal_token_secret = os.getenv("MODAL_TOKEN_SECRET")
@@ -107,22 +110,23 @@ async def startup_event():
         print("  Modal functions will NOT work without credentials!")
 
 
+# Configure CORS origins
 allowed_origins = [origin.strip() for origin in settings.FRONTEND_URL.split(",")]
 if "http://localhost:5173" not in allowed_origins:
     allowed_origins.append("http://localhost:5173")
 if "http://localhost:5174" not in allowed_origins:
     allowed_origins.append("http://localhost:5174")
 
-
 production_urls = [
     "https://calleval-webapp.vercel.app",
 ]
-
 
 for url in production_urls:
     if url not in allowed_origins:
         allowed_origins.append(url)
 
+# REMOVED: print statement that caused sync loop
+# print(f"✓ CORS allowed origins: {allowed_origins}")
 
 app.add_middleware(
     CORSMiddleware,
@@ -1819,4 +1823,3 @@ async def get_audit_logs(
     except Exception as e:
         print(f"Error fetching audit logs: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
-    
