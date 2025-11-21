@@ -355,7 +355,7 @@ export const columns = [
 
         setDeleting(true);
         try {
-          const response = await fetch(API_ENDPOINTS.DELETE_CALL(call.id), {
+          const response = await authenticatedFetch(API_ENDPOINTS.DELETE_CALL(call.id), {
             method: 'DELETE',
           });
 

@@ -1098,11 +1098,21 @@ async def get_call(
             detail="You don't have permission to access this call"
         )
     
-    # Parse JSON fields if they exist
-    bert_analysis = json.loads(call.bert_analysis) if call.bert_analysis else None
-    wav2vec2_analysis = json.loads(call.wav2vec2_analysis) if call.wav2vec2_analysis else None
-    binary_scores = json.loads(call.binary_scores) if call.binary_scores else None
-    transcript = json.loads(call.transcript) if call.transcript else None
+    # Helper function for safe JSON parsing
+    def safe_json_parse(json_str):
+        if not json_str or json_str.strip() == '':
+            return None
+        try:
+            return json.loads(json_str)
+        except (json.JSONDecodeError, ValueError, TypeError):
+            print(f"Warning: Failed to parse JSON: {json_str[:100]}")
+            return None
+    
+    # Parse JSON fields safely
+    bert_analysis = safe_json_parse(call.bert_analysis)
+    wav2vec2_analysis = safe_json_parse(call.wav2vec2_analysis)
+    binary_scores = safe_json_parse(call.binary_scores)
+    transcript = safe_json_parse(call.transcript)
     
     return {
         "id": call.id,
@@ -1354,19 +1364,19 @@ async def get_agent(
 @app.post("/api/agents")
 async def create_agent(
     agent: AgentCreate,
-    current_user = Depends(get_current_admin_or_manager),  # ADDED: Admin/Manager only
+    current_user = Depends(get_current_user),  # ✅ Allow all authenticated
     db: Session = Depends(get_db)
 ):
-    """Create new agent - Admin/Manager only"""
+    """Create new agent - All authenticated users"""
     try:
-        # Check if agent ID already exists
-        existing_agent = db.query(Agent).filter(Agent.agentId == agent.agentId).first()
-        if existing_agent:
-            raise HTTPException(status_code=400, detail="Agent ID already exists")
+        # ✅ AUTO-GENERATE agent ID
+        from datetime import datetime
+        timestamp = datetime.now().strftime('%Y%m')
+        agent_id = f"AGT-{timestamp}-{str(uuid.uuid4().int)[:6]}"
         
         # Create new agent
         new_agent = Agent(
-            agentId=agent.agentId,
+            agentId=agent_id,  # ✅ Use generated ID
             agentName=agent.agentName,
             position=agent.position,
             status=agent.status or "Active",

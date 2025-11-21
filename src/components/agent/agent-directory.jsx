@@ -188,7 +188,7 @@ export default function AgentDirectory({ onAgentSelect, onCallsUpdate }) {
       return
 
     try {
-      const response = await fetch(API_ENDPOINTS.AGENT_DETAIL(agentId), {
+      const response = await authenticatedFetch(API_ENDPOINTS.AGENT_DETAIL(agentId), {
         method: 'DELETE'
       })
 

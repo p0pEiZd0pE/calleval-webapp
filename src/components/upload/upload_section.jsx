@@ -89,12 +89,28 @@ export default function UploadSection({ onUploadComplete }) {
       const formData = new FormData();
       formData.append('file', file);
       formData.append('agent_id', selectedAgent);
+
+      // Add authentication header manually (can't use authenticatedFetch for file uploads)
+      const token = localStorage.getItem('auth_token');
+      const headers = {};
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
       
       try {
         const response = await fetch(API_ENDPOINTS.UPLOAD, {
           method: 'POST',
+          headers,  // Add auth header
           body: formData,
         });
+
+        if (response.status === 401) {
+          localStorage.removeItem('auth_token');
+          localStorage.removeItem('auth');
+          localStorage.removeItem('user');
+          window.location.href = '/login';
+          throw new Error('Unauthorized');
+        }
         
         if (!response.ok) {
           throw new Error('Upload failed');
