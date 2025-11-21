@@ -1018,7 +1018,7 @@ export const columns = [
       const handleDelete = async () => {
         setDeleting(true)
         try {
-          const response = await fetch(API_ENDPOINTS.DELETE_CALL(recording.callId), {
+          const response = await authenticatedFetch(API_ENDPOINTS.DELETE_CALL(recording.callId), {
             method: 'DELETE',
           })
 

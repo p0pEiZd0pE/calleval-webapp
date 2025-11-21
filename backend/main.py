@@ -1438,6 +1438,16 @@ async def update_agent(
         if agent_update.agentName is not None:
             changes['agentName'] = agent_update.agentName
             agent.agentName = agent_update.agentName
+
+            # ADD THIS BLOCK
+            db.query(CallEvaluation).filter(
+                CallEvaluation.agent_id == agent_id
+            ).update(
+                {"agent_name": agent_update.agentName},
+                synchronize_session=False
+            )
+            print(f"✅ Updated agent_name in all call records")
+            
         if agent_update.position is not None:
             changes['position'] = agent_update.position
             agent.position = agent_update.position
