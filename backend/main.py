@@ -1115,7 +1115,7 @@ async def get_call(
     bert_analysis = safe_json_parse(call.bert_analysis)
     wav2vec2_analysis = safe_json_parse(call.wav2vec2_analysis)
     binary_scores = safe_json_parse(call.binary_scores)
-    transcript = safe_json_parse(call.transcript)
+    transcript = call.transcript
     
     # ADDED: Extract segments and speakers from binary_scores
     segments = None
