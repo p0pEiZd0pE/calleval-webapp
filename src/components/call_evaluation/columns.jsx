@@ -79,14 +79,15 @@ function ScoreDetailsDialog({ callId }) {
     const speakers = callData.speakers || {};
     const parsed = [];
     
-    callData.segments.forEach((segment) => {
+    callData.segments.forEach((segment, index) => {
       const speakerId = segment.speaker;
-      const role = speakers[speakerId] || 'unknown';
+      const text = segment.text;
+      let role = speakers[speakerId] || 'unknown';
       
       parsed.push({
         speaker: speakerId,
         role: role,
-        text: segment.text.trim(),
+        text: text.trim(),
         start: segment.start,
         end: segment.end
       });
@@ -95,7 +96,8 @@ function ScoreDetailsDialog({ callId }) {
     return parsed;
   };
 
-const transcriptLines = parseTranscript();
+  const transcriptLines = parseTranscript();
+  const stats = getAgentStats();
 
   const handleOpenChange = (newOpen) => {
     setOpen(newOpen)
@@ -587,35 +589,56 @@ const transcriptLines = parseTranscript();
               <Separator />
 
               {/* Transcription */}
-              <div className="space-y-2">
-                <h3 className="font-semibold text-lg">Transcription</h3>
-                <ScrollArea className="h-96 border rounded-lg p-4">
+              <div className="flex-shrink-0">
+                <h3 className="font-semibold text-lg mb-2">📝 Diarized Transcription</h3>
+                <Separator className="mb-3" />
+                
+                <ScrollArea className="h-[300px] w-full rounded-md border p-4 bg-white dark:bg-gray-950">
                   {transcriptLines.length > 0 ? (
-                    <div className="space-y-3">
+                    <div className="space-y-4 pr-4">
                       {transcriptLines.map((line, index) => {
                         const isAgent = line.role === 'agent';
                         const isCaller = line.role === 'caller';
+                        const isUnknown = line.role === 'unknown';
                         
                         return (
-                          <div key={index} className="flex gap-3">
-                            <div className={`w-1 rounded-full flex-shrink-0 ${
-                              isAgent ? 'bg-blue-500' : isCaller ? 'bg-green-500' : 'bg-gray-400'
-                            }`} />
-                            <div className="flex-1 space-y-1">
-                              <div className="flex items-center gap-2">
-                                {isAgent ? (
-                                  <User className="h-4 w-4 text-blue-500" />
-                                ) : isCaller ? (
-                                  <Phone className="h-4 w-4 text-green-500" />
-                                ) : (
-                                  <UserCircle className="h-4 w-4 text-gray-400" />
-                                )}
-                                <p className={`text-xs font-semibold ${
-                                  isAgent ? 'text-blue-700 dark:text-blue-300' : 
-                                  isCaller ? 'text-green-700 dark:text-green-300' : 
-                                  'text-gray-600 dark:text-gray-400'
+                          <div 
+                            key={index} 
+                            className={`flex gap-3 p-4 rounded-lg border-l-4 transition-all hover:shadow-md ${
+                              isAgent 
+                                ? 'bg-blue-50 dark:bg-blue-950/30 border-blue-500' 
+                                : isCaller 
+                                ? 'bg-green-50 dark:bg-green-950/30 border-green-500' 
+                                : 'bg-gray-50 dark:bg-gray-900 border-gray-400'
+                            }`}
+                          >
+                            <div className="flex-shrink-0 pt-1">
+                              {isAgent && (
+                                <div className="bg-blue-500 p-2 rounded-full">
+                                  <User className="h-5 w-5 text-white" />
+                                </div>
+                              )}
+                              {isCaller && (
+                                <div className="bg-green-500 p-2 rounded-full">
+                                  <Phone className="h-5 w-5 text-white" />
+                                </div>
+                              )}
+                              {isUnknown && (
+                                <div className="bg-gray-400 p-2 rounded-full">
+                                  <UserCircle className="h-5 w-5 text-white" />
+                                </div>
+                              )}
+                            </div>
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-2">
+                                <p className={`text-xs font-bold uppercase tracking-wide ${
+                                  isAgent 
+                                    ? 'text-blue-700 dark:text-blue-300' 
+                                    : isCaller 
+                                    ? 'text-green-700 dark:text-green-300' 
+                                    : 'text-gray-600 dark:text-gray-400'
                                 }`}>
-                                  {line.role === 'unknown' ? `Speaker ${line.speaker}` : line.role.toUpperCase()}
+                                  {line.role === 'unknown' ? `Speaker ${line.speaker}` : line.role}
                                 </p>
                                 {line.start !== undefined && (
                                   <span className="text-xs text-muted-foreground">
