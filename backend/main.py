@@ -1730,7 +1730,10 @@ async def get_report(report_id: str, db: Session = Depends(get_db)):
 
 # GET settings
 @app.get("/api/settings")
-async def get_settings(db: Session = Depends(get_db)):
+async def get_settings(
+    current_user = Depends(get_current_active_admin),
+    db: Session = Depends(get_db)
+    ):
     try:
         settings_record = db.query(Settings).first()
         
@@ -1758,7 +1761,11 @@ async def get_settings(db: Session = Depends(get_db)):
 
 # UPDATE settings
 @app.put("/api/settings")
-async def update_settings(settings_data: dict, db: Session = Depends(get_db)):
+async def update_settings(
+    settings_data: dict, 
+    current_user = Depends(get_current_active_admin),
+    db: Session = Depends(get_db)
+    ):
     try:
         settings = db.query(Settings).first()
         
@@ -1827,6 +1834,7 @@ async def create_user(user: dict, db: Session = Depends(get_db)):
 # GET audit logs
 @app.get("/api/audit-logs")
 async def get_audit_logs(
+    current_user = Depends(get_current_active_admin),
     limit: int = 100,
     resource_type: Optional[str] = None,
     action: Optional[str] = None,

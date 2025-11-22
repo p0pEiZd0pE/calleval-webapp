@@ -46,7 +46,7 @@ export default function AuditLogs({ refreshTrigger }) {
   const fetchAuditLogs = async () => {
     setLoading(true)
     try {
-      const response = await fetch(`${API_URL}/api/audit-logs`)
+      const response = await authenticatedFetch(`${API_URL}/api/audit-logs`)
       if (response.ok) {
         const data = await response.json()
         setLogs(data)
