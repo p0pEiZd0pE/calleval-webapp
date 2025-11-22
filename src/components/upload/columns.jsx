@@ -160,7 +160,7 @@ export const columns = [
           const backendUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
           
           // Download audio with proper filename extraction
-          const audioResponse = await fetch(`${backendUrl}/api/temp-audio/${call.id}`);
+          const audioResponse = await authenticatedFetch(`${backendUrl}/api/temp-audio/${call.id}`);
           
           if (!audioResponse.ok) {
             throw new Error('Failed to download audio');
