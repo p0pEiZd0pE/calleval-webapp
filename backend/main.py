@@ -1081,7 +1081,7 @@ async def upload_audio(
 @app.get("/api/calls/{call_id}")
 async def get_call(
     call_id: str,
-    current_user = Depends(get_current_user),  # ADDED: Require authentication
+    current_user = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
@@ -1117,6 +1117,16 @@ async def get_call(
     binary_scores = safe_json_parse(call.binary_scores)
     transcript = safe_json_parse(call.transcript)
     
+    # ADDED: Extract segments and speakers from binary_scores
+    segments = None
+    speakers = None
+    
+    if binary_scores and isinstance(binary_scores, dict):
+        # Segments are stored in binary_scores["segments"]
+        segments = binary_scores.get("segments")
+        # Speakers are stored in binary_scores["speaker_roles"]
+        speakers = binary_scores.get("speaker_roles")
+    
     return {
         "id": call.id,
         "filename": call.filename,
@@ -1130,6 +1140,8 @@ async def get_call(
         "wav2vec2_analysis": wav2vec2_analysis,
         "binary_scores": binary_scores,
         "transcript": transcript,
+        "segments": segments,          # ADDED
+        "speakers": speakers,          # ADDED
         "processing_time": call.processing_time,
         "error_message": call.error_message,
         "created_at": call.created_at.isoformat() if call.created_at else None,
@@ -1447,7 +1459,7 @@ async def update_agent(
                 synchronize_session=False
             )
             print(f"✅ Updated agent_name in all call records")
-            
+
         if agent_update.position is not None:
             changes['position'] = agent_update.position
             agent.position = agent_update.position
