@@ -20,6 +20,8 @@ import {
 } from "@/components/ui/sheet"
 import { API_URL } from '@/config/api'
 import { toast } from 'sonner'
+import { authenticatedFetch } from '@/lib/api';
+
 
 export default function AuditLogs({ refreshTrigger }) {
   const [logs, setLogs] = React.useState([])
