@@ -140,7 +140,7 @@ function ScoreDetailsDialog({ callId }) {
       window.URL.revokeObjectURL(audioUrl)
       
       // Generate PDF with diarized transcription and CallEval metrics
-      const response = await fetch(`${backendUrl}/api/calls/${callId}`)
+      const response = await authenticatedFetch(`${backendUrl}/api/calls/${callId}`)
       if (response.ok) {
         const data = await response.json()
         
@@ -767,7 +767,7 @@ export const columns = [
           const backendUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
           
           // Download audio with proper filename extraction
-          const audioResponse = await fetch(`${backendUrl}/api/temp-audio/${recording.callId}`)
+          const audioResponse = await authenticatedFetch(`${backendUrl}/api/temp-audio/${recording.callId}`)
           
           if (!audioResponse.ok) {
             throw new Error('Failed to download audio')
