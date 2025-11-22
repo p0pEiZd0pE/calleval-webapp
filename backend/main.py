@@ -1341,21 +1341,45 @@ async def list_calls(
 
 
 @app.get("/api/temp-audio/{call_id}")
-async def get_temp_audio(call_id: str, db: Session = Depends(get_db)):
+async def get_temp_audio(
+    call_id: str,
+    request: Request,  # ✅ ADD THIS PARAMETER
+    db: Session = Depends(get_db)
+):
     """Serve audio file temporarily for Modal to download"""
     call = db.query(CallEvaluation).filter(CallEvaluation.id == call_id).first()
-
+    
     if not call:
         raise HTTPException(status_code=404, detail="Call not found")
-
+    
     file_path = Path(call.file_path)
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="Audio file not found")
-
+    
+    # ✅ GET THE REQUESTING ORIGIN
+    origin = request.headers.get("origin", "")
+    
+    # ✅ ALLOWED ORIGINS LIST
+    allowed_origins = [
+        "https://calleval-webapp.vercel.app",
+        "http://localhost:5173",
+    ]
+    
+    # ✅ USE DYNAMIC ORIGIN
+    if origin in allowed_origins:
+        cors_origin = origin  # Echo back the requesting origin
+    else:
+        cors_origin = "*"  # Fallback for direct browser access
+    
     return FileResponse(
         file_path,
         media_type="audio/mpeg",
-        headers={"Content-Disposition": f"attachment; filename={call.filename}"}
+        headers={
+            "Content-Disposition": f"attachment; filename={call.filename}",
+            "Access-Control-Allow-Origin": cors_origin,  # ✅ DYNAMIC
+            "Access-Control-Allow-Credentials": "true",
+            "Access-Control-Expose-Headers": "Content-Disposition"
+        }
     )
 
 
