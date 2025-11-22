@@ -1355,7 +1355,12 @@ async def get_temp_audio(call_id: str, db: Session = Depends(get_db)):
     return FileResponse(
         file_path,
         media_type="audio/mpeg",
-        headers={"Content-Disposition": f"attachment; filename={call.filename}"}
+        headers={
+            "Content-Disposition": f"attachment; filename={call.filename}",
+            "Access-Control-Allow-Origin": "https://calleval-webapp.vercel.app",
+            "Access-Control-Allow-Credentials": "true",
+            "Access-Control-Expose-Headers": "Content-Disposition"
+        }
     )
 
 
