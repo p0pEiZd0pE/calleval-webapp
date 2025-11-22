@@ -1115,17 +1115,18 @@ async def get_call(
     bert_analysis = safe_json_parse(call.bert_analysis)
     wav2vec2_analysis = safe_json_parse(call.wav2vec2_analysis)
     binary_scores = safe_json_parse(call.binary_scores)
+    scores = safe_json_parse(call.scores)
     transcript = call.transcript
     
     # ADDED: Extract segments and speakers from binary_scores
     segments = None
     speakers = None
     
-    if binary_scores and isinstance(binary_scores, dict):
-        # Segments are stored in binary_scores["segments"]
-        segments = binary_scores.get("segments")
-        # Speakers are stored in binary_scores["speaker_roles"]
-        speakers = binary_scores.get("speaker_roles")
+    if scores and isinstance(scores, dict):
+        segments = scores.get("segments")
+
+    if call.speakers:
+        speakers = safe_json_parse(call.speakers)
     
     return {
         "id": call.id,
