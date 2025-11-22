@@ -35,6 +35,7 @@ from auth import (
 )
 
 
+
 settings_router = APIRouter()
 
 
@@ -1342,25 +1343,19 @@ async def list_calls(
 @app.get("/api/temp-audio/{call_id}")
 async def get_temp_audio(call_id: str, db: Session = Depends(get_db)):
     """Serve audio file temporarily for Modal to download"""
-    # NO AUTHENTICATION - Modal needs access
     call = db.query(CallEvaluation).filter(CallEvaluation.id == call_id).first()
-    
+
     if not call:
         raise HTTPException(status_code=404, detail="Call not found")
-    
+
     file_path = Path(call.file_path)
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="Audio file not found")
-    
+
     return FileResponse(
         file_path,
         media_type="audio/mpeg",
-        headers={
-            "Content-Disposition": f"attachment; filename={call.filename}",
-            "Access-Control-Allow-Origin": "https://calleval-webapp.vercel.app",
-            "Access-Control-Allow-Credentials": "true",
-            "Access-Control-Expose-Headers": "Content-Disposition"
-        }
+        headers={"Content-Disposition": f"attachment; filename={call.filename}"}
     )
 
 
