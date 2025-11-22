@@ -122,11 +122,8 @@ export default function GeneralApplicationSettings({ onSettingsActionComplete })
       console.log('Saving settings to:', `${API_URL}/api/settings`)
       console.log('Settings data:', settingsData)
 
-      const response = await fetch(`${API_URL}/api/settings`, {
+      const response = await authenticatedFetch(`${API_URL}/api/settings`, {
         method: 'PUT',
-        headers: { 
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify(settingsData),
       })
 
