@@ -111,7 +111,7 @@ function ScoreDetailsDialog({ callId }) {
       const backendUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
       
       // Download audio with proper filename extraction
-      const audioResponse = await authenticatedFetch(`${backendUrl}/api/temp-audio/${recording.callId}`)
+      const audioResponse = await fetch(`${backendUrl}/api/temp-audio/${recording.callId}`)
       
       if (!audioResponse.ok) {
         throw new Error('Failed to fetch audio file')
