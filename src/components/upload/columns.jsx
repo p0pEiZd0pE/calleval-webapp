@@ -109,7 +109,7 @@ export const columns = [
         setCancelling(true);
         try {
           const backendUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-          const response = await fetch(`${backendUrl}/api/calls/${call.id}/cancel`, {
+          const response = await authenticatedFetch(`${backendUrl}/api/calls/${call.id}/cancel`, {
             method: 'POST',
           });
 

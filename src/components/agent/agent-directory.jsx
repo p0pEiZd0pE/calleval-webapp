@@ -237,7 +237,7 @@ export default function AgentDirectory({ onAgentSelect, onCallsUpdate }) {
               onAgentSelect(agent);
               
               try {
-                const response = await fetch(API_ENDPOINTS.AGENT_CALLS(agent.agentId));
+                const response = await authenticatedFetch(API_ENDPOINTS.AGENT_CALLS(agent.agentId));
                 if (response.ok) {
                   const data = await response.json();
                   onCallsUpdate(data.calls || []);
