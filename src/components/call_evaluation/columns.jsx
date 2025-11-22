@@ -1,4 +1,4 @@
-import { MoreHorizontal, FileText, Play, Download, User, Phone, Trash2 } from "lucide-react"
+import { MoreHorizontal, FileText, Play, Download, User, Phone, Trash2, UserCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -63,6 +63,39 @@ function ScoreDetailsDialog({ callId }) {
     
     return { agentSpeaker, callerSpeaker };
   };
+
+  const parseTranscript = () => {
+    if (!callData?.segments || callData.segments.length === 0) {
+      if (callData?.transcript) {
+        return [{
+          speaker: 'unknown',
+          role: 'unknown',
+          text: callData.transcript
+        }];
+      }
+      return [];
+    }
+    
+    const speakers = callData.speakers || {};
+    const parsed = [];
+    
+    callData.segments.forEach((segment) => {
+      const speakerId = segment.speaker;
+      const role = speakers[speakerId] || 'unknown';
+      
+      parsed.push({
+        speaker: speakerId,
+        role: role,
+        text: segment.text.trim(),
+        start: segment.start,
+        end: segment.end
+      });
+    });
+    
+    return parsed;
+  };
+
+const transcriptLines = parseTranscript();
 
   const handleOpenChange = (newOpen) => {
     setOpen(newOpen)
@@ -554,18 +587,59 @@ function ScoreDetailsDialog({ callId }) {
               <Separator />
 
               {/* Transcription */}
-              {callData.transcript ? (
-                <div className="space-y-2">
-                  <h3 className="font-semibold text-lg">Transcription</h3>
-                  <div className="bg-muted p-4 rounded-lg">
-                    <p className="text-sm whitespace-pre-wrap">{callData.transcript}</p>
-                  </div>
-                </div>
-              ) : (
-                <div className="text-center text-muted-foreground">
-                  No transcription available
-                </div>
-              )}
+              <div className="space-y-2">
+                <h3 className="font-semibold text-lg">Transcription</h3>
+                <ScrollArea className="h-96 border rounded-lg p-4">
+                  {transcriptLines.length > 0 ? (
+                    <div className="space-y-3">
+                      {transcriptLines.map((line, index) => {
+                        const isAgent = line.role === 'agent';
+                        const isCaller = line.role === 'caller';
+                        
+                        return (
+                          <div key={index} className="flex gap-3">
+                            <div className={`w-1 rounded-full flex-shrink-0 ${
+                              isAgent ? 'bg-blue-500' : isCaller ? 'bg-green-500' : 'bg-gray-400'
+                            }`} />
+                            <div className="flex-1 space-y-1">
+                              <div className="flex items-center gap-2">
+                                {isAgent ? (
+                                  <User className="h-4 w-4 text-blue-500" />
+                                ) : isCaller ? (
+                                  <Phone className="h-4 w-4 text-green-500" />
+                                ) : (
+                                  <UserCircle className="h-4 w-4 text-gray-400" />
+                                )}
+                                <p className={`text-xs font-semibold ${
+                                  isAgent ? 'text-blue-700 dark:text-blue-300' : 
+                                  isCaller ? 'text-green-700 dark:text-green-300' : 
+                                  'text-gray-600 dark:text-gray-400'
+                                }`}>
+                                  {line.role === 'unknown' ? `Speaker ${line.speaker}` : line.role.toUpperCase()}
+                                </p>
+                                {line.start !== undefined && (
+                                  <span className="text-xs text-muted-foreground">
+                                    [{Math.floor(line.start)}s]
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-sm leading-relaxed">{line.text}</p>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="text-center text-muted-foreground py-8">
+                      <UserCircle className="h-12 w-12 mx-auto mb-3 opacity-50" />
+                      <p className="font-medium">No transcription available yet.</p>
+                      <p className="text-sm mt-2">
+                        The diarized transcription will appear here once processing is complete.
+                      </p>
+                    </div>
+                  )}
+                </ScrollArea>
+              </div>
             </div>
           </ScrollArea>
         ) : (
