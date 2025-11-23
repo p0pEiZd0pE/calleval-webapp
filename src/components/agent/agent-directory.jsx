@@ -195,6 +195,9 @@ export default function AgentDirectory({ onAgentSelect, onCallsUpdate }) {
       if (!response.ok) throw new Error('Failed to delete agent')
 
       await fetchAgents()
+
+      onAgentSelect(null)
+      onCallsUpdate([])
       
       toast.success("Agent deleted successfully")
     } catch (error) {
