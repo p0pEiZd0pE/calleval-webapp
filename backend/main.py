@@ -1199,6 +1199,7 @@ async def cancel_call_processing(
 async def retry_call_processing(
     call_id: str, 
     background_tasks: BackgroundTasks,
+    current_user = Depends(get_current_admin_or_manager),
     db: Session = Depends(get_db)
 ):
     """Retry a cancelled or failed call processing"""
@@ -1708,7 +1709,11 @@ async def list_reports(
 
 
 @app.get("/api/reports/{report_id}")
-async def get_report(report_id: str, db: Session = Depends(get_db)):
+async def get_report(
+    report_id: str, 
+    current_user = Depends(get_current_user),
+    db: Session = Depends(get_db)
+    ):
     """Get a specific report"""
     try:
         from database import Report
