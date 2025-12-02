@@ -1,11 +1,22 @@
 from sqlalchemy import create_engine, Column, String, Float, DateTime, Text, Integer, Boolean
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import QueuePool
 from datetime import datetime
 from config import settings
 
 # Create engine
-engine = create_engine(settings.DATABASE_URL, connect_args={"check_same_thread": False})
+# Create engine with INCREASED CONNECTION POOL for bulk uploads
+engine = create_engine(
+    settings.DATABASE_URL, 
+    connect_args={"check_same_thread": False},
+    poolclass=QueuePool,
+    pool_size=20,  # Increased from default 5 to handle 19+ concurrent uploads
+    max_overflow=30,  # Increased from default 10
+    pool_timeout=60,  # Increased timeout from default 30
+    pool_pre_ping=True,  # Verify connections before using them
+    pool_recycle=3600  # Recycle connections after 1 hour
+)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 

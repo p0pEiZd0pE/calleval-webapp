@@ -715,6 +715,7 @@ def process_call(call_id: str, file_path: str):
     """Background task: Process call with phase-aware evaluation"""
     
     db = SessionLocal()
+    call = None  # ← ADD THIS LINE: Initialize call to prevent UnboundLocalError
     
     try:
         call = db.query(CallEvaluation).filter(CallEvaluation.id == call_id).first()
@@ -1001,7 +1002,8 @@ def process_call(call_id: str, file_path: str):
             db.refresh(call)
             if call.status != "cancelled":
                 call.status = "failed"
-                call.analysis_status = f"error: {str(e)}"
+                call.analysis_status = "processing_failed"
+                call.error_message = str(e)  # Store full error for debugging
             # =================================================================================
             db.commit()
     
