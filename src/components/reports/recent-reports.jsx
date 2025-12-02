@@ -223,6 +223,14 @@ export default function RecentReports({ refreshTrigger }) {
       headStyles: { fillColor: [34, 197, 94] },
       styles: { fontSize: 8 }
     });
+
+    // Add signature section at bottom left
+    const pageHeight = doc.internal.pageSize.height;
+    doc.setFontSize(10);
+    doc.text('Approved by:', 14, pageHeight - 25);
+    doc.line(14, pageHeight - 20, 70, pageHeight - 20); // Underline for signature
+    doc.setFontSize(9);
+    doc.text('QA Specialist', 14, pageHeight - 15);
     
     doc.save(`${report.id}_${report.type}_Report.pdf`);
   };

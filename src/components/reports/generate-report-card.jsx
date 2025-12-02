@@ -235,6 +235,14 @@ export default function GenerateReportCard({ filters, onReportGenerated }) {
     
     const avgScore = data.reduce((sum, c) => sum + (c.score || 0), 0) / data.length;
     doc.text(`Average Score: ${avgScore.toFixed(1)}`, 14, finalY + 6);
+
+    // Add signature section at bottom left
+    const pageHeight = doc.internal.pageSize.height;
+    doc.setFontSize(10);
+    doc.text('Approved by:', 14, pageHeight - 25);
+    doc.line(14, pageHeight - 20, 70, pageHeight - 20); // Underline for signature
+    doc.setFontSize(9);
+    doc.text('QA Specialist', 14, pageHeight - 15);
     
     const reportTypeName = reportType.charAt(0).toUpperCase() + reportType.slice(1);
     const timestamp = new Date().toISOString().split('T')[0];
