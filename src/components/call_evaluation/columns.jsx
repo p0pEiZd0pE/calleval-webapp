@@ -1104,10 +1104,10 @@ export const columns = [
             // Add signature section at bottom left
             const pageHeight = doc.internal.pageSize.height;
             doc.setFontSize(10);
-            doc.text('Approved by:', 14, pageHeight - 25);
-            doc.line(14, pageHeight - 20, 70, pageHeight - 20); // Underline for signature
+            doc.text('Approved by:', 14, pageHeight - 40);
+            doc.line(14, pageHeight - 30, 70, pageHeight - 30); // Underline for signature
             doc.setFontSize(9);
-            doc.text('QA Specialist', 14, pageHeight - 15);
+            doc.text('QA Specialist', 14, pageHeight - 22);
             
             // Save the PDF
             doc.save(`${recording.callId}_transcript_with_metrics.pdf`)
