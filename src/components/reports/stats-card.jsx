@@ -29,6 +29,10 @@ export default function StatsCards({ filters }) {
       const agentsResponse = await authenticatedFetch(API_ENDPOINTS.AGENT_STATS);
       const agentsData = await agentsResponse.json();
       
+      // FETCH REPORTS
+      const reportsResponse = await authenticatedFetch(API_ENDPOINTS.REPORTS);
+      const reportsData = await reportsResponse.json();
+      
       // Apply filters
       let filteredCalls = callsData;
       
@@ -51,6 +55,14 @@ export default function StatsCards({ filters }) {
           }
         });
       }
+
+      // Apply filters to reports (optional - filter by agent if needed)
+      let filteredReports = reportsData;
+      if (filters?.agentId && filters.agentId !== 'all') {
+        filteredReports = reportsData.filter(report => 
+          report.agent_id === filters.agentId || report.agent_name === 'All Agents'
+        );
+      }
       
       // Calculate stats from filtered data
       const completedCalls = filteredCalls.filter(c => c.status === 'completed' && c.score);
@@ -59,7 +71,7 @@ export default function StatsCards({ filters }) {
         : 0;
       
       setStats({
-        totalReports: 0, // This would come from a reports table in your backend
+        totalReports: filteredReports.length, // Use actual count
         avgScore: parseFloat(avgScore),
         callsAnalyzed: completedCalls.length,
         activeAgents: agentsData.active || 0
